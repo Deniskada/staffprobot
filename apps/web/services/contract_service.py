@@ -12,6 +12,8 @@ from domain.entities.user import User, UserRole
 from domain.entities.object import Object
 from shared.services.role_service import RoleService
 from shared.services.manager_permission_service import ManagerPermissionService
+from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.shift_status_sync_service import ShiftStatusSyncService
 from core.logging.logger import logger
 from core.cache.redis_cache import cached
 from core.cache.cache_service import CacheService
@@ -1851,10 +1853,38 @@ class ContractService:
             shifts_result = await session.execute(shifts_query)
             shifts_to_cancel = shifts_result.scalars().all()
             
+            history_service = ShiftHistoryService(session)
+            sync_service = ShiftStatusSyncService(session)
             cancelled_count = 0
             for shift in shifts_to_cancel:
                 # Отменяем смену
+                previous_status = shift.status
                 shift.status = 'cancelled'
+                payload = {
+                    "reason_code": "contract_termination",
+                    "notes": reason,
+                    "contract_id": terminated_contract.id,
+                    "object_id": shift.object_id,
+                    "origin": "contract_service",
+                }
+                await history_service.log_event(
+                    operation="schedule_cancel",
+                    source="system",
+                    actor_id=terminated_contract.owner_id,
+                    actor_role="system",
+                    schedule_id=shift.id,
+                    shift_id=None,
+                    old_status=previous_status,
+                    new_status='cancelled',
+                    payload=payload,
+                )
+                await sync_service.cancel_linked_shifts(
+                    shift,
+                    actor_id=terminated_contract.owner_id,
+                    actor_role="system",
+                    source="system",
+                    payload=payload,
+                )
                 
                 # Создаем запись о отмене
                 cancellation = ShiftCancellation(
@@ -1925,10 +1955,38 @@ class ContractService:
             shifts_result = await session.execute(shifts_query)
             shifts_to_cancel = shifts_result.scalars().all()
             
+            history_service = ShiftHistoryService(session)
+            sync_service = ShiftStatusSyncService(session)
             cancelled_count = 0
             for shift in shifts_to_cancel:
                 # Отменяем смену
+                previous_status = shift.status
                 shift.status = 'cancelled'
+                payload = {
+                    "reason_code": "contract_termination",
+                    "notes": reason,
+                    "contract_id": contract_id,
+                    "object_id": shift.object_id,
+                    "origin": "contract_service",
+                }
+                await history_service.log_event(
+                    operation="schedule_cancel",
+                    source="system",
+                    actor_id=cancelled_by_id,
+                    actor_role="system",
+                    schedule_id=shift.id,
+                    shift_id=None,
+                    old_status=previous_status,
+                    new_status='cancelled',
+                    payload=payload,
+                )
+                await sync_service.cancel_linked_shifts(
+                    shift,
+                    actor_id=cancelled_by_id,
+                    actor_role="system",
+                    source="system",
+                    payload=payload,
+                )
                 
                 # Создаем запись о отмене
                 cancellation = ShiftCancellation(

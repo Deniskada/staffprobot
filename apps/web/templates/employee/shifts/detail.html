@@ -135,6 +135,43 @@
                     </div>
                     {% endif %}
                     
+                    {% if history_items %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>История операций</h6>
+                            <ul class="list-group">
+                                {% for item in history_items %}
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between">
+                                        <strong>{{ item.title }}</strong>
+                                        <small class="text-muted">{{ item.created_at }}</small>
+                                    </div>
+                                    {% if item.status_change %}
+                                    <div class="text-muted small">Статус: {{ item.status_change }}</div>
+                                    {% endif %}
+                                    <div class="text-muted small">
+                                        Источник: {{ item.source_label }}
+                                        {% if item.actor_label %}
+                                            · {{ item.actor_label }}
+                                        {% endif %}
+                                    </div>
+                                    {% if item.payload_items %}
+                                    <ul class="list-inline small mb-0 mt-2">
+                                        {% for payload in item.payload_items %}
+                                        <li class="list-inline-item">
+                                            <span class="text-muted">{{ payload.label }}:</span>
+                                            <span class="fw-semibold">{{ payload.value }}</span>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
                     <div class="row mt-3">
                         <div class="col-12">
                             <small class="text-muted">

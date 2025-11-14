@@ -31,6 +31,12 @@ from apps.web.utils.timezone_utils import web_timezone_helper
 from shared.services.system_features_service import SystemFeaturesService
 from shared.services.calendar_filter_service import CalendarFilterService
 from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.cancellation_policy_service import CancellationPolicyService
+from shared.services.shift_cancellation_service import ShiftCancellationService
+from shared.services.shift_status_sync_service import ShiftStatusSyncService
+from shared.services.shift_history_service import ShiftHistoryService
+from core.cache.redis_cache import cache
+from apps.web.utils.shift_history_utils import build_shift_history_items
 from shared.models.calendar_data import TimeslotStatus
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
@@ -4628,6 +4634,56 @@ async def owner_shift_detail_legacy(
             task_service = ShiftTaskService(db)
             shift_tasks = await task_service.get_shift_tasks(actual_shift_id)
         
+        # История операций
+        history_service = ShiftHistoryService(db)
+        history_entries = []
+        schedule_id_for_history = None
+        shift_id_for_history = None
+
+        if actual_shift_type == "schedule":
+            schedule_id_for_history = actual_shift_id
+        else:
+            shift_id_for_history = actual_shift_id
+            schedule_id_for_history = getattr(shift, "schedule_id", None)
+
+        if schedule_id_for_history:
+            history_entries.extend(
+                await history_service.fetch_history(schedule_id=schedule_id_for_history)
+            )
+        if shift_id_for_history:
+            history_entries.extend(
+                await history_service.fetch_history(shift_id=shift_id_for_history)
+            )
+
+        actor_ids = {entry.actor_id for entry in history_entries if entry.actor_id}
+        actor_names: Dict[int, str] = {}
+        if actor_ids:
+            users_result = await db.execute(
+                select(User.id, User.first_name, User.last_name).where(User.id.in_(actor_ids))
+            )
+            for row in users_result.all():
+                full_name = " ".join(filter(None, [row.last_name, row.first_name])).strip()
+                actor_names[row.id] = full_name or f"ID {row.id}"
+
+        reason_titles: Dict[str, str] = {}
+        owner_id = getattr(object, "owner_id", None)
+        if owner_id:
+            reasons = await CancellationPolicyService.get_owner_reasons(
+                db,
+                owner_id,
+                only_visible=False,
+                only_active=True,
+            )
+            reason_titles = {reason.code: reason.title for reason in reasons}
+
+        timezone = getattr(object, "timezone", None) or "Europe/Moscow"
+        history_items = build_shift_history_items(
+            history_entries,
+            timezone=timezone,
+            actor_names=actor_names,
+            reason_titles=reason_titles,
+        )
+
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(user_id)
         
@@ -4639,7 +4695,8 @@ async def owner_shift_detail_legacy(
             "shift_tasks": shift_tasks,
             "available_interfaces": available_interfaces,
             "object": object,
-            "web_timezone_helper": web_timezone_helper
+            "web_timezone_helper": web_timezone_helper,
+            "history_items": history_items,
         })
         
     except Exception as e:
@@ -4682,68 +4739,124 @@ async def owner_cancel_shift_legacy(
         user_obj = user_result.scalar_one_or_none()
         user_id = user_obj.id if user_obj else None
         
+        cancellation_service = ShiftCancellationService(db)
+        sync_service = ShiftStatusSyncService(db)
+        history_service = ShiftHistoryService(db)
+
+        cancelled_by_type = "owner"
+        actor_role = user_role if user_role != "superadmin" else "superadmin"
+
         if actual_shift_type == "schedule":
-            # Отмена запланированной смены
             query = select(ShiftSchedule).options(
-                selectinload(ShiftSchedule.object)
+                selectinload(ShiftSchedule.object),
+                selectinload(ShiftSchedule.actual_shifts),
             ).where(ShiftSchedule.id == actual_shift_id)
             result = await db.execute(query)
-            shift = result.scalar_one_or_none()
-            
-            if shift and shift.status == "planned":
-                # Проверка прав доступа
-                if user_role != "superadmin":
-                    if shift.object.owner_id != user_id:
-                        return JSONResponse(
-                            status_code=403,
-                            content={"success": False, "message": "Доступ запрещен"}
-                        )
-                
-                # Отменяем смену
-                shift.status = "cancelled"
-                shift.updated_at = datetime.utcnow()
-                await db.commit()
-                
-                return JSONResponse(
-                    status_code=200,
-                    content={"success": True, "message": "Смена отменена"}
-                )
-            else:
+            schedule = result.scalar_one_or_none()
+
+            if not schedule or schedule.status not in {"planned", "confirmed"}:
                 return JSONResponse(
                     status_code=400,
-                    content={"success": False, "message": "Смена не найдена или уже отменена"}
+                    content={"success": False, "message": "Смена не найдена или уже отменена"},
+                )
+
+            if user_role != "superadmin" and schedule.object.owner_id != user_id:
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "message": "Доступ запрещен"},
+                )
+
+            cancel_result = await cancellation_service.cancel_shift(
+                shift_schedule_id=schedule.id,
+                cancelled_by_user_id=user_id,
+                cancelled_by_type=cancelled_by_type,
+                cancellation_reason="owner_decision",
+                actor_role=actor_role,
+                source="web",
+                extra_payload={"origin": "owner_cancel_legacy"},
+            )
+            if not cancel_result.get("success"):
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": cancel_result.get("message", "Не удалось отменить смену")},
+                )
+
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
+            return JSONResponse(
+                status_code=200,
+                content={"success": True, "message": cancel_result.get("message", "Смена отменена")},
+            )
+
+        shift_query = select(Shift).options(
+            selectinload(Shift.object)
+        ).where(Shift.id == actual_shift_id)
+        shift_result = await db.execute(shift_query)
+        shift = shift_result.scalar_one_or_none()
+
+        if not shift or shift.status not in {"active", "planned"}:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Смена не найдена или уже завершена"},
+            )
+
+        if user_role != "superadmin" and shift.object.owner_id != user_id:
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "message": "Доступ запрещен"},
+            )
+
+        if shift.schedule_id:
+            cancel_result = await cancellation_service.cancel_shift(
+                shift_schedule_id=shift.schedule_id,
+                cancelled_by_user_id=user_id,
+                cancelled_by_type=cancelled_by_type,
+                cancellation_reason="owner_decision",
+                actor_role=actor_role,
+                source="web",
+                extra_payload={"origin": "owner_cancel_legacy"},
+            )
+            if not cancel_result.get("success"):
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "message": cancel_result.get("message", "Не удалось отменить смену")},
                 )
         else:
-            # Отмена реальной смены
-            query = select(Shift).options(
-                selectinload(Shift.object)
-            ).where(Shift.id == actual_shift_id)
-            result = await db.execute(query)
-            shift = result.scalar_one_or_none()
-            
-            if shift and shift.status == "active":
-                # Проверка прав доступа
-                if user_role != "superadmin":
-                    if shift.object.owner_id != user_id:
-                        return JSONResponse(
-                            status_code=403,
-                            content={"success": False, "message": "Доступ запрещен"}
-                        )
-                
-                # Отменяем смену
-                shift.status = "cancelled"
-                shift.updated_at = datetime.utcnow()
-                await db.commit()
-                
-                return JSONResponse(
-                    status_code=200,
-                    content={"success": True, "message": "Смена отменена"}
-                )
-            else:
-                return JSONResponse(
-                    status_code=400,
-                    content={"success": False, "message": "Смена не найдена или уже завершена"}
-                )
+            previous_status = shift.status
+            shift.status = "cancelled"
+            if not shift.end_time:
+                shift.end_time = datetime.utcnow()
+            shift.updated_at = datetime.utcnow()
+
+            await history_service.log_event(
+                operation="shift_cancel",
+                source="web",
+                actor_id=user_id,
+                actor_role=actor_role,
+                shift_id=shift.id,
+                schedule_id=None,
+                old_status=previous_status,
+                new_status="cancelled",
+                payload={
+                    "reason_code": "owner_decision",
+                    "origin": "owner_cancel_legacy",
+                },
+            )
+            await sync_service.cancel_linked_shifts(
+                None,
+                actor_id=user_id,
+                actor_role=actor_role,
+                source="web",
+                payload={"origin": "owner_cancel_legacy"},
+            )
+            await db.commit()
+
+        await cache.clear_pattern("calendar_shifts:*")
+        await cache.clear_pattern("api_response:*")
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "message": "Смена отменена"},
+        )
                 
     except Exception as e:
         logger.error(f"Error canceling shift: {e}")

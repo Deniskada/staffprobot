@@ -30,6 +30,8 @@ from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
 from shared.services.object_access_service import ObjectAccessService
 from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.cancellation_policy_service import CancellationPolicyService
+from apps.web.utils.shift_history_utils import build_shift_history_items
 from apps.web.utils.calendar_utils import create_calendar_grid
 from openpyxl import Workbook
 
@@ -2506,11 +2508,14 @@ async def employee_shift_detail(
                 raise HTTPException(status_code=403, detail="Нет доступа к объектам")
             
             shift_data = None
+            history_items: List[Dict[str, Any]] = []
+            timezone = "Europe/Moscow"
             
             # Импортируем select для запросов
             from sqlalchemy import select
             from sqlalchemy.orm import selectinload
             
+            history_entries: List = []
             if actual_shift_type == "schedule":
                 # Запланированная смена
                 query = select(ShiftSchedule).options(
@@ -2542,6 +2547,16 @@ async def employee_shift_detail(
                     "created_at": schedule.created_at,
                     "updated_at": schedule.updated_at
                 }
+                history_service = ShiftHistoryService(db)
+                schedule_history = await history_service.fetch_history(schedule_id=actual_shift_id)
+                history_entries = list(schedule_history)
+                if schedule.object and getattr(schedule.object, "timezone", None):
+                    timezone = schedule.object.timezone
+                if getattr(schedule, "actual_shifts", None):
+                    for actual in schedule.actual_shifts:
+                        history_entries.extend(
+                            await history_service.fetch_history(shift_id=actual.id)
+                        )
             else:
                 # Фактическая смена
                 query = select(Shift).options(
@@ -2577,15 +2592,59 @@ async def employee_shift_detail(
                     "created_at": shift.created_at,
                     "updated_at": shift.updated_at
                 }
+                history_service = ShiftHistoryService(db)
+                shift_history = await history_service.fetch_history(shift_id=actual_shift_id)
+                history_entries = list(shift_history)
+                if shift.object and getattr(shift.object, "timezone", None):
+                    timezone = shift.object.timezone
+                schedule_id = getattr(shift, "schedule_id", None)
+                if schedule_id:
+                    history_entries.extend(
+                        await history_service.fetch_history(schedule_id=schedule_id)
+                    )
             
             # Получаем доступные интерфейсы
             available_interfaces = await get_available_interfaces_for_user(current_user, db)
+
+            actor_ids = {entry.actor_id for entry in history_entries if entry.actor_id}
+            actor_names: Dict[int, str] = {}
+            if actor_ids:
+                users_result = await db.execute(
+                    select(User.id, User.first_name, User.last_name).where(User.id.in_(actor_ids))
+                )
+                for row in users_result.all():
+                    full_name = " ".join(filter(None, [row.last_name, row.first_name])).strip()
+                    actor_names[row.id] = full_name or f"ID {row.id}"
+
+            reason_titles: Dict[str, str] = {}
+            owner_id = None
+            if actual_shift_type == "schedule":
+                owner_id = schedule.object.owner_id if schedule.object else None  # type: ignore
+            else:
+                owner_id = shift.object.owner_id if shift.object else None  # type: ignore
+
+            if owner_id:
+                reasons = await CancellationPolicyService.get_owner_reasons(
+                    db,
+                    owner_id,
+                    only_visible=False,
+                    only_active=True,
+                )
+                reason_titles = {reason.code: reason.title for reason in reasons}
+
+            history_items = build_shift_history_items(
+                history_entries,
+                timezone=timezone,
+                actor_names=actor_names,
+                reason_titles=reason_titles,
+            )
             
             return templates.TemplateResponse("employee/shifts/detail.html", {
                 "request": request,
                 "current_user": current_user,
                 "shift": shift_data,
-                "available_interfaces": available_interfaces
+                "available_interfaces": available_interfaces,
+                "history_items": history_items,
             })
             
     except HTTPException:

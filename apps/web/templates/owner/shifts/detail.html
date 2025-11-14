@@ -421,6 +421,54 @@
                     </div>
                     {% endif %}
 
+                    {% if history_items %}
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-clock-history"></i> История операций
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled mb-0">
+                                {% for item in history_items %}
+                                <li class="mb-3">
+                                    <div class="d-flex align-items-start">
+                                        <span class="badge {{ item.badge_class }} rounded-pill me-3">
+                                            <i class="bi {{ item.icon }}"></i>
+                                        </span>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <strong>{{ item.title }}</strong>
+                                                <small class="text-muted">{{ item.created_at }}</small>
+                                            </div>
+                                            {% if item.status_change %}
+                                            <div class="text-muted small">Статус: {{ item.status_change }}</div>
+                                            {% endif %}
+                                            <div class="text-muted small">
+                                                Источник: {{ item.source_label }}
+                                                {% if item.actor_label %}
+                                                    · {{ item.actor_label }}
+                                                {% endif %}
+                                            </div>
+                                            {% if item.payload_items %}
+                                            <ul class="list-inline small mb-0">
+                                                {% for payload in item.payload_items %}
+                                                <li class="list-inline-item">
+                                                    <span class="text-muted">{{ payload.label }}:</span>
+                                                    <span class="fw-semibold">{{ payload.value }}</span>
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- Заметки -->
                     {% if shift.notes %}
                     <div class="card mb-4">

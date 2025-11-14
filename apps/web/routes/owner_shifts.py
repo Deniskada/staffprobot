@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Query, status, HTTPException, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from datetime import date, datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc
 from sqlalchemy.orm import selectinload
@@ -16,6 +16,12 @@ from domain.entities.time_slot import TimeSlot
 from domain.entities.object import Object
 from domain.entities.user import User
 from apps.web.utils.timezone_utils import web_timezone_helper
+from apps.web.utils.shift_history_utils import build_shift_history_items
+from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.cancellation_policy_service import CancellationPolicyService
+from shared.services.shift_cancellation_service import ShiftCancellationService
+from shared.services.shift_status_sync_service import ShiftStatusSyncService
+from core.cache.redis_cache import cache
 from core.logging.logger import logger
 
 router = APIRouter()
@@ -433,7 +439,8 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
             # Запланированная смена
             query = select(ShiftSchedule).options(
                 selectinload(ShiftSchedule.object),
-                selectinload(ShiftSchedule.user)
+                selectinload(ShiftSchedule.user),
+                selectinload(ShiftSchedule.actual_shifts)
             ).where(ShiftSchedule.id == shift_id)
         else:
             # Реальная смена
@@ -542,6 +549,58 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
                         'deduction_amount': float(template.deduction_amount) if template.deduction_amount else 0
                     })
         
+        timezone_name = getattr(shift.object, "timezone", None) or "Europe/Moscow"
+        history_service = ShiftHistoryService(session)
+        history_entries: List = []
+
+        if shift_type == "schedule":
+            history_entries.extend(
+                await history_service.fetch_history(schedule_id=shift.id)
+            )
+            # Если есть связанные фактические смены, добавить их историю
+            actual_shifts = getattr(shift, "actual_shifts", []) or []
+            for actual in actual_shifts:
+                history_entries.extend(
+                    await history_service.fetch_history(shift_id=actual.id)
+                )
+        else:
+            history_entries.extend(
+                await history_service.fetch_history(shift_id=shift.id)
+            )
+            schedule_id = getattr(shift, "schedule_id", None)
+            if schedule_id:
+                history_entries.extend(
+                    await history_service.fetch_history(schedule_id=schedule_id)
+                )
+
+        actor_ids = {entry.actor_id for entry in history_entries if entry.actor_id}
+        actor_names: Dict[int, str] = {}
+        if actor_ids:
+            users_result = await session.execute(
+                select(User.id, User.first_name, User.last_name).where(User.id.in_(actor_ids))
+            )
+            for row in users_result.all():
+                full_name = " ".join(filter(None, [row.last_name, row.first_name])).strip()
+                actor_names[row.id] = full_name or f"ID {row.id}"
+
+        reason_titles: Dict[str, str] = {}
+        owner_id = getattr(shift.object, "owner_id", None)
+        if owner_id:
+            reasons = await CancellationPolicyService.get_owner_reasons(
+                session,
+                owner_id,
+                only_visible=False,
+                only_active=True,
+            )
+            reason_titles = {reason.code: reason.title for reason in reasons}
+
+        history_items = build_shift_history_items(
+            history_entries,
+            timezone=timezone_name,
+            actor_names=actor_names,
+            reason_titles=reason_titles,
+        )
+
         return templates.TemplateResponse("owner/shifts/detail.html", {
             "request": request,
             "current_user": current_user,
@@ -549,7 +608,8 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
             "shift_type": shift_type,
             "object": shift.object,
             "shift_tasks": shift_tasks,
-            "web_timezone_helper": web_timezone_helper
+            "web_timezone_helper": web_timezone_helper,
+            "history_items": history_items,
         })
 
 
@@ -566,93 +626,113 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
     async with get_async_session() as session:
         # Получаем внутренний ID пользователя
         user_id = await get_user_id_from_current_user(current_user, session)
+        if not user_id:
+            return JSONResponse({"success": False, "error": "Пользователь не найден"}, status_code=401)
+
+        cancelled_by_type = "owner"
+        actor_role = user_role if user_role != "superadmin" else "superadmin"
+        if actor_role == "superadmin":
+            cancelled_by_type = "owner"
+
+        cancellation_service = ShiftCancellationService(session)
+        sync_service = ShiftStatusSyncService(session)
+        history_service = ShiftHistoryService(session)
+
         if shift_type == "schedule":
-            # Отмена запланированной смены
-            query = select(ShiftSchedule).options(
-                selectinload(ShiftSchedule.object)
+            schedule_query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.object),
+                selectinload(ShiftSchedule.actual_shifts),
             ).where(ShiftSchedule.id == shift_id)
-            result = await session.execute(query)
-            shift = result.scalar_one_or_none()
-            
-            if shift and shift.status == "planned":
-                # Проверка прав доступа
-                if user_role != "superadmin":
-                    if shift.object.owner_id != user_id:
-                        return JSONResponse({"success": False, "error": "Нет прав доступа"})
-                
-                # Отмена смены
-                shift.status = "cancelled"
-                shift.updated_at = datetime.utcnow()
-                await session.commit()
-                
-                return JSONResponse({"success": True, "message": "Запланированная смена отменена"})
-            else:
-                return JSONResponse({"success": False, "error": "Смена не найдена или уже отменена"})
+            schedule_result = await session.execute(schedule_query)
+            schedule = schedule_result.scalar_one_or_none()
+
+            if not schedule or schedule.status not in {"planned", "confirmed"}:
+                return JSONResponse({"success": False, "error": "Смена не найдена или уже отменена"}, status_code=400)
+
+            if user_role != "superadmin" and schedule.object.owner_id != user_id:
+                return JSONResponse({"success": False, "error": "Нет прав доступа"}, status_code=403)
+
+            cancel_result = await cancellation_service.cancel_shift(
+                shift_schedule_id=schedule.id,
+                cancelled_by_user_id=user_id,
+                cancelled_by_type=cancelled_by_type,
+                cancellation_reason="owner_decision",
+                actor_role=actor_role,
+                source="web",
+                extra_payload={"origin": "owner_shifts_legacy"},
+            )
+            if not cancel_result.get("success"):
+                return JSONResponse(
+                    {"success": False, "error": cancel_result.get("message", "Не удалось отменить смену")},
+                    status_code=400,
+                )
+
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
+            return JSONResponse({"success": True, "message": cancel_result.get("message", "Смена отменена")})
+
+        # Работа с фактической сменой
+        shift_query = select(Shift).options(
+            selectinload(Shift.object)
+        ).where(Shift.id == shift_id)
+        shift_result = await session.execute(shift_query)
+        shift = shift_result.scalar_one_or_none()
+
+        if not shift or shift.status not in {"active", "planned"}:
+            return JSONResponse({"success": False, "error": "Смена не найдена или уже завершена"}, status_code=400)
+
+        if user_role != "superadmin" and shift.object.owner_id != user_id:
+            return JSONResponse({"success": False, "error": "Нет прав доступа"}, status_code=403)
+
+        if shift.schedule_id:
+            cancel_result = await cancellation_service.cancel_shift(
+                shift_schedule_id=shift.schedule_id,
+                cancelled_by_user_id=user_id,
+                cancelled_by_type=cancelled_by_type,
+                cancellation_reason="owner_decision",
+                actor_role=actor_role,
+                source="web",
+                extra_payload={"origin": "owner_shifts_legacy"},
+            )
+            if not cancel_result.get("success"):
+                return JSONResponse(
+                    {"success": False, "error": cancel_result.get("message", "Не удалось отменить смену")},
+                    status_code=400,
+                )
         else:
-            # Отмена активной смены
-            query = select(Shift).options(
-                selectinload(Shift.object)
-            ).where(Shift.id == shift_id)
-            result = await session.execute(query)
-            shift = result.scalar_one_or_none()
-            
-            if shift and shift.status == "active":
-                # Проверка прав доступа
-                if user_role != "superadmin":
-                    if shift.object.owner_id != user_id:
-                        return JSONResponse({"success": False, "error": "Нет прав доступа"})
-                
-                # Закрытие смены
-                shift.status = "completed"
+            previous_status = shift.status
+            shift.status = "cancelled"
+            if not shift.end_time:
                 shift.end_time = datetime.utcnow()
-                shift.updated_at = datetime.utcnow()
-                await session.commit()
-                
-                # Создаём уведомление о завершении смены
-                try:
-                    from shared.services.notification_service import NotificationService
-                    from domain.entities.notification import (
-                        NotificationType,
-                        NotificationChannel,
-                        NotificationPriority,
-                    )
-                    from core.celery.tasks.notification_tasks import send_notification_now
-                    
-                    notif_service = NotificationService()
-                    
-                    # In-App уведомление
-                    await notif_service.create_notification(
-                        user_id=shift.user_id,
-                        type=NotificationType.SHIFT_COMPLETED,
-                        channel=NotificationChannel.IN_APP,
-                        title="Смена завершена",
-                        message=f"Смена на объекте {shift.object.name} завершена",
-                        data={"shift_id": shift.id, "object_id": shift.object_id},
-                        priority=NotificationPriority.LOW,
-                        scheduled_at=None,
-                    )
-                    
-                    # Telegram уведомление
-                    notif = await notif_service.create_notification(
-                        user_id=shift.user_id,
-                        type=NotificationType.SHIFT_COMPLETED,
-                        channel=NotificationChannel.TELEGRAM,
-                        title="Смена завершена",
-                        message=f"Смена на объекте {shift.object.name} завершена",
-                        data={"shift_id": shift.id, "object_id": shift.object_id},
-                        priority=NotificationPriority.LOW,
-                        scheduled_at=None,
-                    )
-                    
-                    if notif and getattr(notif, "id", None):
-                        send_notification_now.apply_async(args=[notif.id], queue="notifications")
-                        logger.info("Shift completed notification created", shift_id=shift.id, user_id=shift.user_id)
-                except Exception as e:
-                    logger.error(f"Failed to create shift completed notification: {e}")
-                
-                return JSONResponse({"success": True, "message": "Смена завершена"})
-            else:
-                return JSONResponse({"success": False, "error": "Смена не найдена или уже завершена"})
+            shift.updated_at = datetime.utcnow()
+
+            await history_service.log_event(
+                operation="shift_cancel",
+                source="web",
+                actor_id=user_id,
+                actor_role=actor_role,
+                shift_id=shift.id,
+                schedule_id=None,
+                old_status=previous_status,
+                new_status="cancelled",
+                payload={
+                    "reason_code": "owner_decision",
+                    "origin": "owner_shifts_legacy",
+                },
+            )
+            # Нет связанного расписания — просто фиксируем факт через sync (ничего не изменит, но оставим для единообразия)
+            await sync_service.cancel_linked_shifts(
+                None,
+                actor_id=user_id,
+                actor_role=actor_role,
+                source="web",
+                payload={"origin": "owner_shifts_legacy"},
+            )
+            await session.commit()
+
+        await cache.clear_pattern("calendar_shifts:*")
+        await cache.clear_pattern("api_response:*")
+        return JSONResponse({"success": True, "message": "Смена отменена"})
 
 
 @router.post("/{shift_id}/tasks/{task_id}/toggle")

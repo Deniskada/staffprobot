@@ -15,6 +15,7 @@ from domain.entities.user import User
 from core.logging.logger import logger
 from shared.services.cancellation_policy_service import CancellationPolicyService
 from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.shift_status_sync_service import ShiftStatusSyncService
 
 
 class ShiftCancellationService:
@@ -83,6 +84,14 @@ class ShiftCancellationService:
             now_utc = datetime.now(timezone.utc)
             time_delta = shift.planned_start - now_utc
             hours_before_shift = Decimal(str(round(time_delta.total_seconds() / 3600, 2)))
+
+            sync_service = ShiftStatusSyncService(self.session)
+            base_payload: Dict[str, Any] = {
+                "reason_code": cancellation_reason,
+                "notes": reason_notes,
+                "document_description": document_description,
+                "hours_before_shift": float(hours_before_shift) if hours_before_shift is not None else None,
+            }
             
             # Получаем объект для настроек штрафов (с eager loading org_unit и цепочки parent'ов)
             object_query = select(Object).where(Object.id == shift.object_id).options(
@@ -132,6 +141,18 @@ class ShiftCancellationService:
             history_service = ShiftHistoryService(self.session)
 
             if is_respectful:
+                respectful_payload = dict(base_payload)
+                if extra_payload:
+                    respectful_payload.update(extra_payload)
+
+                await sync_service.cancel_linked_shifts(
+                    shift,
+                    actor_id=cancelled_by_user_id,
+                    actor_role=actor_role or cancelled_by_type,
+                    source=source,
+                    payload=respectful_payload,
+                )
+
                 await history_service.log_event(
                     operation="schedule_cancel",
                     source=source,
@@ -141,13 +162,7 @@ class ShiftCancellationService:
                     shift_id=None,
                     old_status=previous_status,
                     new_status=shift.status,
-                    payload={
-                        "reason_code": cancellation_reason,
-                        "notes": reason_notes,
-                        "document_description": document_description,
-                        "hours_before_shift": float(hours_before_shift) if hours_before_shift is not None else None,
-                        **(extra_payload or {}),
-                    },
+                    payload=respectful_payload,
                 )
                 await self.session.commit()
                 logger.info(
@@ -235,16 +250,23 @@ class ShiftCancellationService:
             elif applied_parts:
                 cancellation.fine_reason = 'short_notice' if applied_parts[0] == 'короткий срок' else 'invalid_reason'
 
-            payload = {
-                "reason_code": cancellation_reason,
-                "notes": reason_notes,
-                "document_description": document_description,
-                "hours_before_shift": float(hours_before_shift) if hours_before_shift is not None else None,
-                "fine_amount": float(total_fine) if total_fine > 0 else None,
-                "fine_reason": cancellation.fine_reason,
-            }
+            payload = dict(base_payload)
+            payload.update(
+                {
+                    "fine_amount": float(total_fine) if total_fine > 0 else None,
+                    "fine_reason": cancellation.fine_reason,
+                }
+            )
             if extra_payload:
                 payload.update(extra_payload)
+
+            await sync_service.cancel_linked_shifts(
+                shift,
+                actor_id=cancelled_by_user_id,
+                actor_role=actor_role or cancelled_by_type,
+                source=source,
+                payload=payload,
+            )
 
             await history_service.log_event(
                 operation="schedule_cancel",
