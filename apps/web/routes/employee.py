@@ -29,6 +29,7 @@ from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
 from shared.services.object_access_service import ObjectAccessService
+from shared.services.shift_history_service import ShiftHistoryService
 from apps.web.utils.calendar_utils import create_calendar_grid
 from openpyxl import Workbook
 
@@ -2886,6 +2887,27 @@ async def employee_plan_shift(
         )
         
         db.add(shift_schedule)
+        await db.flush()
+
+        actor_role = "owner" if is_owner else "employee"
+        history_service = ShiftHistoryService(db)
+        await history_service.log_event(
+            operation="schedule_plan",
+            source="web",
+            actor_id=user_id,
+            actor_role=actor_role,
+            schedule_id=shift_schedule.id,
+            old_status=None,
+            new_status="planned",
+            payload={
+                "object_id": timeslot.object_id,
+                "time_slot_id": timeslot_id,
+                "employee_id": user_id,
+                "planned_start": slot_datetime.isoformat(),
+                "planned_end": end_datetime.isoformat(),
+                "origin": "employee_calendar",
+            },
+        )
         await db.commit()
         await db.refresh(shift_schedule)
         

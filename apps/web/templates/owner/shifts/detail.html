@@ -513,42 +513,6 @@
     </div>
 </div>
 
-<!-- Модальное окно отмены смены -->
-<div class="modal fade" id="cancelModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Отмена смены</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="cancelReason" class="form-label">Причина отмены *</label>
-                    <select class="form-select" id="cancelReason" required>
-                        <option value="">Выберите причину...</option>
-                        <option value="owner_decision">Решение владельца</option>
-                        <option value="schedule_change">Изменение расписания</option>
-                        <option value="employee_request">Просьба сотрудника</option>
-                        <option value="other">Другая причина</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="cancelNotes" class="form-label">Примечание (опционально)</label>
-                    <textarea class="form-control" id="cancelNotes" rows="3" placeholder="Дополнительная информация..."></textarea>
-                </div>
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    Это действие нельзя отменить.
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <button type="button" class="btn btn-danger" id="confirmCancel">Отменить смену</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Модальное окно добавления задачи -->
 <div class="modal fade" id="addTaskModal" tabindex="-1">
     <div class="modal-dialog">
@@ -578,57 +542,22 @@
 </div>
 
 <script>
-function cancelShift() {
-    const modal = new bootstrap.Modal(document.getElementById('cancelModal'));
-    modal.show();
-}
+const SHIFT_TYPE = {{ shift_type | tojson }};
+const SCHEDULE_ID = {{ (shift.id if shift_type == 'schedule' else shift.schedule_id) | tojson }};
 
-document.getElementById('confirmCancel').addEventListener('click', async function() {
-    const reason = document.getElementById('cancelReason').value;
-    const notes = document.getElementById('cancelNotes').value;
-    
-    if (!reason) {
-        showNotification('Пожалуйста, выберите причину отмены', 'error');
+function cancelShift() {
+    if (SHIFT_TYPE !== 'schedule' || !SCHEDULE_ID) {
+        showNotification('Отменить можно только запланированную смену', 'error');
         return;
     }
-    
-    try {
-        // Используем новый роут с причиной
-        const formData = new FormData();
-        formData.append('reason', reason);
-        if (notes) {
-            formData.append('notes', notes);
-        }
-        
-        const response = await fetch(`/owner/shifts/schedule/{{ shift.id }}/cancel`, {
-            method: 'POST',
-            body: formData,
-            credentials: 'include'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification('Смена успешно отменена', 'success');
-            setTimeout(() => {
-                window.location.href = '/owner/shifts';
-            }, 1000);
-        } else {
-            showNotification(result.message || 'Ошибка отмены смены', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showNotification('Ошибка отмены смены', 'error');
-    }
-    
-    // Закрываем модальное окно
-    const modal = bootstrap.Modal.getInstance(document.getElementById('cancelModal'));
-    modal.hide();
-    
-    // Очищаем поля
-    document.getElementById('cancelReason').value = '';
-    document.getElementById('cancelNotes').value = '';
-});
+
+    const params = new URLSearchParams();
+    params.set('shift_type', 'schedule');
+    params.set('shift_ids', String(SCHEDULE_ID));
+    params.set('return_to', `${window.location.pathname}${window.location.search}`);
+    params.set('caller', 'owner_shift_detail');
+    window.location.href = `/shared/cancellations/form?${params.toString()}`;
+}
 
 function showNotification(message, type) {
     // Создаем уведомление

@@ -89,6 +89,16 @@
             window.location.href = `/manager/shifts/plan?${params.toString()}`;
         };
 
+        const openCancellationForm = (scheduleIds, caller = 'manager_calendar') => {
+            const params = new URLSearchParams();
+            const idList = Array.isArray(scheduleIds) ? scheduleIds : [scheduleIds];
+            params.set('shift_type', 'schedule');
+            params.set('shift_ids', idList.join(','));
+            params.set('return_to', buildManagerReturnTo());
+            params.set('caller', caller);
+            window.location.href = `/shared/cancellations/form?${params.toString()}`;
+        };
+
         if (typeof UniversalCalendarManager !== 'undefined') {
             window.universalCalendar = new UniversalCalendarManager({
                 currentDate: new Date({{ year }}, {{ month - 1 }}, 1),
@@ -169,6 +179,16 @@
                     if (typeof window.renderCalendarGrid === 'function') {
                         window.renderCalendarGrid(calendarData);
                     }
+                },
+                onShiftDelete: function(shiftInfo, event) {
+                    if (event) {
+                        event.preventDefault();
+                    }
+                    if (!shiftInfo || shiftInfo.type !== 'planned' || !shiftInfo.scheduleId) {
+                        notifyCalendar('Можно отменять только запланированные смены', 'warning');
+                        return;
+                    }
+                    openCancellationForm(String(shiftInfo.scheduleId), 'manager_calendar_delete');
                 }
             });
             

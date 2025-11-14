@@ -18,6 +18,7 @@ from shared.services.role_based_login_service import RoleBasedLoginService
 from apps.web.middleware.role_middleware import require_manager_or_owner
 from apps.web.dependencies import get_current_user_dependency
 from shared.services.calendar_filter_service import CalendarFilterService
+from shared.services.shift_history_service import ShiftHistoryService
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.shift import Shift
@@ -3656,6 +3657,14 @@ async def plan_shift_manager(
         
         if not timeslot_id or not employee_id:
             raise HTTPException(status_code=400, detail="Не указан тайм-слот или сотрудник")
+
+        raw_roles = current_user.get("roles", []) or []
+        normalized_roles = [getattr(role, "value", role) for role in raw_roles]
+        actor_role = "manager"
+        if "superadmin" in normalized_roles:
+            actor_role = "superadmin"
+        elif "owner" in normalized_roles:
+            actor_role = "owner"
         
         async with get_async_session() as db:
             user_id = await get_user_id_from_current_user(current_user, db)
@@ -3900,6 +3909,27 @@ async def plan_shift_manager(
             )
             
             db.add(shift_schedule)
+            await db.flush()
+
+            history_service = ShiftHistoryService(db)
+            await history_service.log_event(
+                operation="schedule_plan",
+                source="web",
+                actor_id=user_id,
+                actor_role=actor_role,
+                schedule_id=shift_schedule.id,
+                old_status=None,
+                new_status="planned",
+                payload={
+                    "object_id": int(object_id),
+                    "time_slot_id": int(timeslot_id),
+                    "employee_id": int(employee_id),
+                    "planned_start": slot_datetime.isoformat(),
+                    "planned_end": end_datetime.isoformat(),
+                    "origin": "manager_calendar",
+                },
+            )
+
             await db.commit()
             await db.refresh(shift_schedule)
             
@@ -5694,6 +5724,7 @@ async def manager_contract_terminate(
             shifts_to_cancel = shifts_result.scalars().all()
             
             for shift in shifts_to_cancel:
+                previous_status = shift.status
                 shift.status = 'cancelled'
                 cancellation = ShiftCancellation(
                     shift_schedule_id=shift.id,
@@ -5710,6 +5741,23 @@ async def manager_contract_terminate(
                     fine_applied=False
                 )
                 db.add(cancellation)
+                
+                history_service = ShiftHistoryService(db)
+                await history_service.log_event(
+                    operation="schedule_cancel",
+                    source="system",
+                    actor_id=user_id,
+                    actor_role='manager',
+                    schedule_id=shift.id,
+                    shift_id=None,
+                    old_status=previous_status,
+                    new_status=shift.status,
+                    payload={
+                        "reason_code": "contract_termination",
+                        "notes": f"Расторгнут договор (дата увольнения: {term_date}). Причина: {reason}",
+                        "auto_generated": True,
+                    },
+                )
         
         # Сохраняем employee_id перед коммитом
         employee_id = contract.employee_id

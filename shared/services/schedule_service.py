@@ -13,6 +13,7 @@ from domain.entities.time_slot import TimeSlot
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import joinedload
 from .base_service import BaseService
+from shared.services.shift_history_service import ShiftHistoryService
 
 
 def _time_to_minutes(time_obj: time) -> int:
@@ -447,6 +448,27 @@ class ScheduleService(BaseService):
                 )
                 
                 session.add(new_shift)
+                await session.flush()
+
+                history_service = ShiftHistoryService(session)
+                await history_service.log_event(
+                    operation="schedule_plan",
+                    source="bot",
+                    actor_id=user.id,
+                    actor_role="employee",
+                    schedule_id=new_shift.id,
+                    old_status=None,
+                    new_status="planned",
+                    payload={
+                        "time_slot_id": time_slot_id,
+                        "object_id": time_slot.object_id,
+                        "planned_start": start_datetime.isoformat(),
+                        "planned_end": end_datetime.isoformat(),
+                        "notes": notes,
+                        "origin": "timeslot_service",
+                    },
+                )
+
                 await session.commit()
                 await session.refresh(new_shift)
                 

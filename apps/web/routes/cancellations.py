@@ -78,7 +78,9 @@ async def owner_cancel_shift(
             cancelled_by_user_id=user.id,
             cancelled_by_type='owner',
             cancellation_reason=reason,
-            reason_notes=notes
+            reason_notes=notes,
+            actor_role='owner',
+            source='web',
         )
         
         if result['success']:
@@ -170,12 +172,15 @@ async def manager_cancel_shift(
         
         # Используем сервис для отмены
         cancellation_service = ShiftCancellationService(db)
+        cancelled_type = 'superadmin' if is_superadmin else ('owner' if is_owner else 'manager')
         result = await cancellation_service.cancel_shift(
             shift_schedule_id=schedule_id,
             cancelled_by_user_id=internal_user_id,
-            cancelled_by_type='manager',
+            cancelled_by_type=cancelled_type,
             cancellation_reason=reason,
-            reason_notes=notes
+            reason_notes=notes,
+            actor_role=cancelled_type,
+            source='web',
         )
         
         if result['success']:

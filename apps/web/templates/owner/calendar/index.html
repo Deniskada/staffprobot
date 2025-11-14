@@ -100,6 +100,16 @@ footer {
             window.location.href = `/owner/shifts/plan?${params.toString()}`;
         };
 
+        const openCancellationForm = (scheduleIds, caller = 'owner_calendar') => {
+            const params = new URLSearchParams();
+            const idList = Array.isArray(scheduleIds) ? scheduleIds : [scheduleIds];
+            params.set('shift_type', 'schedule');
+            params.set('shift_ids', idList.join(','));
+            params.set('return_to', buildOwnerReturnTo());
+            params.set('caller', caller);
+            window.location.href = `/shared/cancellations/form?${params.toString()}`;
+        };
+
         // Создаем экземпляр универсального календаря
         if (typeof UniversalCalendarManager !== 'undefined') {
             window.universalCalendar = new UniversalCalendarManager({
@@ -197,6 +207,16 @@ footer {
                     if (window.renderCalendarGrid) {
                         window.renderCalendarGrid(calendarData);
                     }
+                },
+                onShiftDelete: function(shiftInfo, event) {
+                    if (event) {
+                        event.preventDefault();
+                    }
+                    if (!shiftInfo || shiftInfo.type !== 'planned' || !shiftInfo.scheduleId) {
+                        notifyCalendar('Удалять можно только запланированные смены', 'warning');
+                        return;
+                    }
+                    openCancellationForm(String(shiftInfo.scheduleId), 'owner_calendar_delete');
                 }
             });
         }

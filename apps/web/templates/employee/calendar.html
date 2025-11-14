@@ -85,6 +85,21 @@
                  });
              }
 
+            const buildEmployeeReturn = () => {
+                const search = window.location.search || '';
+                return `/employee/calendar${search}`;
+            };
+
+            const openCancellationForm = (scheduleIds, caller = 'employee_calendar') => {
+                const idList = Array.isArray(scheduleIds) ? scheduleIds : [scheduleIds];
+                const params = new URLSearchParams();
+                params.set('shift_type', 'schedule');
+                params.set('shift_ids', idList.join(','));
+                params.set('return_to', buildEmployeeReturn());
+                params.set('caller', caller);
+                window.location.href = `/shared/cancellations/form?${params.toString()}`;
+            };
+
              window.universalCalendar = new UniversalCalendarManager({
                 currentDate: new Date({{ year }}, {{ month - 1 }}, 1),
                 viewType: 'month',
@@ -131,6 +146,16 @@
                     if (window.renderCalendarGrid) {
                         window.renderCalendarGrid(calendarData);
                     }
+                },
+                onShiftDelete: function(shiftInfo, event) {
+                    if (event) {
+                        event.preventDefault();
+                    }
+                    if (!shiftInfo || shiftInfo.type !== 'planned' || !shiftInfo.scheduleId) {
+                        notifyCalendar('Можно отменять только запланированные смены', 'warning');
+                        return;
+                    }
+                    openCancellationForm(String(shiftInfo.scheduleId), 'employee_calendar_delete');
                 }
             });
         }

@@ -1,0 +1,173 @@
+{% extends base_template %}
+
+{% block title %}Отмена смен{% endblock %}
+
+{% macro cancellation_content() %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-xl-8 col-lg-9">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-1">Отмена смен</h1>
+                    <p class="text-muted mb-0">
+                        Выберите причину отмены. Уважительные причины помогут избежать штрафа.
+                    </p>
+                </div>
+                <a href="{{ return_to }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Назад
+                </a>
+            </div>
+
+            {% if error_messages %}
+            <div class="alert alert-danger" role="alert">
+                <h2 class="h6 fw-semibold mb-2">Не удалось отменить некоторые смены</h2>
+                <ul class="mb-0">
+                    {% for message in error_messages %}
+                    <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h2 class="h5 fw-semibold mb-3">
+                        Смены к отмене ({{ shifts | length }})
+                    </h2>
+
+                    <div class="list-group mb-4">
+                        {% for shift in shifts %}
+                        <div class="list-group-item list-group-item-action">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="fw-semibold text-primary">{{ shift.object_name }}</div>
+                                    <div class="small text-muted">ID: {{ shift.schedule_id }}</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="badge bg-light text-dark">
+                                        {{ shift.timezone }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-person-fill text-muted me-2"></i>
+                                    <span>{{ shift.employee_name }}</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-clock-history text-muted me-2"></i>
+                                    <span>{{ shift.start_label }} → {{ shift.end_label }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <form method="post" action="/shared/cancellations/submit" class="needs-validation" novalidate>
+                        <input type="hidden" name="shift_type" value="{{ shift_type }}">
+                        <input type="hidden" name="shift_ids" value="{{ shift_ids }}">
+                        <input type="hidden" name="return_to" value="{{ return_to }}">
+                        <input type="hidden" name="caller" value="{{ caller or '' }}">
+
+                        <div class="mb-3">
+                            <label for="cancellationReason" class="form-label">
+                                Причина отмены <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="cancellationReason" name="reason" required>
+                                <option value="" disabled {% if not selected_reason %}selected{% endif %}>
+                                    Выберите причину из списка
+                                </option>
+                                {% for item in reasons | sort(attribute='order_index') %}
+                                <option value="{{ item.code }}"
+                                        data-requires-document="{{ 'true' if item.requires_document else 'false' }}"
+                                        data-treated-valid="{{ 'true' if item.treated_as_valid else 'false' }}"
+                                        {% if selected_reason == item.code %}selected{% endif %}>
+                                    {{ item.title }}
+                                    {% if item.treated_as_valid %}(уважительная){% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">
+                                Причины с пометкой «уважительная» не начисляют штраф без подтверждения владельцем.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="cancellationNotes" class="form-label">Комментарий</label>
+                            <textarea class="form-control" id="cancellationNotes" name="notes" rows="3"
+                                      placeholder="Дополнительная информация (необязательно)">{{ notes or '' }}</textarea>
+                        </div>
+
+                        <div class="mb-3 d-none" id="documentDescriptionWrapper">
+                            <label for="documentDescriptionInput" class="form-label">
+                                Подтверждающий документ <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   class="form-control"
+                                   id="documentDescriptionInput"
+                                   name="document_description"
+                                   placeholder="Например: «Больничный лист №12345 от 10.11»"
+                                   value="{{ document_description or '' }}">
+                            <div class="form-text">
+                                Опишите документ или приложите ссылку. Укажите, как передадите подтверждение.
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a href="{{ return_to }}" class="btn btn-outline-secondary">
+                                Отменить и вернуться
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-x-circle me-1"></i>Отменить выбранные смены
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% block content %}{{ cancellation_content() }}{% endblock %}
+{% block manager_content %}{{ cancellation_content() }}{% endblock %}
+{% block employee_content %}{{ cancellation_content() }}{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const reasonSelect = document.getElementById('cancellationReason');
+    const documentWrapper = document.getElementById('documentDescriptionWrapper');
+    const documentInput = document.getElementById('documentDescriptionInput');
+
+    if (!reasonSelect) {
+        return;
+    }
+
+    const toggleDocumentField = () => {
+        const option = reasonSelect.options[reasonSelect.selectedIndex];
+        const requiresDocument = option && option.dataset.requiresDocument === 'true';
+
+        if (!documentWrapper) {
+            return;
+        }
+
+        if (requiresDocument) {
+            documentWrapper.classList.remove('d-none');
+            if (documentInput) {
+                documentInput.setAttribute('required', 'required');
+            }
+        } else {
+            documentWrapper.classList.add('d-none');
+            if (documentInput) {
+                documentInput.removeAttribute('required');
+            }
+        }
+    };
+
+    reasonSelect.addEventListener('change', toggleDocumentField);
+    toggleDocumentField();
+});
+</script>
+{% endblock %}
+

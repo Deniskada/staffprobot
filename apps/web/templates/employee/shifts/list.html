@@ -114,20 +114,13 @@
 </div>
 
 <script>
-async function cancelMySchedule(scheduleId) {
-    try {
-        const resp = await fetch('/employee/api/shifts/cancel', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ schedule_id: Number(scheduleId) })
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || data.success !== true) {
-            throw new Error((data && data.detail) || `HTTP ${resp.status}`);
-        }
-        location.reload();
-    } catch (e) {
-        alert('Ошибка отмены: ' + e.message);
-    }
+function cancelMySchedule(scheduleId) {
+    const params = new URLSearchParams();
+    params.set('shift_type', 'schedule');
+    params.set('shift_ids', String(scheduleId));
+    params.set('return_to', `${window.location.pathname}${window.location.search}`);
+    params.set('caller', 'employee_shifts_list');
+    window.location.href = `/shared/cancellations/form?${params.toString()}`;
 }
 </script>
 {% endblock %}

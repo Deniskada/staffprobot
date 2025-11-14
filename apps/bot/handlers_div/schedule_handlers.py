@@ -914,7 +914,12 @@ async def _execute_shift_cancellation(
                 cancelled_by_type='employee',
                 cancellation_reason=reason,
                 reason_notes=reason_notes,
-                document_description=document_description
+                document_description=document_description,
+                actor_role='employee',
+                source='bot',
+                extra_payload={
+                    "bot_flow": True,
+                },
             )
             
             if result['success']:

@@ -14,10 +14,16 @@ class UniversalCalendarManager {
         this.onTimeslotClick = options.onTimeslotClick || null;
         this.onDateClick = options.onDateClick || null;
         this.onDataLoaded = options.onDataLoaded || null;
+        this.onShiftDelete = options.onShiftDelete || null;
         
         // Data cache
         this.calendarData = null;
         this.loading = false;
+
+        this.selectedShiftId = null;
+        this.selectedShiftScheduleId = null;
+        this.selectedShiftType = null;
+        this.selectedShiftElement = null;
         
         // Dynamic loading
         this.loadedMonths = new Set(); // Кэш загруженных месяцев
@@ -34,6 +40,42 @@ class UniversalCalendarManager {
         this.bindEvents();
         this.loadCalendarData();
         this.initScrollTracking();
+    }
+
+    getShiftById(shiftId) {
+        if (!this.calendarData || !Array.isArray(this.calendarData.shifts)) {
+            return null;
+        }
+        return this.calendarData.shifts.find(
+            (shift) => String(shift.id) === String(shiftId),
+        ) || null;
+    }
+
+    _selectShiftElement(element, shiftId) {
+        if (this.selectedShiftElement && this.selectedShiftElement !== element) {
+            this.selectedShiftElement.classList.remove('shift-item-selected');
+        }
+
+        if (!element) {
+            this.selectedShiftElement = null;
+            this.selectedShiftId = null;
+            this.selectedShiftScheduleId = null;
+            this.selectedShiftType = null;
+            return;
+        }
+
+        this.selectedShiftElement = element;
+        this.selectedShiftId = shiftId;
+        this.selectedShiftElement.classList.add('shift-item-selected');
+
+        const scheduleAttr = this.selectedShiftElement.dataset.scheduleId;
+        this.selectedShiftScheduleId = scheduleAttr ? Number(scheduleAttr) : null;
+
+        let shiftType = this.selectedShiftElement.dataset.shiftType || '';
+        if (!shiftType && typeof shiftId === 'string' && shiftId.startsWith('schedule_')) {
+            shiftType = 'planned';
+        }
+        this.selectedShiftType = shiftType || null;
     }
     
     // Helpers for local date formatting (avoid UTC shifts)
@@ -325,6 +367,7 @@ class UniversalCalendarManager {
             if (shiftElement) {
                 const shiftId = shiftElement.dataset.shiftId;
                 if (shiftId) {
+                    this._selectShiftElement(shiftElement, shiftId);
                     if (typeof this.handleShiftClick === 'function') {
                         this.handleShiftClick(shiftId, e);
                     } else if (this.onShiftClick) {
@@ -336,6 +379,7 @@ class UniversalCalendarManager {
             
             const timeslotElement = e.target.closest('.timeslot-item');
             if (timeslotElement) {
+                this._selectShiftElement(null, null);
                 const timeslotId = timeslotElement.dataset.timeslotId;
                 if (timeslotId && this.onTimeslotClick) {
                     this.onTimeslotClick(timeslotId);
@@ -344,11 +388,46 @@ class UniversalCalendarManager {
             }
             
             const dayElement = e.target.closest('.calendar-day');
-            if (dayElement && this.onDateClick) {
-                const dateStr = dayElement.dataset.date;
-                this.onDateClick(dateStr, dayElement);
+            if (dayElement) {
+                this._selectShiftElement(null, null);
+                if (this.onDateClick) {
+                    const dateStr = dayElement.dataset.date;
+                    this.onDateClick(dateStr, dayElement);
+                }
             }
         });
+
+        if (typeof this.onShiftDelete === 'function') {
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Delete' && e.key !== 'Backspace') {
+                    return;
+                }
+
+                const activeElement = document.activeElement;
+                if (activeElement) {
+                    const tagName = activeElement.tagName ? activeElement.tagName.toLowerCase() : null;
+                    if (tagName && ['input', 'textarea', 'select'].includes(tagName)) {
+                        return;
+                    }
+                }
+
+                if (!this.selectedShiftId) {
+                    return;
+                }
+
+                const shiftData = this.getShiftById(this.selectedShiftId);
+                this.onShiftDelete(
+                    {
+                        id: this.selectedShiftId,
+                        scheduleId: this.selectedShiftScheduleId,
+                        type: this.selectedShiftType,
+                        shift: shiftData,
+                        event: e,
+                    },
+                    e,
+                );
+            });
+        }
     }
     
     async loadCalendarData(startDate = null, endDate = null, objectIds = null, skipAutoScroll = false) {

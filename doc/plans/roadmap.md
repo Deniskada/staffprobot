@@ -1184,27 +1184,27 @@
 **Описание:** Исправления логики фильтров и расчётов в разделах начислений и корректировок владельца.
 
 ### Задачи
-+- [x] Безопасная обработка пустого `employee_id` и валидация дат в `/owner/payroll`  
+- [x] Безопасная обработка пустого `employee_id` и валидация дат в `/owner/payroll`  
   - Type: bugfix | Files: `apps/web/routes/payroll.py`, шаблон списка
-+- [x] Фильтр сотрудников по пересечению периода договора (учёт `termination_date`) и сортировка `Фамилия Имя`  
+- [x] Фильтр сотрудников по пересечению периода договора (учёт `termination_date`) и сортировка `Фамилия Имя`  
   - Type: improvement | Files: `apps/web/routes/payroll.py`, `apps/web/templates/owner/payroll/list.html`
-+- [x] Ручной пересчёт: включение terminated контрактов с policy `termination_date` при `period_end <= termination_date`  
+- [x] Ручной пересчёт: включение terminated контрактов с policy `termination_date` при `period_end <= termination_date`  
   - Type: bugfix | Files: `apps/web/routes/payroll.py`
-+- [x] Смягчение фильтра на странице корректировок: показывать по объектам владельца (прямо/через ShiftSchedule)  
+- [x] Смягчение фильтра на странице корректировок: показывать по объектам владельца (прямо/через ShiftSchedule)  
   - Type: improvement | Files: `apps/web/routes/owner_payroll_adjustments.py`
-+- [ ] Диагностика кейсов с «неправильными договорами» и очистка данных (удаление лишних контрактов)  
+- [ ] Диагностика кейсов с «неправильными договорами» и очистка данных (удаление лишних контрактов)  
   - Type: data-fix | SQL инструкции подготовлены
-+- [ ] Доп. тесты для verify-потока и отчёта выплат  
+- [ ] Доп. тесты для verify-потока и отчёта выплат  
   - Type: testing
 
 ### Документация
 +- Обновлены: `doc/vision_v1/entities/payroll.md`, `doc/vision_v1/roles/owner.md`
 
 ### DoD (промежуточный)
-+- [x] Изменённые роуты задокументированы  
-+- [x] Логика фильтров отражена в документации  
-+- [ ] Пройдено ручное тестирование на dev  
-+- [ ] Пройдено ревью владельцем проекта
+- [x] Изменённые роуты задокументированы  
+- [x] Логика фильтров отражена в документации  
+- [ ] Пройдено ручное тестирование на dev  
+- [ ] Пройдено ревью владельцем проекта
 
 ## Итерация 43: Улучшения интерфейса (Owner, Login, Manager)
 
@@ -1425,27 +1425,31 @@
 **Цель:** зафиксировать каждое изменение жизненного цикла смен (планирование, открытие, закрытие, отмена, автопроцессы) и визуализировать историю в карточках смен.
 
 ### Фаза 1: Аудит текущих потоков
-- [ ] Составить карту точек изменения статусов:
+- [x] Составить карту точек изменения статусов:
   - веб: `/owner|manager|employee/api/calendar/plan-shift`, `/.../cancel-shift`, `ScheduleService.create_scheduled_shift_from_timeslot`
   - bot: `schedule_handlers.py`, `shift_handlers.py`, `TimeSlotService`
   - авто-задачи: `core/celery/tasks/shift_tasks.py`
 - [ ] Зафиксировать статусы (`planned`, `confirmed`, `active`, `completed`, `cancelled`) и сценарии переходов, описать существующие несогласованности (пример: расписание отменено, фактическая смена активна).
 
 ### Фаза 2: Логирование и нормализация
-- [ ] Добавить таблицу `shift_history` (shift_id, schedule_id, operation, actor_id, actor_type, source, old_status, new_status, payload, created_at).
-- [ ] Встроить запись логов во все сервисы/роуты (web, bot, celery).
+- [x] Добавить таблицу `shift_history` (shift_id, schedule_id, operation, actor_id, actor_type, source, old_status, new_status, payload, created_at).
+- [x] Встроить запись логов во все сервисы/роуты (web, bot, celery).
 - [ ] Синхронизировать присвоение статусов для `Shift` и `ShiftSchedule` (устранить комбинации `active + cancelled`).
 - [ ] Актуализировать отмену: вместе с расписанием переводить связанные фактические смены в `cancelled`.
-- [ ] Унифицировать процедуру отмены смен (сотрудник/управляющий/владелец): общий справочник причин (как в боте), единая форма/валидация/логика в API и UI.
+- [x] Унифицировать процедуру отмены смен (сотрудник/управляющий/владелец): общий справочник причин (как в боте), единая форма/валидация/логика в API и UI.
+- [x] Создать shared-страницу отмены смен в веб-интерфейсе (единый роут и шаблон) для ролей сотрудник/управляющий/владелец вместо модальных форм; внедрить использование в соответствующих разделах.
+- [ ] Разработать единый сервис загрузки медиа: на prod Selectel Object Storage, на dev MinIO (Docker); скрыть текущий Telegram-провайдер за абстракцией и подключить shared-страницу подтверждений отмен.
+  - [ ] Технический анализ (1 день): требования по retention/доступу/типам файлов; аудит текущего использования `MediaOrchestrator` (tasks/incidents) и подготовка к Selectel/MinIO.
+  - [ ] Настройка хранилища (1-2 дня): развернуть MinIO в docker-compose.dev; создать бакет в Selectel Object Storage, настроить IAM/ACL и секреты; вынести параметры в `.env` и CI/CD.
+  - [ ] Реализация сервиса (2-3 дня): интерфейс `MediaStorageClient` (upload/list/delete/generate_url); провайдеры `TelegramMediaStorageClient` (текущий), `S3MediaStorageClient` (Selectel/MinIO); обновление `MediaOrchestrator` для переключения по конфигу.
+  - [ ] Миграция и интеграция (2 дня): добавить `media_meta` в `ShiftCancellation` (миграция); создать shared-страницу отмены с загрузкой подтверждений; адаптировать формы owner/manager/employee.
+  - [ ] Документация и Project Brain (0.5 дня): обновить `doc/vision_v1/shared/media_storage.md`, `DOCUMENTATION_RULES.md`; занести информацию в Project Brain.
+  - [ ] Тестирование и деплой (1 день): юнит-тесты с моками провайдеров; функциональные сценарии на dev (MinIO) и prod (Selectel); проверка политик доступа и presigned URL.
+ 
+ ### Фаза 3: UI/отчётность
+ - [ ] Добавить вкладку «История» в карточках:
+   - `/owner/shifts/<schedule_id>?shift_type=schedule`
+   - `/owner/shifts/<shift_id>?shift_type=shift`
 
-### Фаза 3: UI/отчётность
-- [ ] Добавить вкладку «История» в карточках:
-  - `/owner/shifts/<schedule_id>?shift_type=schedule`
-  - `/owner/shifts/<shift_id>?shift_type=shift`
-- [ ] Показывать дату, исполнителя, действие, источник (web/bot/auto), содержимое payload.
-- [ ] Добавить фильтры по типам операций и индикаторы несогласованностей.
+---
 
-### Фаза 4: Тестирование и документация
-- [ ] Unit/интеграционные тесты для основных сценариев (планирование, отмена, авто-открытие/закрытие, бот).
-- [ ] Обновить `doc/vision_v1/shared/calendar.md`, `doc/vision_v1/roles/owner.md`, `doc/vision_v1/roles/manager.md`, `DOCUMENTATION_RULES.md`.
-- [ ] Добавить справку в Project Brain (новые таблицы/эндпоинты).

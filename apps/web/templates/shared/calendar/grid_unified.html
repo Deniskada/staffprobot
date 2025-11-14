@@ -458,6 +458,12 @@ window.unifiedCalendar = {
         const element = document.createElement('div');
         element.className = `shift-item shift-${shift.shift_type}`;
         element.setAttribute('data-shift-id', shift.id);
+        if (shift.shift_type) {
+            element.setAttribute('data-shift-type', String(shift.shift_type).toLowerCase());
+        }
+        if (typeof shift.schedule_id !== 'undefined' && shift.schedule_id !== null) {
+            element.setAttribute('data-schedule-id', shift.schedule_id);
+        }
         element.onclick = () => {
             if (window.universalCalendar && window.universalCalendar.onShiftClick) {
                 window.universalCalendar.onShiftClick(shift.id);

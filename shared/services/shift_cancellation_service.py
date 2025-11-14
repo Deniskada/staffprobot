@@ -14,6 +14,7 @@ from domain.entities.payroll_adjustment import PayrollAdjustment
 from domain.entities.user import User
 from core.logging.logger import logger
 from shared.services.cancellation_policy_service import CancellationPolicyService
+from shared.services.shift_history_service import ShiftHistoryService
 
 
 class ShiftCancellationService:
@@ -30,7 +31,11 @@ class ShiftCancellationService:
         cancellation_reason: str,
         reason_notes: Optional[str] = None,
         document_description: Optional[str] = None,
-        contract_id: Optional[int] = None
+        contract_id: Optional[int] = None,
+        *,
+        actor_role: Optional[str] = None,
+        source: str = "web",
+        extra_payload: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Отменить запланированную смену.
@@ -99,6 +104,7 @@ class ShiftCancellationService:
                     is_respectful = cancellation_reason in {'medical_cert', 'emergency_cert', 'police_cert'}
 
             # Отменяем смену
+            previous_status = shift.status
             shift.status = 'cancelled'
 
             # Создаем запись об отмене
@@ -123,7 +129,26 @@ class ShiftCancellationService:
             await self.session.flush()
 
             # Если причина уважительная — уходим на модерацию без мгновенных штрафов
+            history_service = ShiftHistoryService(self.session)
+
             if is_respectful:
+                await history_service.log_event(
+                    operation="schedule_cancel",
+                    source=source,
+                    actor_id=cancelled_by_user_id,
+                    actor_role=actor_role or cancelled_by_type,
+                    schedule_id=shift_schedule_id,
+                    shift_id=None,
+                    old_status=previous_status,
+                    new_status=shift.status,
+                    payload={
+                        "reason_code": cancellation_reason,
+                        "notes": reason_notes,
+                        "document_description": document_description,
+                        "hours_before_shift": float(hours_before_shift) if hours_before_shift is not None else None,
+                        **(extra_payload or {}),
+                    },
+                )
                 await self.session.commit()
                 logger.info(
                     f"Shift {shift_schedule_id} cancelled by {cancelled_by_type} (user_id={cancelled_by_user_id}), pending moderation"
@@ -209,6 +234,29 @@ class ShiftCancellationService:
                 cancellation.fine_reason = 'both'
             elif applied_parts:
                 cancellation.fine_reason = 'short_notice' if applied_parts[0] == 'короткий срок' else 'invalid_reason'
+
+            payload = {
+                "reason_code": cancellation_reason,
+                "notes": reason_notes,
+                "document_description": document_description,
+                "hours_before_shift": float(hours_before_shift) if hours_before_shift is not None else None,
+                "fine_amount": float(total_fine) if total_fine > 0 else None,
+                "fine_reason": cancellation.fine_reason,
+            }
+            if extra_payload:
+                payload.update(extra_payload)
+
+            await history_service.log_event(
+                operation="schedule_cancel",
+                source=source,
+                actor_id=cancelled_by_user_id,
+                actor_role=actor_role or cancelled_by_type,
+                schedule_id=shift_schedule_id,
+                shift_id=None,
+                old_status=previous_status,
+                new_status=shift.status,
+                payload=payload,
+            )
 
             await self.session.commit()
 

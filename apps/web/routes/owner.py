@@ -30,6 +30,7 @@ from apps.web.services.object_service import ObjectService, TimeSlotService
 from apps.web.utils.timezone_utils import web_timezone_helper
 from shared.services.system_features_service import SystemFeaturesService
 from shared.services.calendar_filter_service import CalendarFilterService
+from shared.services.shift_history_service import ShiftHistoryService
 from shared.models.calendar_data import TimeslotStatus
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
@@ -3131,6 +3132,27 @@ async def api_calendar_plan_shift(
                 notes="Запланировано через drag&drop"
             )
             session.add(new_schedule)
+            await session.flush()
+
+            actor_role = "owner" if "owner" in user_roles else "superadmin"
+            history_service = ShiftHistoryService(session)
+            await history_service.log_event(
+                operation="schedule_plan",
+                source="web",
+                actor_id=user_id,
+                actor_role=actor_role,
+                schedule_id=new_schedule.id,
+                old_status=None,
+                new_status="planned",
+                payload={
+                    "object_id": int(timeslot.object_id),
+                    "time_slot_id": int(timeslot_id),
+                    "employee_id": int(employee_id),
+                    "planned_start": slot_datetime.isoformat(),
+                    "planned_end": end_datetime.isoformat(),
+                    "origin": "owner_calendar",
+                },
+            )
             await session.commit()
             
             # Очищаем кэш календаря для немедленного отображения

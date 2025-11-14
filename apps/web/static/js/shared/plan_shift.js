@@ -13,7 +13,7 @@
     employeesEndpointBase: config.employeesEndpointBase || `${config.apiBase || DEFAULT_API_BASE}/api/employees/for-object`,
     checkAvailabilityEndpoint: config.checkAvailabilityEndpoint || `${config.apiBase || DEFAULT_API_BASE}/api/calendar/check-availability`,
     planShiftEndpoint: config.planShiftEndpoint || `${config.apiBase || DEFAULT_API_BASE}/api/calendar/plan-shift`,
-    cancelScheduledShiftBase: config.cancelScheduledShiftBase || `${config.apiBase || DEFAULT_API_BASE}/shifts_legacy`,
+    cancelScheduledShiftBase: config.cancelScheduledShiftBase || '/shared/cancellations/form',
     returnToUrl: config.returnToUrl || null,
     selectedObjectId: (config.selectedObjectId !== undefined && config.selectedObjectId !== null && config.selectedObjectId !== 'null')
       ? Number(config.selectedObjectId)
@@ -154,17 +154,64 @@
         state.currentEmployeeId = settings.preselectedEmployeeId;
       }
     }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const cancelSuccess = Number(urlParams.get('cancel_success') || 0);
+    const cancelErrors = Number(urlParams.get('cancel_errors') || 0);
+    if (cancelSuccess > 0 || cancelErrors > 0) {
+      const summary = [];
+      if (cancelSuccess > 0) {
+        summary.push(`Отменено смен: ${cancelSuccess}`);
+      }
+      if (cancelErrors > 0) {
+        summary.push(`Не удалось отменить: ${cancelErrors}`);
+      }
+      alert(summary.join('\n'));
+      urlParams.delete('cancel_success');
+      urlParams.delete('cancel_errors');
+      const newUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams.toString()}` : ''}`;
+      window.history.replaceState({}, '', newUrl);
+    }
   });
 
-  function buildCancelScheduleUrl(scheduleId) {
-    if (settings.role === 'employee') {
-      return settings.cancelScheduledShiftBase || null;
-    }
+  function buildCancellationFormUrl(scheduleIds) {
     if (!settings.cancelScheduledShiftBase) {
       return null;
     }
+
     const base = settings.cancelScheduledShiftBase.replace(/\/$/, '');
-    return `${base}/schedule_${scheduleId}/cancel`;
+    const scheduleIdList = Array.isArray(scheduleIds) ? scheduleIds : [scheduleIds];
+    if (!scheduleIdList.length) {
+      return null;
+    }
+
+    const params = new URLSearchParams();
+    params.set('shift_type', 'schedule');
+    params.set('shift_ids', scheduleIdList.join(','));
+
+    const returnUrl = settings.returnToUrl || window.location.href;
+    if (returnUrl) {
+      params.set('return_to', returnUrl);
+    }
+
+    const callerLabel = settings.role ? `${settings.role}_planner` : 'planner';
+    params.set('caller', callerLabel);
+
+    const objectIdValue = DOM.objectSelect && DOM.objectSelect.value
+      ? DOM.objectSelect.value
+      : (settings.selectedObjectId || null);
+    if (objectIdValue) {
+      params.set('object_id', objectIdValue);
+    }
+
+    const employeeIdValue = settings.hideEmployeeSelect
+      ? settings.preselectedEmployeeId
+      : (DOM.employeeSelect && DOM.employeeSelect.value ? DOM.employeeSelect.value : state.currentEmployeeId);
+    if (employeeIdValue) {
+      params.set('employee_id', employeeIdValue);
+    }
+
+    return `${base}?${params.toString()}`;
   }
 
   function createEmptyCalendar() {
@@ -791,61 +838,7 @@
 
     let planSuccess = 0;
     let planErrors = 0;
-    let cancelSuccess = 0;
-    let cancelErrors = 0;
-
-    const alreadyCancelledMessageMatcher = (message) => {
-      if (!message || typeof message !== 'string') {
-        return false;
-      }
-      const normalized = message.toLowerCase();
-      return normalized.includes('не найдена') && normalized.includes('уже отменена');
-    };
-
-    const isEmployeeRole = settings.role === 'employee';
-
-    if (settings.allowCancelPlannedShifts) {
-      for (const scheduleId of shiftsToCancel) {
-        const cancelUrl = buildCancelScheduleUrl(scheduleId);
-        if (!cancelUrl) {
-          cancelErrors++;
-          continue;
-        }
-        try {
-          const requestInit = {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-          };
-          if (isEmployeeRole) {
-            requestInit.body = JSON.stringify({ schedule_id: Number(scheduleId) });
-          }
-          const response = await fetch(cancelUrl, {
-            ...requestInit
-          });
-          let result = null;
-          try {
-            result = await response.json();
-          } catch (parseError) {
-            result = null;
-          }
-          if (response.ok && result && (result.success || result.status === 'ok')) {
-            cancelSuccess++;
-          } else {
-            const message = result?.detail || result?.message || response.statusText;
-            if (alreadyCancelledMessageMatcher(message || '')) {
-              cancelSuccess++;
-              console.warn('Смена уже была отменена ранее, считаем операцию успешной.');
-            } else {
-              cancelErrors++;
-              console.error('Ошибка отмены смены:', message);
-            }
-          }
-        } catch (error) {
-          cancelErrors++;
-          console.error('Ошибка отмены смены:', error);
-        }
-      }
-    }
+    const shouldRedirectToCancellation = settings.allowCancelPlannedShifts && shiftsToCancel.length > 0;
 
     for (const slotKey of timeslotsToPlan) {
       try {
@@ -920,28 +913,38 @@
       }
     }
 
+    if (shouldRedirectToCancellation) {
+      const redirectSummary = [];
+      if (planSuccess > 0) {
+        redirectSummary.push(`Запланировано смен: ${planSuccess}`);
+      }
+      if (planErrors > 0) {
+        redirectSummary.push(`Ошибок планирования: ${planErrors}`);
+      }
+      redirectSummary.push(`Смен для отмены: ${shiftsToCancel.length}`);
+      alert(redirectSummary.join('\n'));
+
+      const cancellationUrl = buildCancellationFormUrl(shiftsToCancel);
+      if (cancellationUrl) {
+        window.location.href = cancellationUrl;
+      } else {
+        alert('Не удалось открыть страницу отмены смен');
+      }
+      return;
+    }
+
     const summaryParts = [];
     if (planSuccess > 0) {
       summaryParts.push(`Запланировано смен: ${planSuccess}`);
     }
-    if (cancelSuccess > 0) {
-      summaryParts.push(`Отменено смен: ${cancelSuccess}`);
-    }
     if (planErrors > 0) {
       summaryParts.push(`Ошибок планирования: ${planErrors}`);
-    }
-    if (cancelErrors > 0) {
-      summaryParts.push(`Ошибок отмены: ${cancelErrors}`);
     }
 
     if (summaryParts.length > 0) {
       alert(summaryParts.join('\n'));
     } else {
       alert('Изменений не выполнено');
-    }
-
-    if ((planSuccess > 0 || cancelSuccess > 0) && settings.returnToUrl) {
-      window.location.href = settings.returnToUrl;
     }
   }
 

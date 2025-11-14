@@ -675,6 +675,13 @@
     transform: translateX(2px);
 }
 
+.shift-item.shift-item-selected,
+.shift-item.shift-item-selected:hover {
+    outline: 2px solid rgba(220, 53, 69, 0.4);
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.45);
+}
+
 .shift-time {
     font-weight: 600;
     color: #155724;

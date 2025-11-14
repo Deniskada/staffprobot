@@ -8,6 +8,8 @@ import logging
 logger = logging.getLogger(__name__)
 from core.database.session import get_async_session
 from domain.entities.shift import Shift
+from domain.entities.shift_schedule import ShiftSchedule
+from shared.services.shift_history_service import ShiftHistoryService
 from sqlalchemy import select, update, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -172,7 +174,51 @@ class ShiftScheduler:
             )
             
             await session.execute(update_query)
-            
+
+            schedule = None
+            previous_schedule_status = None
+            if getattr(shift, "schedule_id", None):
+                schedule_result = await session.execute(
+                    select(ShiftSchedule).where(ShiftSchedule.id == shift.schedule_id)
+                )
+                schedule = schedule_result.scalar_one_or_none()
+                if schedule:
+                    previous_schedule_status = schedule.status
+                    schedule.status = "completed"
+                    session.add(schedule)
+
+            history_service = ShiftHistoryService(session)
+            await history_service.log_event(
+                operation="shift_auto_close",
+                source="system",
+                actor_id=None,
+                actor_role="system",
+                shift_id=shift.id,
+                schedule_id=getattr(shift, "schedule_id", None),
+                old_status=shift.status,
+                new_status="auto_closed",
+                payload={
+                    "auto_closed_at": now.isoformat(),
+                    "total_hours": total_hours,
+                    "total_payment": total_payment,
+                },
+            )
+
+            if schedule and previous_schedule_status != schedule.status:
+                await history_service.log_event(
+                    operation="schedule_complete",
+                    source="system",
+                    actor_id=None,
+                    actor_role="system",
+                    shift_id=shift.id,
+                    schedule_id=schedule.id,
+                    old_status=previous_schedule_status,
+                    new_status=schedule.status,
+                    payload={
+                        "auto_closed": True,
+                    },
+                )
+
             logger.info(
                 "Shift " + str(shift.id) + " auto-closed"
             )
@@ -240,6 +286,51 @@ class ShiftScheduler:
                 
                 update_query = update(Shift).where(Shift.id == shift_id).values(**update_data)
                 await session.execute(update_query)
+
+                schedule = None
+                previous_schedule_status = None
+                if shift.schedule_id:
+                    schedule_result = await session.execute(
+                        select(ShiftSchedule).where(ShiftSchedule.id == shift.schedule_id)
+                    )
+                    schedule = schedule_result.scalar_one_or_none()
+                    if schedule:
+                        previous_schedule_status = schedule.status
+                        schedule.status = "completed"
+                        session.add(schedule)
+
+                history_service = ShiftHistoryService(session)
+                await history_service.log_event(
+                    operation="shift_manual_close",
+                    source="system",
+                    actor_id=None,
+                    actor_role="system",
+                    shift_id=shift_id,
+                    schedule_id=shift.schedule_id,
+                    old_status=shift.status,
+                    new_status=update_data.get('status', 'completed'),
+                    payload={
+                        "end_coordinates": end_coordinates,
+                        "notes": notes,
+                        "manual": True,
+                    },
+                )
+
+                if schedule and previous_schedule_status != schedule.status:
+                    await history_service.log_event(
+                        operation="schedule_complete",
+                        source="system",
+                        actor_id=None,
+                        actor_role="system",
+                        shift_id=shift_id,
+                        schedule_id=schedule.id,
+                        old_status=previous_schedule_status,
+                        new_status=schedule.status,
+                        payload={
+                            "manual": True,
+                        },
+                    )
+
                 await session.commit()
                 
                 logger.info(

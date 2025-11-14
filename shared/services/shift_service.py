@@ -10,7 +10,9 @@ from core.utils.timezone_helper import timezone_helper
 from domain.entities.shift import Shift
 from domain.entities.object import Object
 from domain.entities.user import User
+from shared.services.shift_history_service import ShiftHistoryService
 from sqlalchemy import select, and_
+from sqlalchemy.orm import joinedload
 from .base_service import BaseService
 
 
@@ -102,6 +104,24 @@ class ShiftService(BaseService):
                 )
                 
                 session.add(new_shift)
+                await session.flush()
+
+                history_service = ShiftHistoryService(session)
+                await history_service.log_event(
+                    operation="shift_open",
+                    source="bot",
+                    actor_id=user.id,
+                    actor_role="employee",
+                    shift_id=new_shift.id,
+                    schedule_id=new_shift.schedule_id,
+                    old_status=None,
+                    new_status="active",
+                    payload={
+                        "object_id": object_id,
+                        "coordinates": coordinates,
+                    },
+                )
+
                 await session.commit()
                 await session.refresh(new_shift)
                 
@@ -185,6 +205,7 @@ class ShiftService(BaseService):
                     }
                 
                 # Закрываем смену
+                previous_shift_status = active_shift.status
                 active_shift.end_time = datetime.now()
                 active_shift.status = "completed"
                 
@@ -195,6 +216,8 @@ class ShiftService(BaseService):
                 active_shift.total_payment = hours * active_shift.hourly_rate
                 
                 # Обновляем статус shift_schedule, если это была запланированная смена
+                schedule = None
+                previous_schedule_status = None
                 if active_shift.is_planned and active_shift.schedule_id:
                     from domain.entities.shift_schedule import ShiftSchedule
                     schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == active_shift.schedule_id)
@@ -202,6 +225,7 @@ class ShiftService(BaseService):
                     schedule = schedule_result.scalar_one_or_none()
                     
                     if schedule:
+                        previous_schedule_status = schedule.status
                         schedule.status = "completed"
                         session.add(schedule)
                         logger.info(
@@ -210,6 +234,39 @@ class ShiftService(BaseService):
                             shift_id=active_shift.id
                         )
                 
+                history_service = ShiftHistoryService(session)
+                await history_service.log_event(
+                    operation="shift_close",
+                    source="bot",
+                    actor_id=user.id,
+                    actor_role="employee",
+                    shift_id=active_shift.id,
+                    schedule_id=active_shift.schedule_id,
+                    old_status=previous_shift_status,
+                    new_status=active_shift.status,
+                    payload={
+                        "object_id": active_shift.object_id,
+                        "coordinates": coordinates,
+                        "hours": hours,
+                        "payment": float(active_shift.total_payment) if active_shift.total_payment else None,
+                    },
+                )
+
+                if schedule and previous_schedule_status != schedule.status:
+                    await history_service.log_event(
+                        operation="schedule_complete",
+                        source="bot",
+                        actor_id=user.id,
+                        actor_role="employee",
+                        schedule_id=schedule.id,
+                        shift_id=active_shift.id,
+                        old_status=previous_schedule_status,
+                        new_status=schedule.status,
+                        payload={
+                            "completed_by_shift_id": active_shift.id,
+                        },
+                    )
+
                 await session.commit()
                 
                 logger.info(
