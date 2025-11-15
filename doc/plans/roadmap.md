@@ -1434,7 +1434,12 @@
 ### Фаза 2: Логирование и нормализация
 - [x] Добавить таблицу `shift_history` (shift_id, schedule_id, operation, actor_id, actor_type, source, old_status, new_status, payload, created_at).
 - [x] Встроить запись логов во все сервисы/роуты (web, bot, celery).
-- [ ] Синхронизировать присвоение статусов для `Shift` и `ShiftSchedule`: собрать матрицу переходов, устранить комбинации `active + cancelled`, обрабатывать автоматические сценарии (bot/web, `shift_service`, `shift_tasks`, расторжение договоров).
+- [x] Синхронизировать присвоение статусов для `Shift` и `ShiftSchedule`: собрать матрицу переходов, устранить комбинации `active + cancelled`, обрабатывать автоматические сценарии (bot/web, `shift_service`, `shift_tasks`, расторжение договоров).
+  - [x] Создана матрица переходов статусов (`doc/vision_v1/entities/shift_status_transitions.md`)
+  - [x] Расширен `ShiftStatusSyncService` методами `sync_on_shift_open`, `sync_on_shift_close`, `sync_on_shift_cancel`, `sync_on_schedule_cancel`
+  - [x] Интегрирован `ShiftStatusSyncService` во все места изменения статусов (shared/services/shift_service.py, core/scheduler/shift_scheduler.py, apps/bot/services/shift_service.py, core/celery/tasks/shift_tasks.py)
+  - [x] Устранены нестандартные статусы (`in_progress` заменен на использование синхронизации, `auto_closed` заменен на `completed`)
+  - [x] Добавлены проверки запрещенных комбинаций статусов (cancelled + active/completed, completed + active)
 - [ ] Актуализировать отмену: при смене статуса расписания приводить связанные фактические смены к `cancelled`, логировать системные операции (actor_role=`system`), покрыть `_cancel_shifts_after_termination` и аналогичные кейсы.
 - [ ] Backfill и выравнивание: миграция/скрипт для исторических `schedule_plan`/`schedule_cancel`, корректировка статусов `Shift` vs `ShiftSchedule`, отчёт о затронутых записях.
 - [x] Нормализовать уведомления о сменах: переименовать `SHIFT_CONFIRMED` в «Планирование смены сотрудником», реализовать полный набор сменных уведомлений (планирование, открытие, закрытие, отмена, напоминание), обновить Celery/триггеры, документацию и настройки каналов.

@@ -305,21 +305,20 @@ class ShiftService:
                 session.add(new_shift)
                 await session.flush()  # Получаем new_shift.id без коммита
                 
-                # Обновляем статус shift_schedule, если это запланированная смена
+                # Синхронизация статусов при открытии смены из расписания
                 if shift_type == "planned" and schedule_id:
-                    from domain.entities.shift_schedule import ShiftSchedule
-                    schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == schedule_id)
-                    schedule_result = await session.execute(schedule_query)
-                    schedule = schedule_result.scalar_one_or_none()
-                    
-                    if schedule:
-                        schedule.status = "in_progress"
-                        session.add(schedule)
-                        logger.info(
-                            f"Updated shift_schedule status to in_progress",
-                            schedule_id=schedule_id,
-                            shift_id=new_shift.id
-                        )
+                    from shared.services.shift_status_sync_service import ShiftStatusSyncService
+                    sync_service = ShiftStatusSyncService(session)
+                    await sync_service.sync_on_shift_open(
+                        new_shift,
+                        actor_id=db_user.id,
+                        actor_role="employee",
+                        source="bot",
+                        payload={
+                            "object_id": object_id,
+                            "coordinates": coordinates,
+                        },
+                    )
                 
                 # Tasks v2: Создаём TaskEntryV2 для только что открытой смены (ДО коммита, в той же транзакции)
                 try:
@@ -455,22 +454,8 @@ class ShiftService:
                         'error': 'Ошибка при закрытии смены'
                     }
                 
-                # Обновляем статус shift_schedule, если это была запланированная смена
-                if shift.is_planned and shift.schedule_id:
-                    from domain.entities.shift_schedule import ShiftSchedule
-                    schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == shift.schedule_id)
-                    schedule_result = await session.execute(schedule_query)
-                    schedule = schedule_result.scalar_one_or_none()
-                    
-                    if schedule:
-                        schedule.status = "completed"
-                        session.add(schedule)
-                        await session.commit()
-                        logger.info(
-                            f"Updated shift_schedule status to completed",
-                            schedule_id=shift.schedule_id,
-                            shift_id=shift_id
-                        )
+                # Синхронизация статусов выполняется в scheduler.close_shift_manually
+                # Дополнительная синхронизация не требуется
                 
                 # Получаем обновленную информацию о смене в новой сессии (после коммита close_shift_manually)
                 async with get_async_session() as fresh_session:

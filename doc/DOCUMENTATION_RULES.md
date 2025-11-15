@@ -36,6 +36,33 @@
 - Перед коммитом: быстрый diff по `doc/vision_v1` и запуск автогенерации при необходимости.
 - При обнаружении несоответствий — завести задачу на коррекцию документации.
 
+## Недавние изменения (main, 15.11.2025)
+
+### Синхронизация статусов Shift и ShiftSchedule (Iteration 44) ✅
+
+**Статус:** Завершено
+- **Матрица переходов статусов:**
+  - Создана документация `doc/vision_v1/entities/shift_status_transitions.md` с полной матрицей переходов статусов
+  - Стандартные статусы: `ShiftSchedule` (planned, confirmed (legacy), cancelled, completed), `Shift` (active, cancelled, completed)
+  - Запрещенные комбинации: cancelled + active/completed, completed + active
+- **ShiftStatusSyncService:**
+  - Расширен методами `sync_on_shift_open()`, `sync_on_shift_close()`, `sync_on_shift_cancel()`, `sync_on_schedule_cancel()`
+  - Интегрирован во все места изменения статусов (shared/services/shift_service.py, core/scheduler/shift_scheduler.py, apps/bot/services/shift_service.py, core/celery/tasks/shift_tasks.py, shared/services/shift_cancellation_service.py)
+  - Добавлены проверки запрещенных комбинаций статусов
+- **Устранены нестандартные статусы:**
+  - `in_progress` заменен на использование синхронизации (расписание остается planned при открытии смены)
+  - `auto_closed` заменен на `completed`
+- **Тесты:**
+  - Созданы unit-тесты `tests/unit/test_shift_status_sync_service.py` (12 тестов, все проходят)
+- **Файлы:**
+  - `shared/services/shift_status_sync_service.py` - расширен методами синхронизации
+  - `shared/services/shift_service.py` - интегрирован ShiftStatusSyncService
+  - `core/scheduler/shift_scheduler.py` - интегрирован ShiftStatusSyncService, заменен auto_closed на completed
+  - `apps/bot/services/shift_service.py` - интегрирован ShiftStatusSyncService, удален нестандартный статус in_progress
+  - `core/celery/tasks/shift_tasks.py` - интегрирован ShiftStatusSyncService, удален нестандартный статус in_progress
+  - `shared/services/shift_cancellation_service.py` - обновлен для использования sync_on_schedule_cancel
+  - `doc/vision_v1/entities/shift_status_transitions.md` - документация матрицы переходов
+
 ## Недавние изменения (main, 06.11.2025)
 
 ### Улучшения интерфейса (Login & Manager - Iteration 43) ✅

@@ -249,10 +249,21 @@ def auto_close_shifts(self):
                                                     )
                                                     
                                                     session.add(new_shift)
+                                                    await session.flush()  # Получаем new_shift.id
                                                     
-                                                    # Обновляем статус следующего расписания
-                                                    next_schedule.status = 'in_progress'
-                                                    session.add(next_schedule)
+                                                    # Синхронизация статусов при открытии смены из расписания
+                                                    from shared.services.shift_status_sync_service import ShiftStatusSyncService
+                                                    sync_service = ShiftStatusSyncService(session)
+                                                    await sync_service.sync_on_shift_open(
+                                                        new_shift,
+                                                        actor_id=shift.user_id,
+                                                        actor_role="system",
+                                                        source="celery",
+                                                        payload={
+                                                            "auto_opened": True,
+                                                            "prev_shift_id": shift.id,
+                                                        },
+                                                    )
                                                     
                                                     logger.info(
                                                         f"Auto-opened consecutive shift (from Shift): user_id={shift.user_id}, "
@@ -287,7 +298,7 @@ def auto_close_shifts(self):
                     .join(Object)
                     .filter(
                         and_(
-                            ShiftSchedule.status == 'confirmed',
+                            ShiftSchedule.status.in_(['planned', 'confirmed']),  # confirmed - legacy, оставляем для совместимости
                             ShiftSchedule.planned_start < now_utc,
                             ShiftSchedule.auto_closed == False
                         )

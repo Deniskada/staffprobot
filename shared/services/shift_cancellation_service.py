@@ -116,6 +116,7 @@ class ShiftCancellationService:
             # Отменяем смену
             previous_status = shift.status
             shift.status = 'cancelled'
+            shift.updated_at = datetime.now(timezone.utc)
 
             # Создаем запись об отмене
             cancellation = ShiftCancellation(
@@ -146,7 +147,8 @@ class ShiftCancellationService:
                 if extra_payload:
                     respectful_payload.update(extra_payload)
 
-                await sync_service.cancel_linked_shifts(
+                # Синхронизация статусов при отмене расписания
+                await sync_service.sync_on_schedule_cancel(
                     shift,
                     actor_id=cancelled_by_user_id,
                     actor_role=actor_role or cancelled_by_type,
@@ -276,7 +278,8 @@ class ShiftCancellationService:
             if extra_payload:
                 payload.update(extra_payload)
 
-            await sync_service.cancel_linked_shifts(
+            # Синхронизация статусов при отмене расписания
+            await sync_service.sync_on_schedule_cancel(
                 shift,
                 actor_id=cancelled_by_user_id,
                 actor_role=actor_role or cancelled_by_type,

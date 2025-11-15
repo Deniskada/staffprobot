@@ -12,6 +12,7 @@ from domain.entities.object import Object
 from domain.entities.user import User
 from shared.services.shift_history_service import ShiftHistoryService
 from shared.services.shift_notification_service import ShiftNotificationService
+from shared.services.shift_status_sync_service import ShiftStatusSyncService
 from sqlalchemy import select, and_
 from sqlalchemy.orm import joinedload
 from .base_service import BaseService
@@ -106,6 +107,20 @@ class ShiftService(BaseService):
                 
                 session.add(new_shift)
                 await session.flush()
+
+                # Синхронизация статусов при открытии смены из расписания
+                sync_service = ShiftStatusSyncService(session)
+                if new_shift.schedule_id:
+                    await sync_service.sync_on_shift_open(
+                        new_shift,
+                        actor_id=user.id,
+                        actor_role="employee",
+                        source="bot",
+                        payload={
+                            "object_id": object_id,
+                            "coordinates": coordinates,
+                        },
+                    )
 
                 history_service = ShiftHistoryService(session)
                 await history_service.log_event(
@@ -228,24 +243,21 @@ class ShiftService(BaseService):
                 active_shift.total_hours = hours
                 active_shift.total_payment = hours * active_shift.hourly_rate
                 
-                # Обновляем статус shift_schedule, если это была запланированная смена
-                schedule = None
-                previous_schedule_status = None
-                if active_shift.is_planned and active_shift.schedule_id:
-                    from domain.entities.shift_schedule import ShiftSchedule
-                    schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == active_shift.schedule_id)
-                    schedule_result = await session.execute(schedule_query)
-                    schedule = schedule_result.scalar_one_or_none()
-                    
-                    if schedule:
-                        previous_schedule_status = schedule.status
-                        schedule.status = "completed"
-                        session.add(schedule)
-                        logger.info(
-                            f"Updated shift_schedule status to completed",
-                            schedule_id=active_shift.schedule_id,
-                            shift_id=active_shift.id
-                        )
+                # Синхронизация статусов при закрытии смены
+                sync_service = ShiftStatusSyncService(session)
+                if active_shift.schedule_id:
+                    await sync_service.sync_on_shift_close(
+                        active_shift,
+                        actor_id=user.id,
+                        actor_role="employee",
+                        source="bot",
+                        payload={
+                            "object_id": active_shift.object_id,
+                            "coordinates": coordinates,
+                            "hours": hours,
+                            "payment": float(active_shift.total_payment) if active_shift.total_payment else None,
+                        },
+                    )
                 
                 history_service = ShiftHistoryService(session)
                 await history_service.log_event(
@@ -264,21 +276,6 @@ class ShiftService(BaseService):
                         "payment": float(active_shift.total_payment) if active_shift.total_payment else None,
                     },
                 )
-
-                if schedule and previous_schedule_status != schedule.status:
-                    await history_service.log_event(
-                        operation="schedule_complete",
-                        source="bot",
-                        actor_id=user.id,
-                        actor_role="employee",
-                        schedule_id=schedule.id,
-                        shift_id=active_shift.id,
-                        old_status=previous_schedule_status,
-                        new_status=schedule.status,
-                        payload={
-                            "completed_by_shift_id": active_shift.id,
-                        },
-                    )
 
                 await session.commit()
 

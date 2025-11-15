@@ -160,3 +160,34 @@
 - `owner/templates/contracts/edit.html`
 - `owner/timeslots/detail.html`
 - `owner/timeslots/edit.html`
+
+## Синхронизация статусов Shift и ShiftSchedule
+
+**Сервис:** `shared/services/shift_status_sync_service.py` — `ShiftStatusSyncService`
+
+**Назначение:** Обеспечение согласованности статусов между `ShiftSchedule` (расписание) и `Shift` (фактическая смена).
+
+**Матрица переходов:** См. `doc/vision_v1/entities/shift_status_transitions.md`
+
+**Методы:**
+- `sync_on_shift_open()` — синхронизация при открытии смены из расписания (расписание остается `planned`)
+- `sync_on_shift_close()` — синхронизация при закрытии смены (расписание → `completed`)
+- `sync_on_shift_cancel()` — синхронизация при отмене смены (расписание → `cancelled`)
+- `sync_on_schedule_cancel()` — синхронизация при отмене расписания (смены → `cancelled`)
+
+**Интеграция:**
+- `shared/services/shift_service.py` — открытие/закрытие смен
+- `core/scheduler/shift_scheduler.py` — автозакрытие и ручное закрытие
+- `apps/bot/services/shift_service.py` — открытие смен из расписания
+- `core/celery/tasks/shift_tasks.py` — автооткрытие последовательных смен
+- `shared/services/shift_cancellation_service.py` — отмена смен
+
+**Правила:**
+- При открытии смены из расписания: `Shift` = `active`, `ShiftSchedule` остается `planned`
+- При закрытии смены: `Shift` = `completed`, `ShiftSchedule` = `completed`
+- При отмене расписания: `ShiftSchedule` = `cancelled`, все связанные `Shift` = `cancelled` (если не `completed`)
+- При отмене смены: `Shift` = `cancelled`, `ShiftSchedule` = `cancelled` (если связана)
+
+**Запрещенные комбинации:**
+- `cancelled` + `active/completed` (расписание отменено, смена не может быть активной/завершенной)
+- `completed` + `active` (расписание завершено, смена не может быть активной)
