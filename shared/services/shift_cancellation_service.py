@@ -173,6 +173,7 @@ class ShiftCancellationService:
                         actor_role=actor_role or cancelled_by_type,
                         cancelled_by_user_id=cancelled_by_user_id,
                         reason_code=cancellation_reason,
+                        session=self.session,
                     )
                 except Exception as notification_error:
                     logger.warning(
@@ -304,6 +305,7 @@ class ShiftCancellationService:
                     actor_role=actor_role or cancelled_by_type,
                     cancelled_by_user_id=cancelled_by_user_id,
                     reason_code=cancellation_reason,
+                    session=self.session,
                 )
             except Exception as notification_error:
                 logger.warning(

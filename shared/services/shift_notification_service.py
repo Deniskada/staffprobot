@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.database.session import get_async_session
@@ -91,98 +92,117 @@ class ShiftNotificationService:
         actor_role: str,
         cancelled_by_user_id: Optional[int],
         reason_code: str,
+        session: Optional[AsyncSession] = None,
     ) -> None:
         """Уведомления при отмене смены."""
-        async with get_async_session() as session:
-            schedule = await self._load_schedule(session, schedule_id)
-            if not schedule or not schedule.object:
-                return
-
-            owner_id = schedule.object.owner_id
-            employee_id = schedule.user_id
-
-            if not owner_id and not employee_id:
-                return
-
-            reason_title = await self._get_reason_title(session, schedule.object.owner_id, reason_code)
-            shift_window = self._format_shift_window(schedule.planned_start, schedule.planned_end, schedule.object.timezone)
-            employee_name = None
-            if schedule.user:
-                employee_name = self._build_user_name(
-                    schedule.user.first_name,
-                    schedule.user.last_name,
-                    schedule.user.username,
+        if session is None:
+            async with get_async_session() as new_session:
+                await self._notify_schedule_cancelled_impl(
+                    schedule_id, actor_role, cancelled_by_user_id, reason_code, new_session
                 )
+        else:
+            await self._notify_schedule_cancelled_impl(
+                schedule_id, actor_role, cancelled_by_user_id, reason_code, session
+            )
+    
+    async def _notify_schedule_cancelled_impl(
+        self,
+        schedule_id: int,
+        actor_role: str,
+        cancelled_by_user_id: Optional[int],
+        reason_code: str,
+        session: AsyncSession,
+    ) -> None:
+        """Внутренняя реализация уведомлений при отмене смены."""
+        schedule = await self._load_schedule(session, schedule_id)
+        if not schedule or not schedule.object:
+            return
 
-            data = {
-                "shift_schedule_id": schedule.id,
-                "object_id": schedule.object_id,
-                "object_name": schedule.object.name,
-                "employee_id": schedule.user_id,
-                "employee_name": employee_name,
-                "user_name": employee_name,  # Для шаблона (для сотрудника)
-                "shift_window": shift_window,
-                "reason_code": reason_code,
-                "reason_title": reason_title,
-                "shift_time": shift_window,
-                "cancellation_reason": reason_title,
-            }
+        owner_id = schedule.object.owner_id
+        employee_id = schedule.user_id
 
-            recipients: List[Tuple[int, NotificationType, str, str]] = []
-            actor = (actor_role or "").lower()
+        if not owner_id and not employee_id:
+            return
 
-            # Определяем сообщения для владельца и управляющих
-            owner_title = None
-            owner_message = None
+        reason_title = await self._get_reason_title(session, schedule.object.owner_id, reason_code)
+        shift_window = self._format_shift_window(schedule.planned_start, schedule.planned_end, schedule.object.timezone)
+        employee_name = None
+        if schedule.user:
+            employee_name = self._build_user_name(
+                schedule.user.first_name,
+                schedule.user.last_name,
+                schedule.user.username,
+            )
+
+        data = {
+            "shift_schedule_id": schedule.id,
+            "object_id": schedule.object_id,
+            "object_name": schedule.object.name,
+            "employee_id": schedule.user_id,
+            "employee_name": employee_name,
+            "user_name": employee_name,  # Для шаблона (для сотрудника)
+            "shift_window": shift_window,
+            "reason_code": reason_code,
+            "reason_title": reason_title,
+            "shift_time": shift_window,
+            "cancellation_reason": reason_title,
+        }
+
+        recipients: List[Tuple[int, NotificationType, str, str]] = []
+        actor = (actor_role or "").lower()
+
+        # Определяем сообщения для владельца и управляющих
+        owner_title = None
+        owner_message = None
+        
+        if owner_id:
+            if actor == "employee":
+                owner_title = "Сотрудник отменил смену"
+                owner_message = (
+                    f"{employee_name or 'Сотрудник'} отменил смену на объекте «{schedule.object.name}».\n"
+                    f"Время: {shift_window}.\n"
+                    f"Причина: {reason_title}."
+                )
+            elif actor == "system":
+                owner_title = "Смена отменена системой"
+                owner_message = (
+                    f"Смена на объекте «{schedule.object.name}» отменена системой.\n"
+                    f"Время: {shift_window}.\n"
+                    f"Причина: {reason_title}."
+                )
+            else:
+                # Владелец или менеджер отменили — уведомим владельца для истории
+                owner_title = "Смена отменена"
+                owner_message = (
+                    f"Смена на объекте «{schedule.object.name}» была отменена ({reason_title}).\n"
+                    f"Время: {shift_window}."
+                )
             
-            if owner_id:
-                if actor == "employee":
-                    owner_title = "Сотрудник отменил смену"
-                    owner_message = (
-                        f"{employee_name or 'Сотрудник'} отменил смену на объекте «{schedule.object.name}».\n"
-                        f"Время: {shift_window}.\n"
-                        f"Причина: {reason_title}."
-                    )
-                elif actor == "system":
-                    owner_title = "Смена отменена системой"
-                    owner_message = (
-                        f"Смена на объекте «{schedule.object.name}» отменена системой.\n"
-                        f"Время: {shift_window}.\n"
-                        f"Причина: {reason_title}."
-                    )
-                else:
-                    # Владелец или менеджер отменили — уведомим владельца для истории
-                    owner_title = "Смена отменена"
-                    owner_message = (
-                        f"Смена на объекте «{schedule.object.name}» была отменена ({reason_title}).\n"
-                        f"Время: {shift_window}."
-                    )
+            if owner_title and owner_message:
+                recipients.append((owner_id, NotificationType.SHIFT_CANCELLED, owner_title, owner_message))
                 
-                if owner_title and owner_message:
-                    recipients.append((owner_id, NotificationType.SHIFT_CANCELLED, owner_title, owner_message))
-                    
-                    # Отправляем уведомления управляющим
-                    manager_user_ids = await self._get_managers_for_object(session, schedule.object_id)
-                    for manager_user_id in manager_user_ids:
-                        recipients.append((manager_user_id, NotificationType.SHIFT_CANCELLED, owner_title, owner_message))
+                # Отправляем уведомления управляющим
+                manager_user_ids = await self._get_managers_for_object(session, schedule.object_id)
+                for manager_user_id in manager_user_ids:
+                    recipients.append((manager_user_id, NotificationType.SHIFT_CANCELLED, owner_title, owner_message))
 
-            if employee_id and (actor in {"owner", "manager", "superadmin", "system"}):
-                title = "Ваша смена отменена"
-                if actor == "system":
-                    message = (
-                        f"Смена на объекте «{schedule.object.name}» отменена системой.\n"
-                        f"Время: {shift_window}.\n"
-                        f"Причина: {reason_title}."
-                    )
-                else:
-                    message = (
-                        f"Владелец отменил вашу смену на объекте «{schedule.object.name}».\n"
-                        f"Время: {shift_window}.\n"
-                        f"Причина: {reason_title}."
-                    )
-                recipients.append((employee_id, NotificationType.SHIFT_CANCELLED, title, message))
+        if employee_id and (actor in {"owner", "manager", "superadmin", "system"}):
+            title = "Ваша смена отменена"
+            if actor == "system":
+                message = (
+                    f"Смена на объекте «{schedule.object.name}» отменена системой.\n"
+                    f"Время: {shift_window}.\n"
+                    f"Причина: {reason_title}."
+                )
+            else:
+                message = (
+                    f"Владелец отменил вашу смену на объекте «{schedule.object.name}».\n"
+                    f"Время: {shift_window}.\n"
+                    f"Причина: {reason_title}."
+                )
+            recipients.append((employee_id, NotificationType.SHIFT_CANCELLED, title, message))
 
-            await self._send_bulk(recipients, data)
+        await self._send_bulk(recipients, data)
 
     async def notify_shift_started(
         self,
