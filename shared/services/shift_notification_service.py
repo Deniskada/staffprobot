@@ -23,6 +23,7 @@ from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from shared.services.cancellation_policy_service import CancellationPolicyService
 from shared.services.notification_service import NotificationService
+from shared.services.manager_permission_service import ManagerPermissionService
 from shared.templates.notifications.base_templates import NotificationTemplateManager
 
 
@@ -74,7 +75,15 @@ class ShiftNotificationService:
                 f"Время: {shift_window}."
             )
 
+            # Отправляем уведомление владельцу
             await self._send(owner_id, NotificationType.SHIFT_CONFIRMED, channels, title, message, data)
+            
+            # Отправляем уведомления управляющим
+            manager_user_ids = await self._get_managers_for_object(session, schedule.object_id)
+            for manager_user_id in manager_user_ids:
+                manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_CONFIRMED)
+                if manager_channels:
+                    await self._send(manager_user_id, NotificationType.SHIFT_CONFIRMED, manager_channels, title, message, data)
 
     async def notify_schedule_cancelled(
         self,
@@ -122,31 +131,40 @@ class ShiftNotificationService:
             recipients: List[Tuple[int, NotificationType, str, str]] = []
             actor = (actor_role or "").lower()
 
+            # Определяем сообщения для владельца и управляющих
+            owner_title = None
+            owner_message = None
+            
             if owner_id:
                 if actor == "employee":
-                    title = "Сотрудник отменил смену"
-                    message = (
+                    owner_title = "Сотрудник отменил смену"
+                    owner_message = (
                         f"{employee_name or 'Сотрудник'} отменил смену на объекте «{schedule.object.name}».\n"
                         f"Время: {shift_window}.\n"
                         f"Причина: {reason_title}."
                     )
-                    recipients.append((owner_id, NotificationType.SHIFT_CANCELLED, title, message))
                 elif actor == "system":
-                    title = "Смена отменена системой"
-                    message = (
+                    owner_title = "Смена отменена системой"
+                    owner_message = (
                         f"Смена на объекте «{schedule.object.name}» отменена системой.\n"
                         f"Время: {shift_window}.\n"
                         f"Причина: {reason_title}."
                     )
-                    recipients.append((owner_id, NotificationType.SHIFT_CANCELLED, title, message))
                 else:
                     # Владелец или менеджер отменили — уведомим владельца для истории
-                    title = "Смена отменена"
-                    message = (
+                    owner_title = "Смена отменена"
+                    owner_message = (
                         f"Смена на объекте «{schedule.object.name}» была отменена ({reason_title}).\n"
                         f"Время: {shift_window}."
                     )
-                    recipients.append((owner_id, NotificationType.SHIFT_CANCELLED, title, message))
+                
+                if owner_title and owner_message:
+                    recipients.append((owner_id, NotificationType.SHIFT_CANCELLED, owner_title, owner_message))
+                    
+                    # Отправляем уведомления управляющим
+                    manager_user_ids = await self._get_managers_for_object(session, schedule.object_id)
+                    for manager_user_id in manager_user_ids:
+                        recipients.append((manager_user_id, NotificationType.SHIFT_CANCELLED, owner_title, owner_message))
 
             if employee_id and (actor in {"owner", "manager", "superadmin", "system"}):
                 title = "Ваша смена отменена"
@@ -205,7 +223,15 @@ class ShiftNotificationService:
                 f"{employee_name} начал смену на объекте «{shift.object.name}» в {started_at}."
             )
 
+            # Отправляем уведомление владельцу
             await self._send(owner_id, NotificationType.SHIFT_STARTED, channels, title, message, data)
+            
+            # Отправляем уведомления управляющим
+            manager_user_ids = await self._get_managers_for_object(session, shift.object_id)
+            for manager_user_id in manager_user_ids:
+                manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_STARTED)
+                if manager_channels:
+                    await self._send(manager_user_id, NotificationType.SHIFT_STARTED, manager_channels, title, message, data)
 
     async def notify_shift_completed(
         self,
@@ -275,7 +301,15 @@ class ShiftNotificationService:
 
             message = "\n".join(parts)
 
+            # Отправляем уведомление владельцу
             await self._send(owner_id, NotificationType.SHIFT_COMPLETED, channels, title, message, data)
+            
+            # Отправляем уведомления управляющим
+            manager_user_ids = await self._get_managers_for_object(session, shift.object_id)
+            for manager_user_id in manager_user_ids:
+                manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_COMPLETED)
+                if manager_channels:
+                    await self._send(manager_user_id, NotificationType.SHIFT_COMPLETED, manager_channels, title, message, data)
 
     async def notify_shift_reminder(self, schedule_id: int) -> bool:
         """Отправить напоминание сотруднику о предстоящей смене."""
@@ -558,6 +592,44 @@ class ShiftNotificationService:
         if local_start:
             return local_start.strftime("%d.%m.%Y %H:%M")
         return "Неизвестно"
+
+    async def _get_managers_for_object(
+        self,
+        session,
+        object_id: int,
+    ) -> List[int]:
+        """Получить список user_id управляющих, имеющих доступ к объекту."""
+        try:
+            permission_service = ManagerPermissionService(session)
+            permissions = await permission_service.get_object_permissions(object_id)
+            
+            manager_user_ids: List[int] = []
+            for permission in permissions:
+                # Проверяем, что у управляющего есть хотя бы одно право
+                if not permission.has_any_permission():
+                    continue
+                
+                # Получаем договор управляющего
+                if not permission.contract:
+                    continue
+                
+                # Проверяем, что договор активен
+                if not permission.contract.is_active:
+                    continue
+                
+                # employee_id в договоре управляющего - это user_id управляющего
+                manager_user_ids.append(permission.contract.employee_id)
+            
+            # Убираем дубликаты
+            return list(set(manager_user_ids))
+            
+        except Exception as exc:
+            logger.error(
+                "Failed to get managers for object",
+                object_id=object_id,
+                error=str(exc),
+            )
+            return []
 
     def _build_user_name(self, first: Optional[str], last: Optional[str], username: Optional[str]) -> str:
         parts = [part for part in [last, first] if part]
