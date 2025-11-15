@@ -1440,8 +1440,12 @@
   - [x] Интегрирован `ShiftStatusSyncService` во все места изменения статусов (shared/services/shift_service.py, core/scheduler/shift_scheduler.py, apps/bot/services/shift_service.py, core/celery/tasks/shift_tasks.py)
   - [x] Устранены нестандартные статусы (`in_progress` заменен на использование синхронизации, `auto_closed` заменен на `completed`)
   - [x] Добавлены проверки запрещенных комбинаций статусов (cancelled + active/completed, completed + active)
-- [ ] Актуализировать отмену: при смене статуса расписания приводить связанные фактические смены к `cancelled`, логировать системные операции (actor_role=`system`), покрыть `_cancel_shifts_after_termination` и аналогичные кейсы.
-- [ ] Backfill и выравнивание: миграция/скрипт для исторических `schedule_plan`/`schedule_cancel`, корректировка статусов `Shift` vs `ShiftSchedule`, отчёт о затронутых записях.
+- [x] Актуализировать отмену: при смене статуса расписания приводить связанные фактические смены к `cancelled`, логировать системные операции (actor_role=`system`), покрыть `_cancel_shifts_after_termination` и аналогичные кейсы.
+  - [x] `_cancel_shifts_after_termination_date()` использует `ShiftStatusSyncService.cancel_linked_shifts()` и логирует с `actor_role="system"`
+  - [x] `_cancel_shifts_on_contract_termination()` использует `ShiftStatusSyncService.cancel_linked_shifts()` и логирует с `actor_role="system"`
+- [x] Backfill и выравнивание: миграция/скрипт для исторических `schedule_plan`/`schedule_cancel`, корректировка статусов `Shift` vs `ShiftSchedule`.
+  - [x] Скрипт `scripts/backfill_shift_history.py` создает историю для всех расписаний и смен
+  - [x] Добавлена функция `correct_shift_statuses()` для корректировки несогласованных статусов по правилам синхронизации
 - [x] Нормализовать уведомления о сменах: переименовать `SHIFT_CONFIRMED` в «Планирование смены сотрудником», реализовать полный набор сменных уведомлений (планирование, открытие, закрытие, отмена, напоминание), обновить Celery/триггеры, документацию и настройки каналов.
   - [x] Настроены уведомления для планирования сотрудником, отмен, открытия/закрытия (web/bot/celery) и обновлён планировщик напоминаний
   - [x] Обновлены шаблоны, UI /owner/notifications и документация
