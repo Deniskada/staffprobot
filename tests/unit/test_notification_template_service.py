@@ -461,7 +461,7 @@ class TestNotificationTemplateService:
         stats = await service.get_template_statistics()
 
         # Assert
-        assert stats["total_static"] == 26  # Реальное количество статических шаблонов
+        assert stats["total_static"] == 31  # Реальное количество статических шаблонов (обновлено после добавления новых типов)
         assert stats["total_custom"] == 5
         assert stats["active_custom"] == 5
 

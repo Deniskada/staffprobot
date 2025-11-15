@@ -5,6 +5,7 @@ from .calendar_filter_service import CalendarFilterService
 from .notification_service import NotificationService
 from .notification_dispatcher import NotificationDispatcher, get_notification_dispatcher
 from .shift_status_sync_service import ShiftStatusSyncService
+from .shift_notification_service import ShiftNotificationService
 
 __all__ = [
     'ObjectAccessService',
@@ -12,5 +13,6 @@ __all__ = [
     'NotificationService',
     'NotificationDispatcher',
     'get_notification_dispatcher',
-    'ShiftStatusSyncService'
+    'ShiftStatusSyncService',
+    'ShiftNotificationService'
 ]

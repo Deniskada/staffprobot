@@ -15,6 +15,7 @@ from domain.entities.user import User
 from core.logging.logger import logger
 from shared.services.cancellation_policy_service import CancellationPolicyService
 from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.shift_notification_service import ShiftNotificationService
 from shared.services.shift_status_sync_service import ShiftStatusSyncService
 
 
@@ -165,6 +166,20 @@ class ShiftCancellationService:
                     payload=respectful_payload,
                 )
                 await self.session.commit()
+
+                try:
+                    await ShiftNotificationService().notify_schedule_cancelled(
+                        schedule_id=shift_schedule_id,
+                        actor_role=actor_role or cancelled_by_type,
+                        cancelled_by_user_id=cancelled_by_user_id,
+                        reason_code=cancellation_reason,
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        "Failed to send respectful cancellation notification",
+                        schedule_id=shift_schedule_id,
+                        error=str(notification_error),
+                    )
                 logger.info(
                     f"Shift {shift_schedule_id} cancelled by {cancelled_by_type} (user_id={cancelled_by_user_id}), pending moderation"
                 )
@@ -281,6 +296,21 @@ class ShiftCancellationService:
             )
 
             await self.session.commit()
+
+            # Отправляем уведомление об отмене
+            try:
+                await ShiftNotificationService().notify_schedule_cancelled(
+                    schedule_id=shift_schedule_id,
+                    actor_role=actor_role or cancelled_by_type,
+                    cancelled_by_user_id=cancelled_by_user_id,
+                    reason_code=cancellation_reason,
+                )
+            except Exception as notification_error:
+                logger.warning(
+                    "Failed to send cancellation notification",
+                    schedule_id=shift_schedule_id,
+                    error=str(notification_error),
+                )
 
             # Сообщение для пользователя
             if total_fine > 0:

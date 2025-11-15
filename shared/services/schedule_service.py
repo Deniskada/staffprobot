@@ -14,6 +14,7 @@ from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import joinedload
 from .base_service import BaseService
 from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.shift_notification_service import ShiftNotificationService
 
 
 def _time_to_minutes(time_obj: time) -> int:
@@ -471,6 +472,19 @@ class ScheduleService(BaseService):
 
                 await session.commit()
                 await session.refresh(new_shift)
+
+                try:
+                    await ShiftNotificationService().notify_schedule_planned(
+                        schedule_id=new_shift.id,
+                        actor_role="employee",
+                        planner_id=user.id,
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        "Failed to send shift planned notification",
+                        error=str(notification_error),
+                        schedule_id=new_shift.id,
+                    )
                 
                 logger.info(
                     f"Scheduled shift created from timeslot: user_id={user_id}, shift_id={new_shift.id}, time_slot_id={time_slot_id}, object_id={time_slot.object_id}"

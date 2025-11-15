@@ -10,10 +10,7 @@ from core.celery.celery_app import celery_app
 from core.logging.logger import logger
 from core.database.session import get_async_session
 from domain.entities.shift_schedule import ShiftSchedule
-from domain.entities.shift import Shift
-from domain.entities.notification import Notification, NotificationType, NotificationChannel, NotificationPriority
-from domain.entities.user import User
-from domain.entities.object import Object
+from shared.services.shift_notification_service import ShiftNotificationService
 
 
 class ReminderTask(Task):
@@ -49,11 +46,10 @@ async def _create_shift_reminders_async() -> Dict[str, Any]:
     
     try:
         async with get_async_session() as session:
-            # Время проверки: через 1 час (±5 минут для покрытия интервала запуска)
-            # ВРЕМЕННО: расширенное окно для тестирования
+            # Время проверки: через 1 час (окно 55-65 минут)
             now = datetime.now(timezone.utc)
-            target_time_start = now + timedelta(minutes=25)  # 25 минут (для теста)
-            target_time_end = now + timedelta(minutes=65)    # 65 минут
+            target_time_start = now + timedelta(minutes=55)
+            target_time_end = now + timedelta(minutes=65)
             
             # Найти запланированные смены (shift_schedules) начинающиеся через ~1 час
             query = select(ShiftSchedule).options(
@@ -75,110 +71,14 @@ async def _create_shift_reminders_async() -> Dict[str, Any]:
                 target_range=f"{target_time_start} - {target_time_end}"
             )
             
+            notification_service = ShiftNotificationService()
             for shift_schedule in upcoming_shifts:
                 try:
-                    user = shift_schedule.user
-                    if not user:
-                        logger.warning(f"ShiftSchedule {shift_schedule.id} has no user")
-                        skipped_count += 1
-                        continue
-                    
-                    # Проверить настройки уведомлений пользователя
-                    prefs = user.notification_preferences or {}
-                    shift_reminder_prefs = prefs.get("shift_reminder", {})
-                    
-                    # Проверить включены ли уведомления
-                    telegram_enabled = shift_reminder_prefs.get("telegram", True)
-                    inapp_enabled = shift_reminder_prefs.get("inapp", True)
-                    
-                    if not telegram_enabled and not inapp_enabled:
-                        logger.debug(
-                            f"User {user.id} disabled shift_reminder notifications",
-                            shift_schedule_id=shift_schedule.id
-                        )
-                        skipped_count += 1
-                        continue
-                    
-                    # Проверить не создано ли уже уведомление для этой смены
-                    from sqlalchemy import cast, String
-                    existing_query = select(Notification).where(
-                        and_(
-                            Notification.user_id == user.id,
-                            Notification.type == NotificationType.SHIFT_REMINDER,
-                            cast(Notification.data['shift_schedule_id'], String) == str(shift_schedule.id)
-                        )
-                    )
-                    existing_result = await session.execute(existing_query)
-                    existing_notification = existing_result.scalar_one_or_none()
-                    
-                    if existing_notification:
-                        logger.debug(
-                            f"Notification already exists for shift_schedule {shift_schedule.id}",
-                            notification_id=existing_notification.id
-                        )
-                        skipped_count += 1
-                        continue
-                    
-                    # Формируем данные для шаблона
-                    obj = shift_schedule.object
-                    object_name = obj.name if obj else "Неизвестный объект"
-                    object_address = obj.address if obj else ""
-                    
-                    # Локальное время для отображения
-                    from core.utils.timezone_helper import timezone_helper
-                    local_start = timezone_helper.utc_to_local(shift_schedule.planned_start)
-                    local_end = timezone_helper.utc_to_local(shift_schedule.planned_end)
-                    shift_time = f"{local_start.strftime('%H:%M')} - {local_end.strftime('%H:%M')}"
-                    
-                    # Создать уведомления для включённых каналов
-                    if telegram_enabled:
-                        notification_tg = Notification(
-                            user_id=user.id,
-                            type=NotificationType.SHIFT_REMINDER,
-                            channel=NotificationChannel.TELEGRAM,
-                            priority=NotificationPriority.HIGH,
-                            title="Напоминание о смене",
-                            message=f"Привет, {user.first_name}!\n\nНапоминаем, что ваша смена начинается через 1 час на объекте '{object_name}'.\n\nВремя смены: {shift_time}\nАдрес: {object_address}\n\nНе забудьте отметиться по геолокации!",
-                            data={
-                                "shift_schedule_id": shift_schedule.id,
-                                "object_id": shift_schedule.object_id,
-                                "object_name": object_name,
-                                "shift_time": shift_time,
-                                "time_until": "1 час"
-                            },
-                            scheduled_at=now  # Отправить сразу
-                        )
-                        session.add(notification_tg)
+                    sent = await notification_service.notify_shift_reminder(shift_schedule.id)
+                    if sent:
                         created_count += 1
-                    
-                    if inapp_enabled:
-                        notification_inapp = Notification(
-                            user_id=user.id,
-                            type=NotificationType.SHIFT_REMINDER,
-                            channel=NotificationChannel.IN_APP,
-                            priority=NotificationPriority.HIGH,
-                            title="Напоминание о смене",
-                            message=f"Ваша смена начинается через 1 час на объекте '{object_name}'",
-                            data={
-                                "shift_schedule_id": shift_schedule.id,
-                                "object_id": shift_schedule.object_id,
-                                "object_name": object_name,
-                                "shift_time": shift_time,
-                                "time_until": "1 час"
-                            },
-                            scheduled_at=now  # Отправить сразу
-                        )
-                        session.add(notification_inapp)
-                        created_count += 1
-                    
-                    await session.commit()
-                    
-                    logger.info(
-                        f"Created shift reminder for user {user.id}",
-                        shift_schedule_id=shift_schedule.id,
-                        telegram=telegram_enabled,
-                        inapp=inapp_enabled
-                    )
+                    else:
+                        skipped_count += 1
                     
                 except Exception as e:
                     logger.error(

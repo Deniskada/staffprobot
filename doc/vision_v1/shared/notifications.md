@@ -70,7 +70,7 @@
 
 ### Смены
 - `SHIFT_REMINDER` — Напоминание о смене
-- `SHIFT_CONFIRMED` — Смена подтверждена
+- `SHIFT_CONFIRMED` — Планирование смены сотрудником (уведомление владельцу)
 - `SHIFT_CANCELLED` — Смена отменена
 - `SHIFT_STARTED` — Смена началась
 - `SHIFT_COMPLETED` — Смена завершена

@@ -10,6 +10,7 @@ from core.database.session import get_async_session
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.shift_notification_service import ShiftNotificationService
 from sqlalchemy import select, update, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,11 +61,31 @@ class ShiftScheduler:
                 
                 logger.info("Checking " + str(len(active_shifts)) + " active shifts")
                 
+                closed_shifts: List[tuple[int, float, Optional[float], datetime]] = []
                 # Проверяем каждую смену
                 for shift in active_shifts:
-                    await self._check_shift_closure(session, shift)
+                    result = await self._check_shift_closure(session, shift)
+                    if result:
+                        closed_shifts.append(result)
                 
                 await session.commit()
+
+            for shift_id, total_hours, total_payment, finished_at in closed_shifts:
+                try:
+                    await ShiftNotificationService().notify_shift_completed(
+                        shift_id=shift_id,
+                        actor_role="system",
+                        total_hours=total_hours,
+                        total_payment=total_payment,
+                        auto=True,
+                        finished_at=finished_at,
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        "Failed to send auto-close notification",
+                        shift_id=shift_id,
+                        error=str(notification_error),
+                    )
                 
         except Exception as e:
             logger.error("Error in shift check cycle: " + str(e))
@@ -103,10 +124,13 @@ class ShiftScheduler:
             should_close = await self._should_close_shift(shift, obj)
             
             if should_close:
-                await self._auto_close_shift(session, shift)
+                return await self._auto_close_shift(session, shift)
+
+            return None
                 
         except Exception as e:
             logger.error("Error checking shift " + str(shift.id) + ": " + str(e))
+            return None
     
     async def _should_close_shift(self, shift: Shift, obj) -> bool:
         """
@@ -151,7 +175,7 @@ class ShiftScheduler:
             logger.error("Error determining if shift should be closed: " + str(e))
             return False
     
-    async def _auto_close_shift(self, session: AsyncSession, shift: Shift):
+    async def _auto_close_shift(self, session: AsyncSession, shift: Shift) -> Optional[tuple[int, float, Optional[float], datetime]]:
         """Автоматически закрывает смену."""
         try:
             now = datetime.now(timezone.utc)
@@ -222,9 +246,12 @@ class ShiftScheduler:
             logger.info(
                 "Shift " + str(shift.id) + " auto-closed"
             )
+
+            return (shift.id, total_hours, total_payment, now)
             
         except Exception as e:
             logger.error("Error auto-closing shift " + str(shift.id) + ": " + str(e))
+            return None
     
     async def close_shift_manually(
         self, 
@@ -336,6 +363,22 @@ class ShiftScheduler:
                 logger.info(
                     "Shift " + str(shift_id) + " manually closed"
                 )
+
+                try:
+                    await ShiftNotificationService().notify_shift_completed(
+                        shift_id=shift_id,
+                        actor_role="system",
+                        total_hours=total_hours,
+                        total_payment=total_payment,
+                        auto=False,
+                        finished_at=close_time,
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        "Failed to send manual close notification",
+                        shift_id=shift_id,
+                        error=str(notification_error),
+                    )
                 
                 # Инвалидация кэша календаря
                 from core.cache.redis_cache import cache

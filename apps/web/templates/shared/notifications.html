@@ -292,7 +292,7 @@ class NotificationManager {
             'shift_confirmed': {
                 class: 'shift',
                 icon: 'fas fa-check',
-                title: 'Смена подтверждена'
+                title: 'Планирование смены сотрудником'
             },
             'interview_assigned': {
                 class: 'interview',
@@ -328,7 +328,7 @@ class NotificationManager {
             case 'shift_cancelled':
                 return `Смена на объекте "${payload.object_name || 'Объект'}" отменена`;
             case 'shift_confirmed':
-                return `Смена на объекте "${payload.object_name || 'Объект'}" подтверждена${payload.payment ? `, оплата: ${payload.payment}` : ''}`;
+                return `${payload.employee_name || payload.user_name || 'Сотрудник'} запланировал смену на объекте "${payload.object_name || 'Объект'}"${payload.shift_window || payload.shift_time ? ` (${payload.shift_window || payload.shift_time})` : ''}`;
             case 'interview_assigned':
                 return `Собеседование назначено на ${payload.scheduled_at || 'на дату'} на объект "${payload.object_name || 'Объект'}"`;
             default:

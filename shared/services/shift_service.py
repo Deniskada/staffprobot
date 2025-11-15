@@ -11,6 +11,7 @@ from domain.entities.shift import Shift
 from domain.entities.object import Object
 from domain.entities.user import User
 from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.shift_notification_service import ShiftNotificationService
 from sqlalchemy import select, and_
 from sqlalchemy.orm import joinedload
 from .base_service import BaseService
@@ -124,6 +125,18 @@ class ShiftService(BaseService):
 
                 await session.commit()
                 await session.refresh(new_shift)
+
+                try:
+                    await ShiftNotificationService().notify_shift_started(
+                        shift_id=new_shift.id,
+                        actor_role="employee",
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        "Failed to send shift started notification",
+                        shift_id=new_shift.id,
+                        error=str(notification_error),
+                    )
                 
                 logger.info(
                     f"Shift opened successfully",
@@ -268,6 +281,22 @@ class ShiftService(BaseService):
                     )
 
                 await session.commit()
+
+                try:
+                    await ShiftNotificationService().notify_shift_completed(
+                        shift_id=active_shift.id,
+                        actor_role="employee",
+                        total_hours=hours,
+                        total_payment=float(active_shift.total_payment) if active_shift.total_payment else None,
+                        auto=False,
+                        finished_at=active_shift.end_time,
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        "Failed to send shift completed notification",
+                        shift_id=active_shift.id,
+                        error=str(notification_error),
+                    )
                 
                 logger.info(
                     f"Shift closed successfully",

@@ -30,6 +30,7 @@ from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
 from shared.services.object_access_service import ObjectAccessService
 from shared.services.shift_history_service import ShiftHistoryService
+from shared.services.shift_notification_service import ShiftNotificationService
 from shared.services.cancellation_policy_service import CancellationPolicyService
 from apps.web.utils.shift_history_utils import build_shift_history_items
 from apps.web.utils.calendar_utils import create_calendar_grid
@@ -2969,6 +2970,20 @@ async def employee_plan_shift(
         )
         await db.commit()
         await db.refresh(shift_schedule)
+        
+        if actor_role == "employee":
+            try:
+                await ShiftNotificationService().notify_schedule_planned(
+                    schedule_id=shift_schedule.id,
+                    actor_role="employee",
+                    planner_id=user_id,
+                )
+            except Exception as notification_error:
+                logger.warning(
+                    "Failed to send employee schedule planned notification",
+                    error=str(notification_error),
+                    schedule_id=shift_schedule.id,
+                )
         
         # Очищаем кэш календаря для немедленного отображения
         from core.cache.redis_cache import cache
