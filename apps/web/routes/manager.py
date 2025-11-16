@@ -38,6 +38,8 @@ from urllib.parse import quote
 from shared.services.incident_category_service import IncidentCategoryService
 from shared.services.employee_selector_service import EmployeeSelectorService
 from shared.models.calendar_data import TimeslotStatus
+from shared.services.user_service import get_user_id_from_current_user
+from shared.services.incident_service import IncidentService
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 from apps.web.jinja import templates
