@@ -10,6 +10,15 @@ from core.celery.celery_app import celery_app
 from core.logging.logger import logger
 from core.database.session import get_async_session
 from domain.entities.shift_schedule import ShiftSchedule
+from domain.entities.object import Object
+from domain.entities.shift import Shift
+from domain.entities.user import User
+from domain.entities.notification import (
+    Notification,
+    NotificationChannel,
+    NotificationPriority,
+    NotificationType,
+)
 from shared.services.shift_notification_service import ShiftNotificationService
 
 
@@ -333,9 +342,9 @@ async def _check_notification_exists(session, user_id: int, notif_type_value: st
 
 async def _create_object_notification(
     session, 
-    obj: Object, 
-    owner: User, 
-    notif_type: NotificationType, 
+    obj: Object,
+    owner: User,
+    notif_type: NotificationType,
     template_vars: dict,
     scheduled_at: datetime
 ):
@@ -360,7 +369,7 @@ async def _create_object_notification(
             priority=NotificationPriority.HIGH if "late" in type_code or "early" in type_code or "no_shifts" in type_code else NotificationPriority.NORMAL,
             title=rendered_tg["title"],
             message=rendered_tg["message"],
-            data={**template_vars, "object_id": current_obj.id},
+            data={**template_vars, "object_id": obj.id},
             scheduled_at=scheduled_at
         )
         session.add(notification_tg)
@@ -375,7 +384,7 @@ async def _create_object_notification(
             priority=NotificationPriority.HIGH if "late" in type_code or "early" in type_code or "no_shifts" in type_code else NotificationPriority.NORMAL,
             title=rendered_inapp["title"],
             message=rendered_inapp["message"],
-            data={**template_vars, "object_id": current_obj.id},
+            data={**template_vars, "object_id": obj.id},
             scheduled_at=scheduled_at
         )
         session.add(notification_inapp)
@@ -384,7 +393,7 @@ async def _create_object_notification(
     
     logger.info(
         f"Created {notif_type.value} notification for owner {owner.id}",
-        object_id=current_obj.id,
+        object_id=obj.id,
         telegram=telegram_enabled,
         inapp=inapp_enabled
     )
