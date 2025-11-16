@@ -371,7 +371,14 @@ async def manager_incident_edit_form(
         perm = ManagerPermissionService(db)
         accessible_objects = await perm.get_user_accessible_objects(user_id)
         accessible_ids = [o.id for o in accessible_objects]
-        res = await db.execute(select(Incident).where(Incident.id == incident_id).options(selectinload(Incident.object)))
+        res = await db.execute(
+            select(Incident)
+            .where(Incident.id == incident_id)
+            .options(
+                selectinload(Incident.object),
+                selectinload(Incident.employee),
+            )
+        )
         incident = res.scalar_one_or_none()
         if not incident:
             raise HTTPException(status_code=404, detail="Not Found")
