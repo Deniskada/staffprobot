@@ -99,6 +99,7 @@ class NotificationService:
         user_id: int,
         status: Optional[NotificationStatus] = None,
         type: Optional[NotificationType] = None,
+        channel: Optional[NotificationChannel] = None,
         limit: int = 50,
         offset: int = 0,
         include_read: bool = True
@@ -110,6 +111,7 @@ class NotificationService:
             user_id: ID пользователя
             status: Фильтр по статусу (опционально)
             type: Фильтр по типу (опционально)
+            channel: Фильтр по каналу (опционально)
             limit: Макс. кол-во результатов
             offset: Смещение для пагинации
             include_read: Включать ли прочитанные (по умолчанию да)
@@ -128,6 +130,9 @@ class NotificationService:
                 
                 if type:
                     query = query.where(Notification.type == type)
+                
+                if channel:
+                    query = query.where(Notification.channel == channel)
                 
                 if not include_read:
                     query = query.where(Notification.status != NotificationStatus.READ)
@@ -151,24 +156,32 @@ class NotificationService:
             return []
     
     @cached(ttl=timedelta(minutes=1), key_prefix="unread_count")
-    async def get_unread_count(self, user_id: int) -> int:
+    async def get_unread_count(
+        self, 
+        user_id: int, 
+        channel: Optional[NotificationChannel] = None
+    ) -> int:
         """
         Получение количества непрочитанных уведомлений.
         
         Args:
             user_id: ID пользователя
+            channel: Фильтр по каналу (опционально)
             
         Returns:
             Количество непрочитанных уведомлений
         """
         try:
             async with get_async_session() as session:
-                query = select(func.count(Notification.id)).where(
-                    and_(
-                        Notification.user_id == user_id,
-                        Notification.status != NotificationStatus.READ
-                    )
-                )
+                conditions = [
+                    Notification.user_id == user_id,
+                    Notification.status != NotificationStatus.READ
+                ]
+                
+                if channel:
+                    conditions.append(Notification.channel == channel)
+                
+                query = select(func.count(Notification.id)).where(and_(*conditions))
                 
                 result = await session.execute(query)
                 count = result.scalar_one()
@@ -223,12 +236,17 @@ class NotificationService:
             logger.error(f"Error marking notification {notification_id} as read: {e}")
             return False
     
-    async def mark_all_as_read(self, user_id: int) -> int:
+    async def mark_all_as_read(
+        self, 
+        user_id: int, 
+        channel: Optional[NotificationChannel] = None
+    ) -> int:
         """
         Отметить все уведомления пользователя как прочитанные.
         
         Args:
             user_id: ID пользователя
+            channel: Фильтр по каналу (опционально)
             
         Returns:
             Количество обновленных уведомлений
@@ -236,12 +254,15 @@ class NotificationService:
         try:
             async with get_async_session() as session:
                 # Получаем все непрочитанные
-                query = select(Notification).where(
-                    and_(
-                        Notification.user_id == user_id,
-                        Notification.status != NotificationStatus.READ
-                    )
-                )
+                conditions = [
+                    Notification.user_id == user_id,
+                    Notification.status != NotificationStatus.READ
+                ]
+                
+                if channel:
+                    conditions.append(Notification.channel == channel)
+                
+                query = select(Notification).where(and_(*conditions))
                 
                 result = await session.execute(query)
                 notifications = result.scalars().all()

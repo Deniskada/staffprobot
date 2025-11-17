@@ -58,6 +58,9 @@
         // Первая загрузка и простой пуллинг
         update();
         setInterval(update, 30000);
+        
+        // Экспортируем функцию обновления для использования из других скриптов
+        window.updateNotificationsBadge = update;
     }
 
     if (document.readyState === 'loading') {
