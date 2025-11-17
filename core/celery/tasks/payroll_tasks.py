@@ -21,11 +21,14 @@ from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 
 
 @celery_app.task(name="create_payroll_entries_by_schedule")
-def create_payroll_entries_by_schedule():
+def create_payroll_entries_by_schedule(target_date: str = None):
     """
     Автоматически создает начисления (payroll_entries) по графикам выплат.
     
     Запускается ежедневно в 01:00.
+    
+    Args:
+        target_date: Опциональная дата в формате YYYY-MM-DD. Если не указана, используется сегодняшняя дата.
     
     Логика:
     1. Находит все payment_schedules, у которых дата выплаты = сегодня
@@ -40,7 +43,10 @@ def create_payroll_entries_by_schedule():
     
     async def process():
         try:
-            today = date.today()
+            if target_date:
+                today = date.fromisoformat(target_date)
+            else:
+                today = date.today()
             logger.info(f"Starting payroll entries creation for {today}")
             
             async with get_async_session() as session:
