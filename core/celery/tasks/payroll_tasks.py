@@ -100,30 +100,71 @@ def create_payroll_entries_by_schedule():
                         # 2. Найти все объекты с этим payment_schedule_id
                         # Учитываем как прямую привязку, так и наследование от подразделения
                         
-                        # Если у графика указан owner_id, берём ВСЕ активные объекты владельца
-                        if schedule.owner_id:
-                            objects_query = select(Object).where(
-                                Object.is_active == True,
-                                Object.owner_id == schedule.owner_id
-                            )
-                        else:
-                            # Сначала найдем ID подразделений с этим графиком
-                            units_query = select(OrgStructureUnit.id).where(
-                                OrgStructureUnit.payment_schedule_id == schedule.id,
+                        # Функция для рекурсивного поиска всех потомков подразделения
+                        async def get_all_descendant_unit_ids(unit_id: int) -> List[int]:
+                            """Рекурсивно найти все дочерние подразделения"""
+                            result = [unit_id]
+                            children_query = select(OrgStructureUnit.id).where(
+                                OrgStructureUnit.parent_id == unit_id,
                                 OrgStructureUnit.is_active == True
                             )
-                            units_result = await session.execute(units_query)
-                            unit_ids = [row[0] for row in units_result.all()]
+                            children_result = await session.execute(children_query)
+                            children_ids = [row[0] for row in children_result.all()]
                             
-                            # Теперь найдем объекты:
-                            # - с прямой привязкой к графику ИЛИ
-                            # - принадлежащие подразделению с этим графиком
+                            for child_id in children_ids:
+                                result.extend(await get_all_descendant_unit_ids(child_id))
+                            
+                            return result
+                        
+                        # Найти подразделения, использующие этот график (с учетом наследования)
+                        units_with_schedule = []
+                        
+                        # Найти все подразделения владельца (если owner_id указан) или все подразделения
+                        if schedule.owner_id:
+                            all_units_query = select(OrgStructureUnit).options(
+                                selectinload(OrgStructureUnit.parent)
+                            ).where(
+                                OrgStructureUnit.owner_id == schedule.owner_id,
+                                OrgStructureUnit.is_active == True
+                            )
+                        else:
+                            all_units_query = select(OrgStructureUnit).options(
+                                selectinload(OrgStructureUnit.parent)
+                            ).where(
+                                OrgStructureUnit.is_active == True
+                            )
+                        
+                        all_units_result = await session.execute(all_units_query)
+                        all_units = all_units_result.scalars().all()
+                        
+                        # Проверить каждое подразделение
+                        for unit in all_units:
+                            # Проверить, использует ли подразделение этот график (с учетом наследования)
+                            inherited_schedule_id = unit.get_inherited_payment_schedule_id()
+                            if inherited_schedule_id == schedule.id:
+                                # Добавить само подразделение и все его дочерние подразделения
+                                unit_ids = await get_all_descendant_unit_ids(unit.id)
+                                units_with_schedule.extend(unit_ids)
+                        
+                        # Убрать дубликаты
+                        units_with_schedule = list(set(units_with_schedule))
+                        
+                        # Найти объекты:
+                        # - с прямой привязкой к графику ИЛИ
+                        # - принадлежащие подразделению с этим графиком (с учетом дочерних)
+                        if units_with_schedule:
                             objects_query = select(Object).where(
                                 Object.is_active == True,
                                 or_(
                                     Object.payment_schedule_id == schedule.id,
-                                    Object.org_unit_id.in_(unit_ids) if unit_ids else False
+                                    Object.org_unit_id.in_(units_with_schedule)
                                 )
+                            )
+                        else:
+                            # Если нет подразделений с этим графиком, искать только объекты с прямой привязкой
+                            objects_query = select(Object).where(
+                                Object.is_active == True,
+                                Object.payment_schedule_id == schedule.id
                             )
                         
                         objects_result = await session.execute(objects_query)
