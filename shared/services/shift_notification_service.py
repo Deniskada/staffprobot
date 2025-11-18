@@ -77,14 +77,39 @@ class ShiftNotificationService:
             )
 
             # Отправляем уведомление владельцу
-            await self._send(owner_id, NotificationType.SHIFT_CONFIRMED, channels, title, message, data)
+            try:
+                await self._send(owner_id, NotificationType.SHIFT_CONFIRMED, channels, title, message, data)
+            except Exception as exc:
+                logger.error(
+                    "Failed to send shift confirmed notification to owner",
+                    owner_id=owner_id,
+                    schedule_id=schedule_id,
+                    error=str(exc),
+                )
             
             # Отправляем уведомления управляющим
-            manager_user_ids = await self._get_managers_for_object(session, schedule.object_id)
-            for manager_user_id in manager_user_ids:
-                manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_CONFIRMED)
-                if manager_channels:
-                    await self._send(manager_user_id, NotificationType.SHIFT_CONFIRMED, manager_channels, title, message, data)
+            try:
+                manager_user_ids = await self._get_managers_for_object(session, schedule.object_id)
+                for manager_user_id in manager_user_ids:
+                    try:
+                        manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_CONFIRMED)
+                        if manager_channels:
+                            await self._send(manager_user_id, NotificationType.SHIFT_CONFIRMED, manager_channels, title, message, data)
+                    except Exception as manager_exc:
+                        # Ошибка при отправке одному менеджеру не должна останавливать остальных
+                        logger.error(
+                            "Failed to send shift confirmed notification to manager",
+                            manager_user_id=manager_user_id,
+                            schedule_id=schedule_id,
+                            error=str(manager_exc),
+                        )
+                        continue
+            except Exception as exc:
+                logger.error(
+                    "Failed to get managers or send notifications",
+                    schedule_id=schedule_id,
+                    error=str(exc),
+                )
 
     async def notify_schedule_cancelled(
         self,
@@ -244,14 +269,39 @@ class ShiftNotificationService:
             )
 
             # Отправляем уведомление владельцу
-            await self._send(owner_id, NotificationType.SHIFT_STARTED, channels, title, message, data)
+            try:
+                await self._send(owner_id, NotificationType.SHIFT_STARTED, channels, title, message, data)
+            except Exception as exc:
+                logger.error(
+                    "Failed to send shift started notification to owner",
+                    owner_id=owner_id,
+                    shift_id=shift_id,
+                    error=str(exc),
+                )
             
             # Отправляем уведомления управляющим
-            manager_user_ids = await self._get_managers_for_object(session, shift.object_id)
-            for manager_user_id in manager_user_ids:
-                manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_STARTED)
-                if manager_channels:
-                    await self._send(manager_user_id, NotificationType.SHIFT_STARTED, manager_channels, title, message, data)
+            try:
+                manager_user_ids = await self._get_managers_for_object(session, shift.object_id)
+                for manager_user_id in manager_user_ids:
+                    try:
+                        manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_STARTED)
+                        if manager_channels:
+                            await self._send(manager_user_id, NotificationType.SHIFT_STARTED, manager_channels, title, message, data)
+                    except Exception as manager_exc:
+                        # Ошибка при отправке одному менеджеру не должна останавливать остальных
+                        logger.error(
+                            "Failed to send shift started notification to manager",
+                            manager_user_id=manager_user_id,
+                            shift_id=shift_id,
+                            error=str(manager_exc),
+                        )
+                        continue
+            except Exception as exc:
+                logger.error(
+                    "Failed to get managers or send notifications",
+                    shift_id=shift_id,
+                    error=str(exc),
+                )
 
     async def notify_shift_completed(
         self,
@@ -322,14 +372,39 @@ class ShiftNotificationService:
             message = "\n".join(parts)
 
             # Отправляем уведомление владельцу
-            await self._send(owner_id, NotificationType.SHIFT_COMPLETED, channels, title, message, data)
+            try:
+                await self._send(owner_id, NotificationType.SHIFT_COMPLETED, channels, title, message, data)
+            except Exception as exc:
+                logger.error(
+                    "Failed to send shift completed notification to owner",
+                    owner_id=owner_id,
+                    shift_id=shift_id,
+                    error=str(exc),
+                )
             
             # Отправляем уведомления управляющим
-            manager_user_ids = await self._get_managers_for_object(session, shift.object_id)
-            for manager_user_id in manager_user_ids:
-                manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_COMPLETED)
-                if manager_channels:
-                    await self._send(manager_user_id, NotificationType.SHIFT_COMPLETED, manager_channels, title, message, data)
+            try:
+                manager_user_ids = await self._get_managers_for_object(session, shift.object_id)
+                for manager_user_id in manager_user_ids:
+                    try:
+                        manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_COMPLETED)
+                        if manager_channels:
+                            await self._send(manager_user_id, NotificationType.SHIFT_COMPLETED, manager_channels, title, message, data)
+                    except Exception as manager_exc:
+                        # Ошибка при отправке одному менеджеру не должна останавливать остальных
+                        logger.error(
+                            "Failed to send shift completed notification to manager",
+                            manager_user_id=manager_user_id,
+                            shift_id=shift_id,
+                            error=str(manager_exc),
+                        )
+                        continue
+            except Exception as exc:
+                logger.error(
+                    "Failed to get managers or send notifications",
+                    shift_id=shift_id,
+                    error=str(exc),
+                )
 
     async def notify_shift_reminder(self, schedule_id: int) -> bool:
         """Отправить напоминание сотруднику о предстоящей смене."""
@@ -411,15 +486,38 @@ class ShiftNotificationService:
         for user_id, notif_type, title, message in entries:
             if not user_id:
                 continue
-            channels = await self._get_channels(user_id, notif_type)
-            if not channels:
-                continue
-            for channel in channels:
-                key = (user_id, channel)
-                if key in sent_pairs:
+            try:
+                channels = await self._get_channels(user_id, notif_type)
+                if not channels:
                     continue
-                await self._send(user_id, notif_type, [channel], title, message, data)
-                sent_pairs.add(key)
+                for channel in channels:
+                    key = (user_id, channel)
+                    if key in sent_pairs:
+                        continue
+                    try:
+                        await self._send(user_id, notif_type, [channel], title, message, data)
+                        sent_pairs.add(key)
+                    except Exception as send_exc:
+                        # Ошибка при отправке одному получателю не должна останавливать остальных
+                        logger.error(
+                            "Failed to send notification in bulk",
+                            user_id=user_id,
+                            notification_type=notif_type.value,
+                            channel=channel.value,
+                            error=str(send_exc),
+                        )
+                        # Продолжаем обработку остальных получателей
+                        continue
+            except Exception as exc:
+                # Ошибка при получении каналов не должна останавливать остальных
+                logger.error(
+                    "Failed to get channels for user in bulk send",
+                    user_id=user_id,
+                    notification_type=notif_type.value,
+                    error=str(exc),
+                )
+                # Продолжаем обработку остальных получателей
+                continue
 
     async def _send(
         self,
