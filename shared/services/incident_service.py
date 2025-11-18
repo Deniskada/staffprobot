@@ -344,9 +344,14 @@ class IncidentService:
         from domain.entities.payroll_adjustment import PayrollAdjustment
         from sqlalchemy import select
         
+        incident = await self.session.get(Incident, incident_id)
+        if not incident:
+            return
+        
         query = select(PayrollAdjustment).where(
             PayrollAdjustment.details.isnot(None),
-            PayrollAdjustment.details['incident_id'].astext == str(incident_id)
+            PayrollAdjustment.details['incident_id'].astext == str(incident_id),
+            PayrollAdjustment.employee_id == incident.employee_id
         )
         result = await self.session.execute(query)
         adjustments = result.scalars().all()
@@ -359,14 +364,21 @@ class IncidentService:
         else:
             new_created_at = datetime.now(timezone.utc)
         
+        now_ts = datetime.now(timezone.utc)
+        updated_count = 0
         for adj in adjustments:
             adj.created_at = new_created_at
-            adj.updated_at = datetime.now(timezone.utc)
+            adj.updated_at = now_ts
+            if adj.is_applied or adj.payroll_entry_id:
+                adj.is_applied = False
+                adj.payroll_entry_id = None
+            updated_count += 1
         
         logger.info(
             "Обновлены даты корректировок по инциденту",
             incident_id=incident_id,
-            adjustments=len(adjustments),
+            adjustments=updated_count,
+            employee_id=incident.employee_id,
             new_date=new_date.isoformat() if new_date else None
         )
     
