@@ -96,6 +96,34 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <h5 class="mt-4">Корректировки по инциденту</h5>
+  <table class="table table-sm table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Тип</th>
+        <th>Сумма</th>
+        <th>Дата</th>
+        <th>Применена</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if adjustments and adjustments|length > 0 %}
+        {% for adj in adjustments %}
+        <tr>
+          <td>{{ adj.id }}</td>
+          <td>{{ adj.get_type_label() }}</td>
+          <td>{{ adj.amount }}</td>
+          <td>{{ adj.created_at.strftime('%d.%m.%Y') if adj.created_at else '—' }}</td>
+          <td>{{ 'Да' if adj.is_applied else 'Нет' }}</td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="5" class="text-muted">Корректировок нет</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
 </div>
 {% endblock %}
 

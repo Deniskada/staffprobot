@@ -76,6 +76,10 @@
         <label class="form-label">Номер инцидента</label>
         <input type="text" name="custom_number" class="form-control" value="{{ incident.custom_number or '' }}" />
       </div>
+      <div class="col-md-4">
+        <label class="form-label">Дата инцидента</label>
+        <input type="date" name="custom_date" class="form-control" value="{{ incident.custom_date.strftime('%Y-%m-%d') if incident.custom_date else '' }}" />
+      </div>
       <div class="col-12">
         <label class="form-label">Описание</label>
         <textarea name="notes" class="form-control" rows="4">{{ incident.notes or '' }}</textarea>
@@ -119,6 +123,36 @@
           {% endfor %}
         {% else %}
           <tr><td colspan="7" class="text-muted">История отсутствует</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <h5 class="mt-4">Связанные корректировки</h5>
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered align-middle">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Тип</th>
+          <th>Сумма</th>
+          <th>Дата</th>
+          <th>Применена</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if adjustments and adjustments|length > 0 %}
+          {% for adj in adjustments %}
+          <tr>
+            <td>{{ adj.id }}</td>
+            <td>{{ adj.get_type_label() }}</td>
+            <td>{{ adj.amount }}</td>
+            <td>{{ adj.created_at.strftime('%d.%m.%Y') if adj.created_at else '—' }}</td>
+            <td>{{ 'Да' if adj.is_applied else 'Нет' }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="5" class="text-muted">Корректировок нет</td></tr>
         {% endif %}
       </tbody>
     </table>

@@ -246,6 +246,7 @@ async def owner_incident_edit_page(
     if incident.object_id:
         selector = EmployeeSelectorService(session)
         employee_groups = await selector.get_employees_for_owner(owner_db_id, object_id=incident.object_id)
+    adjustments = await IncidentService(session).get_adjustments_by_incident(incident.id)
     return templates.TemplateResponse(
         "owner/incidents/edit.html",
         {
@@ -255,6 +256,7 @@ async def owner_incident_edit_page(
             "history": history,
             "objects": objects,
             "employee_groups": employee_groups,
+            "adjustments": adjustments,
         }
     )
 

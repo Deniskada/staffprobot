@@ -251,6 +251,8 @@ class IncidentService:
         from domain.entities.incident_history import IncidentHistory
         old_employee_id = incident.employee_id
         old_damage_amount = incident.damage_amount
+        old_custom_date = incident.custom_date
+        custom_date_changed = False
         
         changed_fields = [
             'category', 'severity', 'status', 'reason_code', 'notes',
@@ -262,6 +264,8 @@ class IncidentService:
                 old_value = getattr(incident, field)
                 new_value = data[field]
                 if old_value != new_value:
+                    if field == "custom_date":
+                        custom_date_changed = True
                     setattr(incident, field, new_value)
                     self.session.add(IncidentHistory(
                         incident_id=incident.id,
@@ -319,9 +323,52 @@ class IncidentService:
                 )
                 logger.info(f"Создано удержание новому сотруднику {new_employee_id} при изменении инцидента {incident_id}")
         
+        if custom_date_changed:
+            await self._update_incident_adjustment_dates(
+                incident_id=incident.id,
+                new_date=incident.custom_date
+            )
+        
         await self.session.commit()
         await self.session.refresh(incident)
         return incident
+    
+    async def _update_incident_adjustment_dates(
+        self,
+        *,
+        incident_id: int,
+        new_date: Optional[date]
+    ) -> None:
+        """Обновить created_at корректировок, связанных с инцидентом."""
+        from datetime import datetime, timezone
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        from sqlalchemy import select
+        
+        query = select(PayrollAdjustment).where(
+            PayrollAdjustment.details.isnot(None),
+            PayrollAdjustment.details['incident_id'].astext == str(incident_id)
+        )
+        result = await self.session.execute(query)
+        adjustments = result.scalars().all()
+        if not adjustments:
+            return
+        
+        if new_date:
+            naive_dt = datetime.combine(new_date, datetime.min.time())
+            new_created_at = naive_dt.replace(tzinfo=timezone.utc)
+        else:
+            new_created_at = datetime.now(timezone.utc)
+        
+        for adj in adjustments:
+            adj.created_at = new_created_at
+            adj.updated_at = datetime.now(timezone.utc)
+        
+        logger.info(
+            "Обновлены даты корректировок по инциденту",
+            incident_id=incident_id,
+            adjustments=len(adjustments),
+            new_date=new_date.isoformat() if new_date else None
+        )
     
     async def get_incident_by_id(self, incident_id: int) -> Optional[Incident]:
         """Получить инцидент по ID."""
@@ -329,6 +376,20 @@ class IncidentService:
             select(Incident).where(Incident.id == incident_id)
         )
         return result.scalar_one_or_none()
+    
+    async def get_adjustments_by_incident(self, incident_id: int) -> List["PayrollAdjustment"]:
+        """Получить корректировки, связанные с инцидентом."""
+        from domain.entities.payroll_adjustment import PayrollAdjustment
+        query = (
+            select(PayrollAdjustment)
+            .where(
+                PayrollAdjustment.details.isnot(None),
+                PayrollAdjustment.details['incident_id'].astext == str(incident_id)
+            )
+            .order_by(PayrollAdjustment.created_at.desc())
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
     
     async def apply_suggested_adjustments(
         self,

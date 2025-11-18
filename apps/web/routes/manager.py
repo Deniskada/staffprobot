@@ -406,6 +406,7 @@ async def manager_incident_edit_form(
             categories.extend(await cat_service.list_categories(oid))
         # Получаем общий контекст для меню
         manager_context = await get_manager_context(user_id, db)
+        adjustments = await IncidentService(db).get_adjustments_by_incident(incident.id)
         return templates.TemplateResponse("manager/incidents/edit.html", {
             "request": request,
             "current_user": current_user,
@@ -414,6 +415,7 @@ async def manager_incident_edit_form(
             "employee_groups": employee_groups,
             "categories": categories,
             "history": history,
+            "adjustments": adjustments,
             **manager_context
         })
 
