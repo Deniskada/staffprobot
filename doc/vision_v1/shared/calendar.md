@@ -74,7 +74,8 @@
 ## Динамическая загрузка
 
 - Стартовая загрузка охватывает только текущий месяц (рассчитывается в `calculateDateRange()`).
-- Прокрутка инициирует `handleScroll()` → `checkAndLoadAdjacentMonths()` → `loadMonthRange()`. Диапазон по умолчанию: текущий месяц + следующий.
+- Автоскролл к текущему дню при инициализации выполняется с флагом `initialAutoScrollInProgress`, чтобы не триггерить `checkAndLoadAdjacentMonths()` и не подгружать соседние месяцы до ручной прокрутки (фикс от 18.11.2025).
+- Прокрутка инициирует `handleScroll()` → `checkAndLoadAdjacentMonths()` → `loadMonthRange()`, когда флагов загрузки/навигации нет. Диапазон по умолчанию: текущий месяц + следующий.
 - После получения данных вызывается `mergeMonthData()` + `processCalendarData()`, затем `onDataLoaded` перерисовывает сетку (`renderCalendarGrid`) и обновляет `window.calendarData`.
 
 ## Модальное окно планирования

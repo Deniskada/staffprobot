@@ -32,6 +32,7 @@ class UniversalCalendarManager {
         this.isScrolling = false;
         this.isLoadingMonth = false; // Флаг загрузки месяца
         this.isUserNavigating = false; // Флаг пользовательской навигации
+        this.initialAutoScrollInProgress = false; // Флаг автоскролла при инициализации
         
         this.init();
     }
@@ -121,7 +122,7 @@ class UniversalCalendarManager {
     
     handleScroll() {
         // Защита от рекурсивных вызовов
-        if (this.isLoadingMonth || this.isUserNavigating) return;
+        if (this.isLoadingMonth || this.isUserNavigating || this.initialAutoScrollInProgress) return;
         
         const visibleMonth = this.getVisibleMonthFromScroll();
         if (!visibleMonth) return;
@@ -483,9 +484,17 @@ class UniversalCalendarManager {
             
             // Автоскролл к текущему дню при первой загрузке (если не отключен)
             if (!skipAutoScroll) {
+                    this.initialAutoScrollInProgress = true;
                 setTimeout(() => {
-                    this.scrollToToday();
+                        this.scrollToToday(() => {
+                            // даём время плавному скроллу завершиться, затем снимаем флаг
+                            setTimeout(() => {
+                                this.initialAutoScrollInProgress = false;
+                            }, 400);
+                        });
                 }, 200);
+                } else {
+                    this.initialAutoScrollInProgress = false;
             }
             
         } catch (error) {
@@ -904,15 +913,25 @@ class UniversalCalendarManager {
         });
     }
     
-    scrollToToday() {
+    scrollToToday(onComplete = null) {
         const today = new Date();
         const todayString = this.formatDateLocal(today); // YYYY-MM-DD format
         
         const todayElement = document.querySelector(`.calendar-day[data-date="${todayString}"]`);
-        if (!todayElement) return;
+        if (!todayElement) {
+            if (typeof onComplete === 'function') {
+                onComplete();
+            }
+            return;
+        }
         
         const scrollableContainer = document.querySelector('.calendar-scrollable');
-        if (!scrollableContainer) return;
+        if (!scrollableContainer) {
+            if (typeof onComplete === 'function') {
+                onComplete();
+            }
+            return;
+        }
         
         const containerRect = scrollableContainer.getBoundingClientRect();
         const elementRect = todayElement.getBoundingClientRect();
@@ -927,6 +946,10 @@ class UniversalCalendarManager {
             top: Math.max(0, scrollTo),
             behavior: 'smooth'
         });
+
+        if (typeof onComplete === 'function') {
+            setTimeout(onComplete, 100);
+        }
     }
     
     filterByObject(objectId) {
