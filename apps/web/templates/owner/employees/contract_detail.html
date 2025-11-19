@@ -95,7 +95,11 @@
                                 <strong>Период действия:</strong><br>
                                 <small>
                                     с {{ contract.start_date.strftime('%d.%m.%Y') }}<br>
-                                    {% if contract.end_date %}
+                                    {% if contract.status == 'terminated' and contract.termination_date %}
+                                        по {{ contract.termination_date.strftime('%d.%m.%Y') }}
+                                    {% elif contract.status == 'terminated' and contract.terminated_at %}
+                                        по {{ contract.terminated_at.strftime('%d.%m.%Y') }}
+                                    {% elif contract.end_date %}
                                         по {{ contract.end_date.strftime('%d.%m.%Y') }}
                                     {% else %}
                                         бессрочно
