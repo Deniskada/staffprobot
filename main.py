@@ -70,22 +70,11 @@ def main():
                     await bot.initialize()
                     print("✅ Бот инициализирован")
                     
-                    # Запускаем в polling режиме
+                    # Запускаем в polling режиме через встроенный хелпер
                     print("🔄 Запуск в polling режиме...")
                     print("📱 Бот запущен! Отправьте /start в Telegram")
                     print("⏹️ Для остановки нажмите Ctrl+C")
-                    
-                    # Запускаем polling через start_polling
-                    await bot.application.initialize()
-                    await bot.application.start()
-                    await bot.application.updater.start_polling(
-                        allowed_updates=["message", "callback_query"],
-                        drop_pending_updates=True
-                    )
-                    
-                    # Ждем в бесконечном цикле
-                    while True:
-                        await asyncio.sleep(1)
+                    await bot.start_polling()
                     
                 except KeyboardInterrupt:
                     print("\n⏹️ Получен сигнал остановки")
