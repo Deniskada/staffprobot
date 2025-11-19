@@ -72,10 +72,11 @@ DevOps Command Center — это централизованная система
 - Runbook «бот не отвечает»:
   1. `docker compose -f docker-compose.prod.yml logs bot --tail 200`
   2. Проверить lock/heartbeat (см. команды выше)
-  3. Если lock завис — `python scripts/release_bot_lock.py`
-  4. Очистить очередь: `curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN_PROD/getUpdates?offset=-1&drop_pending_updates=true"`
+  3. Если lock завис — `docker compose -f docker-compose.prod.yml exec bot python scripts/release_bot_lock.py`
+  4. Очистить очередь: бот автоматически очищает очередь при старте (`drop_pending_updates=True` в `start_polling()`)
   5. Перезапустить контейнер: `docker compose -f docker-compose.prod.yml restart bot`
-  6. Убедиться, что `bot_polling_heartbeat` появился и метрика обновилась.
+  6. Убедиться, что в логах появилось "Polling lock acquired" и `bot_polling_heartbeat` обновляется
+  7. Если конфликт сохраняется — проверить, не запущен ли бот на dev с прод-токеном
 - Чек-лист перед запуском dev‑бота:
   - `.env` содержит `TELEGRAM_BOT_TOKEN_DEV`, а не prod токен
   - `redis-cli get bot_polling_lock` → пусто или текущая машина
@@ -123,7 +124,7 @@ DevOps Command Center — это централизованная система
 - Variables: `BRAIN_URL` (например, `http://brain:8003`), `STAFFPROBOT_URL` (опц.)
 - Secrets: `SSH_DEPLOY_KEY`, `TELEGRAM_BOT_TOKEN_PROD`, `TELEGRAM_CHAT_ID`
 
-Примечание: при недоступности Brain шаги Analyze/Sync не валят пайплайн (warn + continue). Деплой может не выполниться из‑за firewall по IP — это ожидаемо; статус фиксируется в `deployments`.  
+Примечание: при недоступности Brain шаги Analyze/Sync не валят пайплайн (warn + continue). Деплой может не выполниться из‑за firewall по IP — это ожидаемо; статус фиксируется в `deployments`.
 **Telegram-бог мониторинг**: см. раздел «Telegram Bot Monitoring & Runbook» ниже — добавлены метрики Prometheus и Celery watchdog.
 
 ## 🗄️ База данных

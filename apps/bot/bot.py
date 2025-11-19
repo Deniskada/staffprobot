@@ -295,20 +295,60 @@ class StaffProBot:
 
     async def _acquire_polling_lock(self) -> None:
         """Гарантировать единственный polling-инстанс."""
+        # Пытаемся подключиться к Redis, если не подключен
         if not cache.is_connected:
-            logger.warning("Redis cache not connected, skipping polling lock")
-            return
-        payload = self._build_lock_payload()
+            logger.warning("Redis cache not connected, attempting to connect...")
+            try:
+                await cache.connect()
+                logger.info("Redis cache connected successfully for polling lock")
+            except Exception as e:
+                logger.error(
+                    "Failed to connect to Redis for polling lock",
+                    exc_info=e,
+                    extra={"error": str(e)}
+                )
+                raise RuntimeError(
+                    "Cannot acquire polling lock: Redis is not available. "
+                    "Bot will not start without lock to prevent conflicts."
+                ) from e
+        
+        # Проверяем, не занят ли lock другим экземпляром
+        existing_lock = await cache.get(self.LOCK_KEY, serialize="json")
+        if existing_lock:
+            logger.error(
+                "Polling lock already acquired by another instance",
+                extra={"existing_lock": existing_lock}
+            )
+            raise RuntimeError(
+                f"Polling already running by another instance: {existing_lock}"
+            )
+        
+        # Получаем lock
+        payload = json.loads(self._build_lock_payload())  # Преобразуем в dict для cache.set
+        # Используем cache.set с nx=True через redis напрямую, так как cache.set не поддерживает nx
         lock_acquired = await cache.redis.set(
             self.LOCK_KEY,
-            payload,
+            json.dumps(payload),  # Сохраняем как JSON строку
             nx=True,
             ex=self.LOCK_TTL_SECONDS
         )
         if not lock_acquired:
-            existing = await cache.redis.get(self.LOCK_KEY)
-            details = existing.decode("utf-8") if existing else "unknown"
+            # Двойная проверка на случай race condition
+            existing_raw = await cache.redis.get(self.LOCK_KEY)
+            if existing_raw:
+                try:
+                    existing = json.loads(existing_raw.decode("utf-8"))
+                except (json.JSONDecodeError, AttributeError):
+                    existing = existing_raw.decode("utf-8") if isinstance(existing_raw, bytes) else str(existing_raw)
+            else:
+                existing = None
+            details = existing if existing else "unknown"
+            logger.error(
+                "Failed to acquire polling lock (race condition?)",
+                extra={"existing_lock": details}
+            )
             raise RuntimeError(f"Polling already running by another instance: {details}")
+        
         logger.info("Polling lock acquired", extra={"lock": payload})
         self._lock_refresh_task = asyncio.create_task(self._lock_refresh_loop())
 
