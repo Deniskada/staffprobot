@@ -81,10 +81,10 @@ git checkout main
 
 ```bash
 # Создаем файл окружения для продакшена
-cp .env.example .env.prod
+cp .env.example .env
 
 # Редактируем настройки
-nano .env.prod
+nano .env
 ```
 
 ### 4. Основные переменные окружения
@@ -253,7 +253,7 @@ sudo certbot renew --dry-run
 
 ```bash
 # Получаем токен бота от @BotFather в Telegram
-# Добавляем в .env.prod:
+# Добавляем в .env:
 TELEGRAM_BOT_TOKEN=your_bot_token_here
 
 # Настраиваем webhook
@@ -335,7 +335,7 @@ docker-compose -f docker-compose.prod.yml logs --tail=100 web
 docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U staffprobot staffprobot_prod > backup_before_update_$(date +%Y%m%d_%H%M%S).sql
 
 # Бэкап конфигураций
-tar -czf config_backup_$(date +%Y%m%d_%H%M%S).tar.gz .env.prod docker-compose.prod.yml
+tar -czf config_backup_$(date +%Y%m%d_%H%M%S).tar.gz .env docker-compose.prod.yml
 ```
 
 ### 2. Обновление кода

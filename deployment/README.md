@@ -63,8 +63,8 @@ cd /opt/staffprobot
 ### Шаг 3: Настройка переменных окружения
 
 ```bash
-sudo -u staffprobot cp deployment/env.prod.example .env.prod
-sudo -u staffprobot nano .env.prod
+sudo -u staffprobot cp env.example .env
+sudo -u staffprobot nano .env
 ```
 
 **Обязательно заполните**:
@@ -148,7 +148,7 @@ sudo certbot renew --dry-run
 ### Grafana
 - **URL**: http://staffprobot.ru:3000
 - **Логин**: admin
-- **Пароль**: из .env.prod
+- **Пароль**: из .env
 
 ### Логи
 ```bash

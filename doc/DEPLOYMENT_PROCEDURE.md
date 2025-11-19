@@ -177,10 +177,10 @@ docker ps -a | grep staffprobot
 
 #### 1.3 Подготовка production конфигурации
 ```bash
-# Создаем production .env файл
-cp .env .env.prod
+# Создаем production .env файл (если его ещё нет)
+cp env.example .env
 
-# Редактируем .env.prod для production настроек
+# Редактируем .env для production настроек
 # - Изменить DATABASE_URL на production
 # - Изменить REDIS_URL на production
 # - Настроить другие production переменные
@@ -230,7 +230,7 @@ tar -czf staffprobot_production_images_$(date +%Y%m%d_%H%M%S).tar.gz \
     staffprobot_postgres_*.tar \
     staffprobot_redis_*.tar \
     docker-compose.prod.yml \
-    .env.prod \
+    .env \
     migrations/ \
     requirements.txt
 
@@ -288,7 +288,7 @@ docker images | grep staffprobot
 #### 3.4 Настройка production конфигурации
 ```bash
 # Копируем production конфигурации
-cp .env.prod .env
+cp .env .env
 cp docker-compose.prod.yml .
 
 # Проверяем конфигурации

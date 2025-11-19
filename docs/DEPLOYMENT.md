@@ -16,9 +16,9 @@ git pull origin main
 ```
 
 ### 2. Настройка токенов
-После первого запуска отредактируйте `.env.prod`:
+После первого запуска отредактируйте `.env`:
 ```bash
-nano .env.prod
+nano .env
 ```
 
 Установите реальные значения:
@@ -28,7 +28,7 @@ nano .env.prod
 
 ### 3. Перезапуск с новыми токенами
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod restart bot web
+docker compose -f docker-compose.prod.yml --env-file .env restart bot web
 ```
 
 ## Ручное развертывание
@@ -40,17 +40,17 @@ git pull origin main
 
 ### 2. Сборка образов
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache
+docker compose -f docker-compose.prod.yml --env-file .env build --no-cache
 ```
 
 ### 3. Запуск сервисов
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+docker compose -f docker-compose.prod.yml --env-file .env up -d
 ```
 
 ### 4. Проверка статуса
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+docker compose -f docker-compose.prod.yml --env-file .env ps
 ```
 
 ## Полезные команды
@@ -58,25 +58,25 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 ### Логи сервисов
 ```bash
 # Все сервисы
-docker compose -f docker-compose.prod.yml --env-file .env.prod logs
+docker compose -f docker-compose.prod.yml --env-file .env logs
 
 # Конкретный сервис
-docker compose -f docker-compose.prod.yml --env-file .env.prod logs bot
-docker compose -f docker-compose.prod.yml --env-file .env.prod logs web
+docker compose -f docker-compose.prod.yml --env-file .env logs bot
+docker compose -f docker-compose.prod.yml --env-file .env logs web
 ```
 
 ### Перезапуск сервисов
 ```bash
 # Все сервисы
-docker compose -f docker-compose.prod.yml --env-file .env.prod restart
+docker compose -f docker-compose.prod.yml --env-file .env restart
 
 # Конкретный сервис
-docker compose -f docker-compose.prod.yml --env-file .env.prod restart bot
+docker compose -f docker-compose.prod.yml --env-file .env restart bot
 ```
 
 ### Остановка
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod down
+docker compose -f docker-compose.prod.yml --env-file .env down
 ```
 
 ## Проверка работоспособности
@@ -91,7 +91,7 @@ curl http://localhost:8001/health
 
 ### Статус контейнеров
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+docker compose -f docker-compose.prod.yml --env-file .env ps
 ```
 
 Все сервисы должны иметь статус `Up` и `healthy`.
@@ -109,13 +109,13 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 ## Troubleshooting
 
 ### Проблема: Бот не запускается
-1. Проверьте токен в `.env.prod`
-2. Проверьте логи: `docker compose -f docker-compose.prod.yml --env-file .env.prod logs bot`
+1. Проверьте токен в `.env`
+2. Проверьте логи: `docker compose -f docker-compose.prod.yml --env-file .env logs bot`
 
 ### Проблема: Веб-сервис недоступен
 1. Проверьте порт 8001
-2. Проверьте логи: `docker compose -f docker-compose.prod.yml --env-file .env.prod logs web`
+2. Проверьте логи: `docker compose -f docker-compose.prod.yml --env-file .env logs web`
 
 ### Проблема: База данных недоступна
-1. Проверьте пароли в `.env.prod`
-2. Проверьте логи: `docker compose -f docker-compose.prod.yml --env-file .env.prod logs postgres`
+1. Проверьте пароли в `.env`
+2. Проверьте логи: `docker compose -f docker-compose.prod.yml --env-file .env logs postgres`

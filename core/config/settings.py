@@ -124,8 +124,8 @@ class Settings(BaseSettings):
         return self.telegram_bot_token_dev
     
     class Config:
-        # В production читаем .env.prod, иначе .env
-        env_file = ".env.prod" if os.getenv("ENVIRONMENT") == "production" else ".env"
+        # Всегда читаем единый .env (как локально, так и на проде)
+        env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
 

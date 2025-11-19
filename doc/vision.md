@@ -1481,7 +1481,7 @@ services:
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -1508,7 +1508,7 @@ services:
     volumes:
       - rabbitmq_prod_data:/var/lib/rabbitmq
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
@@ -1524,7 +1524,7 @@ services:
       - ENVIRONMENT=production
       - DEBUG=false
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     depends_on:
       postgres:
@@ -1548,7 +1548,7 @@ services:
       - ENVIRONMENT=production
       - DEBUG=false
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     depends_on:
       postgres:
@@ -1567,7 +1567,7 @@ services:
       - ENVIRONMENT=production
       - DEBUG=false
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     depends_on:
       postgres:
@@ -1603,7 +1603,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
 
 volumes:
@@ -1676,7 +1676,7 @@ services:
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -1703,7 +1703,7 @@ services:
     volumes:
       - rabbitmq_prod_data:/var/lib/rabbitmq
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
@@ -1719,7 +1719,7 @@ services:
       - ENVIRONMENT=production
       - DEBUG=false
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     depends_on:
       postgres:
@@ -1743,7 +1743,7 @@ services:
       - ENVIRONMENT=production
       - DEBUG=false
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     depends_on:
       postgres:
@@ -1762,7 +1762,7 @@ services:
       - ENVIRONMENT=production
       - DEBUG=false
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
     depends_on:
       postgres:
@@ -1798,7 +1798,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     env_file:
-      - .env.prod
+      - .env
     restart: unless-stopped
 
 volumes:
@@ -1922,11 +1922,11 @@ jobs:
 
 ### 2.13.1. Автоматические миграции и единый источник конфигурации
 
-- Все сервисы читают секреты из единого файла `.env.prod`.
+- Все сервисы читают секреты из единого файла `.env`.
 - `DATABASE_URL` в приложениях формируется из `POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB` и хоста `postgres`.
 - Перед поднятием приложений выполняется отдельный одноразовый сервис `migrator` с командой `alembic upgrade head`.
 - Скрипт прод-деплоя запускает порядок: Postgres/Redis/RabbitMQ → migrator → приложения (`web`, `bot`, `celery_*`).
-- Исключены ручные правки паролей в БД: пароль управляется только через `.env.prod`.
+- Исключены ручные правки паролей в БД: пароль управляется только через `.env`.
 
 ## 2.14. Подход к конфигурированию
 

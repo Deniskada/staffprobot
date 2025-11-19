@@ -6,7 +6,7 @@ set -euo pipefail
 
 DOMAIN=${DOMAIN:-staffprobot.ru}
 PROJECT_DIR=/opt/staffprobot
-ENV_FILE=$PROJECT_DIR/.env.prod
+ENV_FILE=$PROJECT_DIR/.env
 DOCKERFILE=$PROJECT_DIR/docker/Dockerfile
 
 log() { echo -e "[$(date +'%F %T')] $*"; }
@@ -18,14 +18,14 @@ log "1) Проверка директории проекта"
 [ -d "$PROJECT_DIR" ] || fail "Нет $PROJECT_DIR. Клонируйте репозиторий туда."
 chown -R staffprobot:staffprobot "$PROJECT_DIR" || true
 
-log "2) Проверка .env.prod"
+log "2) Проверка .env"
 if [ ! -f "$ENV_FILE" ]; then
-  fail "Не найден $ENV_FILE. Создайте из deployment/env.prod.example и заполните."
+  fail "Не найден $ENV_FILE. Создайте из env.example и заполните."
 fi
 # Базовая валидация ключевых переменных
 source "$ENV_FILE"
 for v in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD REDIS_PASSWORD RABBITMQ_USER RABBITMQ_PASSWORD SECRET_KEY TELEGRAM_BOT_TOKEN GRAFANA_PASSWORD; do
-  [ -n "${!v:-}" ] || fail "Переменная $v пуста в .env.prod"
+  [ -n "${!v:-}" ] || fail "Переменная $v пуста в .env"
 done
 
 log "3) Проверка SSL сертификатов"
