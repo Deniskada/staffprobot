@@ -249,6 +249,10 @@
 - [POST] `/owner/payroll/{entry_id}/payments/{payment_id}/complete` — (apps/web/routes/payroll.py) — подтвердить выплату (pending → completed)
 - [POST] `/owner/payroll/manual-recalculate` — (apps/web/routes/payroll.py) — ручной пересчёт выплат на выбранную дату (идемпотентно: обновляет существующие, создаёт недостающие)
   - Включает terminated контракты с `settlement_policy='termination_date'`, если конец платёжного периода ≤ `termination_date`.
+- [GET] `/owner/payroll/statement/{employee_id}` — страница расчётного листа сотрудника (apps/web/routes/payroll.py)
+  - Сервис `PayrollStatementService` гарантирует наличие всех начислений по корректировкам (досоздаёт по графику выплат, если нужно).
+  - UI показывает итог по корректировкам/начислениям/выплатам + кнопки «Печать» и «Экспорт».
+- [GET] `/owner/payroll/statement/{employee_id}/export` — Excel-версия расчётного листа (общий helper `build_statement_workbook`).
 
 ## Графики выплат (Payment Schedules) — Итерация 23
 - [GET] `/owner/payment-schedules/{schedule_id}/data` — (apps/web/routes/payment_schedule.py) — данные графика (JSON)

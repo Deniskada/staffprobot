@@ -199,3 +199,4 @@ early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
 
 
 
+

@@ -162,6 +162,11 @@
                                                             <i class="fas fa-eye-slash"></i>
                                                         </button>
                                                     {% endif %}
+                                                    {% if not row.is_active %}
+                                                        <a href="/manager/payroll/statement/{{ row.employee_id }}" class="btn btn-sm btn-success ms-2">
+                                                            <i class="bi bi-file-earmark-text"></i> Расчётный лист
+                                                        </a>
+                                                    {% endif %}
                                                 </td>
                                             </tr>
                                         {% endfor %}

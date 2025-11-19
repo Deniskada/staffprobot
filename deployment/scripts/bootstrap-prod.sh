@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."  # в корень репозитория
 
 echo "[bootstrap] Старт первичной настройки прод-среды"
 
-ENV_FILE=".env.prod"
+ENV_FILE=".env"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "[bootstrap] Создаю $ENV_FILE"

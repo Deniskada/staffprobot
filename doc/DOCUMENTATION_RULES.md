@@ -36,7 +36,22 @@
 - Перед коммитом: быстрый diff по `doc/vision_v1` и запуск автогенерации при необходимости.
 - При обнаружении несоответствий — завести задачу на коррекцию документации.
 
-## Недавние изменения (main, 15.11.2025)
+## Недавние изменения (main, 19.11.2025)
+
+### Расчётные листы уволенных сотрудников (Iteration 46) ✅
+
+**Статус:** Завершено (owner + manager)
+- **Новый функционал:**
+  - Кнопка «Расчётный лист» в деталях сотрудника на `/owner/payroll` и `/manager/payroll`.
+  - Маршруты:
+    - `GET /owner/payroll/statement/{employee_id}` — просмотр отчёта (шаблон `owner/payroll/statement.html`).
+    - `GET /owner/payroll/statement/{employee_id}/export` — выгрузка в Excel (ASCII filename, URL-encoded).
+    - `GET /manager/payroll/statement/{employee_id}` / `.../export` — аналогичная функциональность для управляющего.
+  - Shared-сервисы: `PayrollStatementService`, `PayrollGenerationService`, `PayrollStatementExporter`.
+  - Логи: `payroll_statement_logs` (entity + миграция).
+- **Правила документации:**
+  - Любые правки в расчётных листах требуют обновления `doc/vision_v1/roles/owner.md`, `doc/vision_v1/roles/manager.md` и этой страницы (описание роутов и экспортов).
+  - При изменении логики генерации начислений обязательно фиксировать сервисы в `doc/vision_v1/entities/payroll.md`.
 
 ### Синхронизация статусов Shift и ShiftSchedule (Iteration 44) ✅
 

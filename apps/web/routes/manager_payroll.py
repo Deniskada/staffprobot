@@ -1,13 +1,14 @@
 """Роуты для работы управляющих с начислениями и выплатами."""
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Query, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from urllib.parse import quote
 
 from apps.web.jinja import templates
 from apps.web.middleware.auth_middleware import get_current_user
@@ -15,7 +16,9 @@ from apps.web.middleware.role_middleware import get_user_id_from_current_user, r
 from apps.web.dependencies import require_manager_payroll_permission
 from core.database.session import get_db_session
 from apps.web.services.payroll_service import PayrollService
+from apps.web.services.payroll_statement_exporter import build_statement_workbook
 from shared.services.manager_permission_service import ManagerPermissionService
+from shared.services.payroll_statement_service import PayrollStatementService
 from domain.entities.object import Object
 from domain.entities.user import User
 from domain.entities.contract import Contract
@@ -277,6 +280,105 @@ async def manager_payroll_list(
     except Exception as e:
         logger.error(f"Error loading manager payroll: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки начислений: {str(e)}")
+
+
+@router.get(
+    "/payroll/statement/{employee_id}",
+    response_class=HTMLResponse,
+    name="manager_payroll_statement",
+)
+async def manager_payroll_statement(
+    request: Request,
+    employee_id: int,
+    current_user = Depends(require_manager_payroll_permission),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Расчётный лист для управляющего (по доступным объектам)."""
+    permission_service = ManagerPermissionService(db)
+    statement_service = PayrollStatementService(db)
+    try:
+        user_id = current_user.id
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = {obj.id for obj in accessible_objects}
+        if not accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступных объектов")
+
+        statement = await statement_service.generate_statement(
+            employee_id=employee_id,
+            requested_by_id=user_id,
+            requested_role="manager",
+            accessible_object_ids=accessible_object_ids,
+        )
+        await db.commit()
+
+        manager_context = await get_manager_context(user_id, db)
+        return templates.TemplateResponse(
+            "manager/payroll/statement.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "statement": statement,
+                "accessible_objects": accessible_objects,
+                **manager_context,
+            },
+        )
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error generating manager payroll statement: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Не удалось сформировать расчётный лист")
+
+
+@router.get(
+    "/payroll/statement/{employee_id}/export",
+    name="manager_payroll_statement_export",
+)
+async def manager_payroll_statement_export(
+    request: Request,
+    employee_id: int,
+    current_user = Depends(require_manager_payroll_permission),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Экспорт расчётного листа управляющего в Excel."""
+    permission_service = ManagerPermissionService(db)
+    statement_service = PayrollStatementService(db)
+    try:
+        user_id = current_user.id
+        accessible_objects = await permission_service.get_user_accessible_objects(user_id)
+        accessible_object_ids = {obj.id for obj in accessible_objects}
+        if not accessible_object_ids:
+            raise HTTPException(status_code=403, detail="Нет доступных объектов")
+
+        statement = await statement_service.generate_statement(
+            employee_id=employee_id,
+            requested_by_id=user_id,
+            requested_role="manager",
+            accessible_object_ids=accessible_object_ids,
+            log_result=False,
+        )
+        await db.commit()
+
+        content = build_statement_workbook(statement)
+        employee = statement["employee"]
+        # Используем только ASCII для имени файла, чтобы избежать проблем с кодировкой
+        safe_name = (employee.last_name or "employee").encode("ascii", "ignore").decode("ascii") or "employee"
+        filename = f"manager_payroll_statement_{safe_name}_{employee_id}.xlsx"
+        # Кодируем имя файла для Content-Disposition заголовка
+        encoded_filename = quote(filename, safe="")
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{encoded_filename}"'},
+        )
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.exception(f"Error exporting manager payroll statement: {e}")
+        raise HTTPException(status_code=500, detail="Не удалось выгрузить отчёт")
 
 
 @router.get("/payroll/{entry_id}", response_class=HTMLResponse)

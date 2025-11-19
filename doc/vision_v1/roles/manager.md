@@ -146,6 +146,10 @@
   - Детальный блок содержит состав начисления, корректировки, выплаты (размещены перед протоколом изменений) и историю изменений.
   - Доступ проверяется через `ManagerPermissionService.get_user_accessible_employee_ids(include_inactive=True)`.
   - Управляющий не может подтверждать выплаты, но видит их статус и детали; добавление корректировок доступно пока нет зафиксированных выплат.
+- [GET] `/manager/payroll/statement/{employee_id}` — (apps/web/routes/manager_payroll.py) — расчётный лист по сотруднику (ограничение по доступным объектам)
+  - Использует общий `PayrollStatementService`: создаёт недостающие начисления по графику выплат, объединяет корректировки/выплаты/баланс.
+  - UI совпадает с owner-версией: кнопки «Печать» и «Экспорт», карточки суммарных показателей, блоки по периодам.
+- [GET] `/manager/payroll/statement/{employee_id}/export` — Excel расчётного листа (общий helper `build_statement_workbook`)
 
 ## Начисления (Payroll Adjustments) — Итерация 23
 **Требуется право:** `manager_permissions.can_manage_payroll = true`

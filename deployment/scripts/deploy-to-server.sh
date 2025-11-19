@@ -9,10 +9,10 @@ echo "🚀 Развертывание StaffProBot на сервере..."
 echo "📥 Обновление кода из Git..."
 git pull origin main
 
-# 2. Создаем .env.prod если его нет
-if [ ! -f .env.prod ]; then
-    echo "📝 Создание .env.prod..."
-    cat > .env.prod << 'EOF'
+# 2. Создаем .env если его нет
+if [ ! -f .env ]; then
+    echo "📝 Создание .env..."
+    cat > .env << 'EOF'
 APP_NAME=StaffProBot_Prod
 ENVIRONMENT=production
 DEBUG=false
@@ -42,20 +42,20 @@ GRAFANA_PASSWORD=prod_admin_pass
 # Дополнительные переменные для продакшена
 TELEGRAM_WEBHOOK_URL=https://bot.staffprobot.ru
 EOF
-    echo "⚠️  ВАЖНО: Отредактируйте .env.prod и установите реальные токены!"
+    echo "⚠️  ВАЖНО: Отредактируйте .env и установите реальные токены!"
 fi
 
 # 3. Останавливаем старые контейнеры
 echo "🛑 Остановка старых контейнеров..."
-docker compose -f docker-compose.prod.yml --env-file .env.prod down || true
+docker compose -f docker-compose.prod.yml --env-file .env down || true
 
 # 4. Собираем образы
 echo "🔨 Сборка Docker образов..."
-docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache
+docker compose -f docker-compose.prod.yml --env-file .env build --no-cache
 
 # 5. Запускаем сервисы
 echo "🚀 Запуск сервисов..."
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+docker compose -f docker-compose.prod.yml --env-file .env up -d
 
 # 6. Ждем готовности сервисов
 echo "⏳ Ожидание готовности сервисов..."
@@ -63,7 +63,7 @@ sleep 30
 
 # 7. Проверяем статус
 echo "📊 Статус сервисов:"
-docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+docker compose -f docker-compose.prod.yml --env-file .env ps
 
 # 8. Проверяем health endpoints
 echo "🔍 Проверка health endpoints..."

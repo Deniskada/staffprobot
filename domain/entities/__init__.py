@@ -45,6 +45,7 @@ from .changelog_entry import ChangelogEntry
 from .deployment import Deployment
 from .faq_entry import FAQEntry
 from .shift_history import ShiftHistory
+from .payroll_statement_log import PayrollStatementLog
 
 __all__ = [
     "Base",
@@ -99,4 +100,5 @@ __all__ = [
     "Deployment",
     "FAQEntry",
     "ShiftHistory",
+    "PayrollStatementLog",
 ]

@@ -1,0 +1,172 @@
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted mb-1">Начислено (брутто)</p>
+                <h4 class="mb-0 text-primary">{{ "%.2f"|format(statement.totals.gross) }} ₽</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted mb-1">Доплаты</p>
+                <h4 class="mb-0 text-success">{{ "%.2f"|format(statement.totals.bonuses) }} ₽</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted mb-1">Удержания</p>
+                <h4 class="mb-0 text-danger">{{ "%.2f"|format(statement.totals.deductions) }} ₽</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted mb-1">Баланс</p>
+                <h4 class="mb-0 {{ 'text-success' if statement.totals.balance >= 0 else 'text-danger' }}">
+                    {{ "%.2f"|format(statement.totals.balance) }} ₽
+                </h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if statement.entries %}
+    {% for block in statement.entries %}
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center">
+                <div>
+                    <strong>{{ block.entry.period_start.strftime('%d.%m.%Y') }} — {{ block.entry.period_end.strftime('%d.%m.%Y') }}</strong>
+                    <div class="text-muted">
+                        {{ block.entry.object_.name if block.entry.object_ else 'Без объекта' }}
+                    </div>
+                </div>
+                <div class="text-end">
+                    <div>К выплате: <strong>{{ "%.2f"|format(block.entry.net_amount or 0) }} ₽</strong></div>
+                    <div>Выплачено: <strong class="text-success">{{ "%.2f"|format(block.paid_amount) }} ₽</strong></div>
+                    <div>Остаток: <strong class="{{ 'text-success' if ((block.entry.net_amount or 0)|float) - ((block.paid_amount or 0)|float) == 0 else 'text-warning' }}">
+                        {{ "%.2f"|format(((block.entry.net_amount or 0)|float) - ((block.paid_amount or 0)|float)) }} ₽
+                    </strong></div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-uppercase text-muted mb-3">Корректировки</h6>
+                        {% if block.adjustments %}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <thead>
+                                        <tr class="text-muted">
+                                            <th>Тип</th>
+                                            <th>Сумма</th>
+                                            <th>Описание</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for adj in block.adjustments %}
+                                            <tr>
+                                                <td>{{ adj.get_type_label() }}</td>
+                                                <td class="{{ 'text-success' if adj.amount > 0 else 'text-danger' }}">
+                                                    {{ "%.2f"|format(adj.amount) }} ₽
+                                                </td>
+                                                <td>{{ adj.description or '—' }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted mb-0">Корректировок нет.</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-uppercase text-muted mb-3">Выплаты</h6>
+                        {% if block.payments %}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <thead>
+                                        <tr class="text-muted">
+                                            <th>Дата</th>
+                                            <th>Сумма</th>
+                                            <th>Статус</th>
+                                            <th>Способ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for payment in block.payments %}
+                                            <tr>
+                                                <td>{{ payment.payment_date.strftime('%d.%m.%Y') }}</td>
+                                                <td>{{ "%.2f"|format(payment.amount or 0) }} ₽</td>
+                                                <td>
+                                                    <span class="badge {% if payment.status == 'completed' %}bg-success{% elif payment.status == 'pending' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                                        {{ payment.status }}
+                                                    </span>
+                                                </td>
+                                                <td>{{ payment.payment_method }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted mb-0">Выплаты ещё не оформлены.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>Для этого сотрудника пока нет начислений.
+    </div>
+{% endif %}
+
+{% if statement.pending_adjustments %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <strong>Неприменённые корректировки</strong>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Дата</th>
+                            <th>Тип</th>
+                            <th>Сумма</th>
+                            <th>Описание</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for adj in statement.pending_adjustments %}
+                            <tr>
+                                <td>{{ adj.created_at.strftime('%d.%m.%Y') if adj.created_at else '—' }}</td>
+                                <td>{{ adj.get_type_label() }}</td>
+                                <td class="{{ 'text-success' if adj.amount > 0 else 'text-danger' }}">
+                                    {{ "%.2f"|format(adj.amount) }} ₽
+                                </td>
+                                <td>{{ adj.description or '—' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+<div class="row mt-5">
+    <div class="col-md-6 mt-4">
+        <div class="border-top pt-3 fw-semibold">Ответственный</div>
+    </div>
+    <div class="col-md-6 mt-4">
+        <div class="border-top pt-3 fw-semibold">Сотрудник</div>
+    </div>
+</div>
+
