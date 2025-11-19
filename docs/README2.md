@@ -125,7 +125,7 @@ cd staffprobot
 2. **Настройка переменных окружения**
 ```bash
 cp env.example .env
-# Отредактируйте .env файл, указав ваш TELEGRAM_BOT_TOKEN
+# Отредактируйте .env файл, указав ваш TELEGRAM_BOT_TOKEN_DEV (для dev) или TELEGRAM_BOT_TOKEN_PROD
 ```
 
 3. **Запуск через Docker Compose**
@@ -178,7 +178,8 @@ python main.py
 
 Основные настройки находятся в файле `.env`:
 
-- `TELEGRAM_BOT_TOKEN` - токен вашего бота (обязательно)
+- `TELEGRAM_BOT_TOKEN_PROD` - токен вашего бота (обязательно для prod)
+- `TELEGRAM_BOT_TOKEN_DEV` - токен для dev окружения
 - `DATABASE_URL` - строка подключения к PostgreSQL
 - `REDIS_URL` - строка подключения к Redis
 - `ENVIRONMENT` - окружение (development/production)

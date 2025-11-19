@@ -29,7 +29,7 @@ RABBITMQ_URL=amqp://prod_admin:prod_password@rabbitmq:5672
 RABBITMQ_USER=prod_admin
 RABBITMQ_PASSWORD=prod_password
 
-TELEGRAM_BOT_TOKEN=your_prod_bot_token_here
+TELEGRAM_BOT_TOKEN_PROD=your_prod_bot_token_here
 OPENAI_API_KEY=your_prod_openai_api_key_here
 SECRET_KEY=your_prod_secret_key_here
 

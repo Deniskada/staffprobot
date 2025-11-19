@@ -143,24 +143,21 @@ def check_environment_variables():
         from dotenv import load_dotenv
         load_dotenv()
         
-        # Проверка обязательных переменных
-        required_vars = ["TELEGRAM_BOT_TOKEN"]
-        missing_vars = []
+        legacy_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        dev_token = os.getenv("TELEGRAM_BOT_TOKEN_DEV")
+        prod_token = os.getenv("TELEGRAM_BOT_TOKEN_PROD")
+        override_token = os.getenv("TELEGRAM_BOT_TOKEN_OVERRIDE")
         
-        for var in required_vars:
-            if not os.getenv(var):
-                missing_vars.append(var)
-        
-        if missing_vars:
-            print(f"⚠️  Отсутствуют переменные: {missing_vars}")
-            print("   Скопируйте env.example в .env и заполните TELEGRAM_BOT_TOKEN")
+        if not any([legacy_token, dev_token, prod_token, override_token]):
+            print("⚠️  Отсутствуют переменные: TELEGRAM_BOT_TOKEN_DEV / TELEGRAM_BOT_TOKEN_PROD")
+            print("   Скопируйте env.example в .env и заполните соответствующий токен бота")
             return False
         else:
             print("✅ Все обязательные переменные установлены")
             return True
     else:
         print("⚠️  Файл .env не найден")
-        print("   Скопируйте env.example в .env и заполните TELEGRAM_BOT_TOKEN")
+        print("   Скопируйте env.example в .env и заполните TELEGRAM_BOT_TOKEN_DEV или TELEGRAM_BOT_TOKEN_PROD")
         return False
 
 
@@ -186,7 +183,7 @@ def main():
         print(f"🎉 Все проверки пройдены! ({passed}/{total})")
         print("\n✅ MVP готов к запуску!")
         print("\n📋 Следующие шаги:")
-        print("1. Заполните TELEGRAM_BOT_TOKEN в .env файле")
+        print("1. Заполните TELEGRAM_BOT_TOKEN_DEV / TELEGRAM_BOT_TOKEN_PROD в .env файле")
         print("2. Запустите: docker-compose up -d")
         print("3. Или для разработки: python scripts/start_dev.py")
     else:

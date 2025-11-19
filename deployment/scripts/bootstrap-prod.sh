@@ -32,16 +32,16 @@ RABBITMQ_PASSWORD=guest
 # App
 SECRET_KEY=${SECRET_KEY_GEN}
 OPENAI_API_KEY=
-TELEGRAM_BOT_TOKEN=
+TELEGRAM_BOT_TOKEN_PROD=
 EOF
-  echo "[bootstrap] Файл $ENV_FILE создан. Впишите TELEGRAM_BOT_TOKEN и при необходимости OPENAI_API_KEY."
+  echo "[bootstrap] Файл $ENV_FILE создан. Впишите TELEGRAM_BOT_TOKEN_PROD и при необходимости OPENAI_API_KEY."
 fi
 
-if ! grep -q "^TELEGRAM_BOT_TOKEN=" "$ENV_FILE" || [ -z "$(grep -E '^TELEGRAM_BOT_TOKEN=' "$ENV_FILE" | cut -d= -f2-)" ]; then
-  echo -n "[bootstrap] Введите TELEGRAM_BOT_TOKEN: "
+if ! grep -q "^TELEGRAM_BOT_TOKEN_PROD=" "$ENV_FILE" || [ -z "$(grep -E '^TELEGRAM_BOT_TOKEN_PROD=' "$ENV_FILE" | cut -d= -f2-)" ]; then
+  echo -n "[bootstrap] Введите TELEGRAM_BOT_TOKEN_PROD: "
   read -r TBTK || true
   if [ -n "${TBTK:-}" ]; then
-    sed -i -E "s|^TELEGRAM_BOT_TOKEN=.*$|TELEGRAM_BOT_TOKEN=${TBTK}|" "$ENV_FILE"
+    sed -i -E "s|^TELEGRAM_BOT_TOKEN_PROD=.*$|TELEGRAM_BOT_TOKEN_PROD=${TBTK}|" "$ENV_FILE"
   fi
 fi
 

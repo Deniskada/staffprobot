@@ -22,7 +22,7 @@ nano .env.prod
 ```
 
 Установите реальные значения:
-- `TELEGRAM_BOT_TOKEN` - токен бота от @BotFather
+- `TELEGRAM_BOT_TOKEN_PROD` - токен бота от @BotFather
 - `OPENAI_API_KEY` - ключ OpenAI API
 - `SECRET_KEY` - секретный ключ для JWT
 

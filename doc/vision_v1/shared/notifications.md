@@ -219,7 +219,9 @@ VAPID_SUBJECT=mailto:admin@staffprobot.ru
 
 ### Telegram (Bot)
 ```bash
-TELEGRAM_BOT_TOKEN=***
+TELEGRAM_BOT_TOKEN_PROD=***
+# Для dev окружения: TELEGRAM_BOT_TOKEN_DEV=***
+# При необходимости можно временно задать TELEGRAM_BOT_TOKEN_OVERRIDE
 TELEGRAM_WEBHOOK_URL=https://staffprobot.ru/webhook/telegram
 ```
 

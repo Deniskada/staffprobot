@@ -71,7 +71,7 @@ sudo -u staffprobot nano .env.prod
 - `POSTGRES_PASSWORD` - надежный пароль для БД
 - `REDIS_PASSWORD` - надежный пароль для Redis
 - `RABBITMQ_PASSWORD` - надежный пароль для RabbitMQ
-- `TELEGRAM_BOT_TOKEN` - токен вашего бота
+- `TELEGRAM_BOT_TOKEN_PROD` - токен вашего бота
 - `OPENAI_API_KEY` - ключ OpenAI API
 - `SECRET_KEY` - секретный ключ (минимум 32 символа)
 - `GRAFANA_PASSWORD` - пароль для Grafana

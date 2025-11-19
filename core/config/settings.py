@@ -1,6 +1,6 @@
 """Настройки приложения StaffProBot."""
 
-from pydantic import BaseSettings
+from pydantic import BaseSettings, Field
 from typing import Optional
 import os
 
@@ -39,7 +39,10 @@ class Settings(BaseSettings):
     openai_temperature: float = 0.7
     
     # Telegram
-    telegram_bot_token: Optional[str] = None
+    telegram_bot_token_override: Optional[str] = None
+    telegram_bot_token_prod: Optional[str] = None
+    telegram_bot_token_dev: Optional[str] = None
+    telegram_bot_token_legacy: Optional[str] = Field(default=None, env="TELEGRAM_BOT_TOKEN")
     telegram_webhook_url: Optional[str] = None
     telegram_webhook_path: str = "/webhook"
     
@@ -108,6 +111,18 @@ class Settings(BaseSettings):
     github_token: Optional[str] = os.getenv("GITHUB_TOKEN")
     github_repo: str = os.getenv("GITHUB_REPO", "OWNER/REPO")  # Format: "owner/repo"
     
+    @property
+    def telegram_bot_token(self) -> Optional[str]:
+        """Получить токен бота в зависимости от окружения."""
+        if self.telegram_bot_token_override:
+            return self.telegram_bot_token_override
+        legacy = self.telegram_bot_token_legacy
+        if legacy:
+            return legacy
+        if self.environment == "production":
+            return self.telegram_bot_token_prod
+        return self.telegram_bot_token_dev
+    
     class Config:
         # В production читаем .env.prod, иначе .env
         env_file = ".env.prod" if os.getenv("ENVIRONMENT") == "production" else ".env"
@@ -121,14 +136,9 @@ settings = Settings()
 
 def validate_settings() -> None:
     """Валидация обязательных настроек."""
-    required_vars = [
-        'telegram_bot_token',
-    ]
-    
     missing_vars = []
-    for var in required_vars:
-        if not getattr(settings, var, None):
-            missing_vars.append(var)
+    if not settings.telegram_bot_token:
+        missing_vars.append('telegram_bot_token')
     
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {missing_vars}")

@@ -2054,7 +2054,8 @@ OPENAI_MAX_TOKENS=500
 OPENAI_TEMPERATURE=0.7
 
 # Telegram
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_BOT_TOKEN_PROD=your_prod_bot_token_here
+TELEGRAM_BOT_TOKEN_DEV=1111111111:DEV_SAMPLE
 TELEGRAM_WEBHOOK_URL=https://yourdomain.com/webhook
 
 # Геолокация

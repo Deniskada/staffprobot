@@ -98,7 +98,7 @@ DevOps Command Center — это централизованная система
 
 Переменные/секреты (GitHub → Settings → Secrets and variables → Actions):
 - Variables: `BRAIN_URL` (например, `http://brain:8003`), `STAFFPROBOT_URL` (опц.)
-- Secrets: `SSH_DEPLOY_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+- Secrets: `SSH_DEPLOY_KEY`, `TELEGRAM_BOT_TOKEN_PROD`, `TELEGRAM_CHAT_ID`
 
 Примечание: при недоступности Brain шаги Analyze/Sync не валят пайплайн (warn + continue). Деплой может не выполниться из‑за firewall по IP — это ожидаемо; статус фиксируется в `deployments`.
 
@@ -181,7 +181,7 @@ GITHUB_REPO=Deniskada/staffprobot
 
 **GitHub Secrets** (для CI/CD):
 - `SSH_DEPLOY_KEY` - приватный SSH ключ для деплоя
-- `TELEGRAM_BOT_TOKEN` - токен бота для уведомлений
+- `TELEGRAM_BOT_TOKEN_PROD` - токен продовского бота для уведомлений
 - `TELEGRAM_CHAT_ID` - ID чата для уведомлений
 
 **Настройка SSH ключа:**

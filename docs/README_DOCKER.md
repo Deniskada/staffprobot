@@ -72,7 +72,8 @@ DEBUG=true
 DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot_dev
 
 # Telegram
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_BOT_TOKEN_PROD=your_prod_bot_token_here
+TELEGRAM_BOT_TOKEN_DEV=
 
 # OpenAI
 OPENAI_API_KEY=your_openai_api_key_here
@@ -97,7 +98,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 ```bash
 # Создание .env.prod
 cp env.example .env.prod
-# Заполните POSTGRES_DB/USER/PASSWORD, SECRET_KEY, TELEGRAM_BOT_TOKEN, REDIS_PASSWORD и т.д.
+# Заполните POSTGRES_DB/USER/PASSWORD, SECRET_KEY, TELEGRAM_BOT_TOKEN_PROD, REDIS_PASSWORD и т.д.
 
 # Сборка и запуск: база/брокеры → миграции → приложения
 docker compose -f docker-compose.prod.yml up -d postgres redis rabbitmq
@@ -134,7 +135,7 @@ docker compose -f docker-compose.prod.yml -f docker-compose.prod.override.yml up
 ### Чек-лист продакшн-деплоя
 
 1. Обновить код: `git pull --ff-only` или `rsync` на сервер
-2. Проверить `.env.prod` (POSTGRES_*, SECRET_KEY, TELEGRAM_BOT_TOKEN, REDIS_PASSWORD)
+2. Проверить `.env.prod` (POSTGRES_*, SECRET_KEY, TELEGRAM_BOT_TOKEN_PROD, REDIS_PASSWORD)
 3. Поднять базы и брокеры: `docker compose -f docker-compose.prod.yml up -d postgres redis rabbitmq`
 4. Прогнать миграции: `docker compose -f docker-compose.prod.yml run --rm migrator`
 5. Запуск приложений: `docker compose -f docker-compose.prod.yml -f docker-compose.prod.override.yml up -d web bot celery_worker celery_beat`

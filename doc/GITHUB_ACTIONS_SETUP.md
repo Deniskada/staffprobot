@@ -60,7 +60,7 @@ cat /tmp/deploy_key
 ### 5. Опциональные секреты
 
 Для уведомлений в Telegram добавь:
-- `TELEGRAM_BOT_TOKEN` - токен бота
+- `TELEGRAM_BOT_TOKEN_PROD` - токен продовского бота
 - `TELEGRAM_CHAT_ID` - ID чата куда слать
 
 Для codecov добавь:

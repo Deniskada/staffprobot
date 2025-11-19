@@ -1,10 +1,15 @@
 """Основной модуль бота StaffProBot."""
 
-import logging
-from typing import Optional
 import asyncio
+import json
+import logging
+import os
+import socket
+from datetime import datetime, timezone
+from typing import Optional
 
 from telegram import Update
+from telegram.error import Conflict
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -14,6 +19,7 @@ from telegram.ext import (
     ContextTypes
 )
 
+from core.cache.redis_cache import cache
 from core.config.settings import settings
 from apps.scheduler.reminder_scheduler import ReminderScheduler
 from .handlers_div import (
@@ -43,10 +49,16 @@ logger = logging.getLogger(__name__)
 class StaffProBot:
     """Основной класс бота StaffProBot."""
     
+    LOCK_KEY = "bot_polling_lock"
+    HEARTBEAT_KEY = "bot_polling_heartbeat"
+    LOCK_TTL_SECONDS = 60
+    HEARTBEAT_INTERVAL_SECONDS = 20
+    
     def __init__(self):
         self.application: Optional[Application] = None
         self._bot_token = None  # Ленивая инициализация
         self.reminder_scheduler: Optional[ReminderScheduler] = None
+        self._lock_refresh_task: Optional[asyncio.Task] = None
         from .handlers_div.analytics_handlers import AnalyticsHandlers
         self.analytics_handlers = AnalyticsHandlers()
 
@@ -181,6 +193,14 @@ class StaffProBot:
     
     async def _error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик ошибок бота."""
+        if isinstance(context.error, Conflict):
+            logger.error(
+                "Telegram polling conflict detected",
+                extra={
+                    "error": str(context.error),
+                    "category": "telegram_conflict"
+                }
+            )
         logger.error(
             "Exception while handling an update",
             extra={
@@ -204,6 +224,8 @@ class StaffProBot:
             if self.reminder_scheduler:
                 await self.reminder_scheduler.start()
 
+            await self._acquire_polling_lock()
+
             await self.application.start()
 
             # Старт polling через updater, без закрытия внешнего event loop
@@ -222,6 +244,8 @@ class StaffProBot:
         except Exception as e:
             logger.error(f"Error in polling mode: {e}")
             raise
+        finally:
+            await self._release_polling_lock()
     
     async def start_webhook(self) -> None:
         """Запуск бота в режиме webhook."""
@@ -263,6 +287,67 @@ class StaffProBot:
             await self.application.stop()
             await self.application.shutdown()
             logger.info("Bot stopped successfully")
+
+    async def _acquire_polling_lock(self) -> None:
+        """Гарантировать единственный polling-инстанс."""
+        if not cache.is_connected:
+            logger.warning("Redis cache not connected, skipping polling lock")
+            return
+        payload = self._build_lock_payload()
+        lock_acquired = await cache.redis.set(
+            self.LOCK_KEY,
+            payload,
+            nx=True,
+            ex=self.LOCK_TTL_SECONDS
+        )
+        if not lock_acquired:
+            existing = await cache.redis.get(self.LOCK_KEY)
+            details = existing.decode("utf-8") if existing else "unknown"
+            raise RuntimeError(f"Polling already running by another instance: {details}")
+        logger.info("Polling lock acquired", extra={"lock": payload})
+        self._lock_refresh_task = asyncio.create_task(self._lock_refresh_loop())
+
+    async def _release_polling_lock(self) -> None:
+        """Освободить lock и heartbeat."""
+        if self._lock_refresh_task:
+            self._lock_refresh_task.cancel()
+            try:
+                await self._lock_refresh_task
+            except asyncio.CancelledError:
+                pass
+            self._lock_refresh_task = None
+        if cache.is_connected:
+            await cache.delete(self.LOCK_KEY)
+            await cache.delete(self.HEARTBEAT_KEY)
+            logger.info("Polling lock released")
+
+    async def _lock_refresh_loop(self) -> None:
+        """Обновление TTL lock и heartbeat."""
+        try:
+            while True:
+                await asyncio.sleep(self.HEARTBEAT_INTERVAL_SECONDS)
+                if not cache.is_connected:
+                    continue
+                await cache.redis.expire(self.LOCK_KEY, self.LOCK_TTL_SECONDS)
+                await cache.redis.set(
+                    self.HEARTBEAT_KEY,
+                    self._build_lock_payload(include_timestamp=True),
+                    ex=self.LOCK_TTL_SECONDS
+                )
+        except asyncio.CancelledError:
+            logger.debug("Polling lock refresh cancelled")
+        except Exception as exc:
+            logger.error("Failed to refresh polling lock", exc_info=exc)
+
+    def _build_lock_payload(self, include_timestamp: bool = True) -> str:
+        payload = {
+            "host": socket.gethostname(),
+            "pid": os.getpid(),
+            "env": settings.environment,
+        }
+        if include_timestamp:
+            payload["ts"] = datetime.now(timezone.utc).isoformat()
+        return json.dumps(payload)
 
 
 # Глобальный экземпляр бота

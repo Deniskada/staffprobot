@@ -77,6 +77,10 @@ services:
       - PYTHONPATH=/app
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+      - TELEGRAM_BOT_TOKEN_DEV=${TELEGRAM_BOT_TOKEN_DEV}
+      - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
+      - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,6 +111,10 @@ services:
       - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
       - ENVIRONMENT=development
       - DEBUG=true
+      - TELEGRAM_BOT_TOKEN_DEV=${TELEGRAM_BOT_TOKEN_DEV}
+      - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
+      - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
     depends_on:
       postgres:
         condition: service_healthy
@@ -133,6 +141,10 @@ services:
       - RABBITMQ_URL=amqp://admin:password@rabbitmq:5672
       - ENVIRONMENT=development
       - DEBUG=true
+      - TELEGRAM_BOT_TOKEN_DEV=${TELEGRAM_BOT_TOKEN_DEV}
+      - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
+      - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
     depends_on:
       postgres:
         condition: service_healthy
@@ -164,7 +176,10 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - SECRET_KEY=dev-secret-key-change-in-production
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_TOKEN_DEV=${TELEGRAM_BOT_TOKEN_DEV}
+      - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
+      - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
       - YANDEX_MAPS_API_KEY=${YANDEX_MAPS_API_KEY}
     depends_on:
       postgres:

@@ -43,7 +43,8 @@ POSTGRES_PASSWORD=your_secure_password
 REDIS_URL=redis://redis:6379/0
 
 # Telegram Bot
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_BOT_TOKEN_PROD=your_prod_bot_token_here
+TELEGRAM_BOT_TOKEN_DEV=
 
 # JWT секреты
 JWT_SECRET_KEY=your_jwt_secret_key_here
@@ -194,7 +195,7 @@ docker compose -f docker-compose.dev.yml exec web alembic upgrade head
 ### Проблема: Бот не отвечает
 ```bash
 # Проверьте токен бота
-echo $TELEGRAM_BOT_TOKEN
+echo $TELEGRAM_BOT_TOKEN_PROD
 
 # Проверьте логи бота
 docker compose -f docker-compose.dev.yml logs bot --tail=50

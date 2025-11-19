@@ -25,9 +25,15 @@ def check_environment():
     
     # Проверка переменных окружения
     if not settings.telegram_bot_token:
-        logger.error("TELEGRAM_BOT_TOKEN not set")
-        logger.info("Please set TELEGRAM_BOT_TOKEN in .env file")
+        logger.error("Telegram bot token not set")
+        logger.info("Please set TELEGRAM_BOT_TOKEN_DEV (or override) in .env file")
         return False
+    
+    if settings.environment != "production":
+        dev_token = os.getenv("TELEGRAM_BOT_TOKEN_DEV")
+        prod_token = os.getenv("TELEGRAM_BOT_TOKEN_PROD")
+        if dev_token and prod_token and dev_token == prod_token:
+            logger.warning("Dev token matches prod token — verify your .env configuration")
     
     logger.info("Environment check passed")
     return True

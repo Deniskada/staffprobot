@@ -113,10 +113,10 @@ docker compose -f docker-compose.dev.yml exec postgres psql -U postgres -d staff
 docker compose -f docker-compose.dev.yml logs bot --tail=50
 
 # Проверка токена бота
-docker compose -f docker-compose.dev.yml exec bot printenv TELEGRAM_BOT_TOKEN
+docker compose -f docker-compose.dev.yml exec bot printenv TELEGRAM_BOT_TOKEN TELEGRAM_BOT_TOKEN_DEV TELEGRAM_BOT_TOKEN_PROD
 
 # Тест API Telegram
-curl -X GET "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe"
+curl -X GET "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN_PROD/getMe"
 ```
 
 **Решение:**

@@ -24,8 +24,8 @@ def main():
         
         # Проверяем токен бота
         if not settings.telegram_bot_token:
-            print("❌ TELEGRAM_BOT_TOKEN не установлен!")
-            print("📝 Создайте файл .env с TELEGRAM_BOT_TOKEN")
+            print("❌ TELEGRAM_BOT_TOKEN не обнаружен!")
+            print("📝 Укажите TELEGRAM_BOT_TOKEN_DEV (dev) или TELEGRAM_BOT_TOKEN_PROD в .env/.env.prod, либо TELEGRAM_BOT_TOKEN_OVERRIDE")
             return
         
         print("✅ TELEGRAM_BOT_TOKEN найден")
