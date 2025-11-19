@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     # Основные настройки
     app_name: str = "StaffProBot"
     debug: bool = False
-    environment: str = "development"
+    # ВАЖНО: значение по умолчанию "development", но переменная ENVIRONMENT из docker-compose
+    # имеет приоритет над .env (Pydantic читает env_file, затем переменные окружения)
+    environment: str = Field(default="development", env="ENVIRONMENT")
     version: str = "0.1.0"
     
     # База данных
@@ -114,20 +116,40 @@ class Settings(BaseSettings):
     @property
     def telegram_bot_token(self) -> Optional[str]:
         """Получить токен бота в зависимости от окружения."""
+        # Приоритет 1: явный override (для тестирования)
         if self.telegram_bot_token_override:
             return self.telegram_bot_token_override
-        legacy = self.telegram_bot_token_legacy
-        if legacy:
-            return legacy
-        if self.environment == "production":
-            return self.telegram_bot_token_prod
-        return self.telegram_bot_token_dev
+        
+        # Приоритет 2: окружение определяет токен
+        # ВАЖНО: переменная ENVIRONMENT из docker-compose имеет приоритет над .env
+        # Проверяем переменную окружения напрямую, чтобы избежать конфликтов
+        env_from_os = os.getenv("ENVIRONMENT", self.environment)
+        
+        if env_from_os == "production":
+            if self.telegram_bot_token_prod:
+                return self.telegram_bot_token_prod
+            # Fallback на legacy только если нет явного прод-токена
+            if self.telegram_bot_token_legacy:
+                return self.telegram_bot_token_legacy
+        
+        # Для development используем dev-токен
+        if self.telegram_bot_token_dev:
+            return self.telegram_bot_token_dev
+        
+        # Последний fallback на legacy (для обратной совместимости)
+        if self.telegram_bot_token_legacy:
+            return self.telegram_bot_token_legacy
+        
+        return None
     
     class Config:
         # Всегда читаем единый .env (как локально, так и на проде)
+        # ВАЖНО: переменные окружения (из docker-compose) имеют приоритет над .env
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        # Pydantic по умолчанию читает env_file, затем переменные окружения
+        # Переменные окружения перезаписывают значения из .env
 
 
 # Создание экземпляра настроек

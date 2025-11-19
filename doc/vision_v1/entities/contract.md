@@ -25,6 +25,8 @@
 | `end_date` | Date | Дата окончания |
 | `status` | String(20) | draft / active / terminated |
 | `is_active` | Boolean | Активность |
+| `termination_date` | Date | Дата увольнения (nullable, Итерация 47) |
+| `settlement_policy` | String(32) | Политика расчёта при увольнении (schedule / termination_date) |
 | `allowed_objects` | JSON | Список ID доступных объектов |
 | **`is_manager`** | Boolean | **Является ли управляющим** |
 | **`manager_permissions`** | JSON | **Права управляющего** |
@@ -155,6 +157,11 @@ contract.terminated_at = datetime.now()
 contract.is_active = False
 ```
 
+**Важно (Итерация 47):** При расторжении договора с указанием `termination_date`:
+- Контракт остаётся активным для работы (открытие смен, планирование) до даты увольнения
+- Контракт считается уволенным для расчётного листа сразу после расторжения
+- Используйте `shared/services/contract_validation_service.py` для проверки активности
+
 ## Приоритет ставок
 
 ### Логика в методе `get_effective_hourly_rate()`
@@ -242,6 +249,58 @@ Contract
 
 ### Уникальность
 - `contract_number` - уникален в рамках владельца
+
+## Определение активности контракта (Итерация 47)
+
+### Логика для работы (бот, планирование смен)
+
+Контракт активен для работы, если:
+- `status == 'active'`
+- `is_active == True`
+- `termination_date IS NULL` ИЛИ `termination_date > check_date`
+
+**Использование:**
+```python
+from shared.services.contract_validation_service import (
+    is_contract_active_for_work,
+    build_active_contract_filter
+)
+from datetime import date
+
+# Проверка конкретного контракта
+is_active = is_contract_active_for_work(contract, date.today())
+
+# SQL фильтр для запросов
+filter = build_active_contract_filter(date.today())
+contracts = await session.execute(
+    select(Contract).where(
+        and_(
+            Contract.employee_id == user_id,
+            build_active_contract_filter(date.today())
+        )
+    )
+)
+```
+
+### Логика для расчётного листа
+
+Контракт считается уволенным для расчётного листа, если:
+- `status == 'terminated'` ИЛИ
+- (`status == 'active'` И `termination_date IS NOT NULL`)
+
+**Использование:**
+```python
+from shared.services.contract_validation_service import is_contract_terminated_for_payroll
+
+is_terminated = is_contract_terminated_for_payroll(contract)
+```
+
+**Результат:** Сотрудник с `termination_date` остаётся активным для работы до даты увольнения, но расчётный лист доступен сразу после расторжения договора.
+
+**Интеграции:**
+- Бот: `apps/bot/services/shift_service.py`, `employee_objects_service.py`, `object_state_handlers.py`
+- Веб: `apps/web/routes/owner.py`, `manager.py`, `payroll.py`, `manager_payroll.py`
+- Сервисы: `object_access_service.py`, `billing_service.py`, `limits_service.py`, `tariff_service.py`
 
 ## См. также
 

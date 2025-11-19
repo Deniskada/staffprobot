@@ -4029,11 +4029,18 @@ async def check_employee_availability(
                 raise HTTPException(status_code=403, detail="У управляющего нет активных договоров")
             
             # Проверяем, что сотрудник работает по договорам с владельцами управляющего
+            from shared.services.contract_validation_service import build_active_contract_filter
+            from datetime import date as date_type
+            
+            # Для проверки доступности используем дату тайм-слота
+            shift_date = timeslot.slot_date if timeslot.slot_date else date_type.today()
+            
             contract_query = select(Contract).where(
-                Contract.employee_id == employee_id,
-                Contract.owner_id.in_(owner_ids),
-                Contract.is_active == True,
-                Contract.status == "active"
+                and_(
+                    Contract.employee_id == employee_id,
+                    Contract.owner_id.in_(owner_ids),
+                    build_active_contract_filter(shift_date)
+                )
             )
             contracts = (await db.execute(contract_query)).scalars().all()
             if not contracts:

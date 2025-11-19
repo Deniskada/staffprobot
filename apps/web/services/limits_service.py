@@ -73,11 +73,16 @@ class LimitsService:
                 return False, "Нет активной подписки", {}
             
             # Получаем текущее количество сотрудников (исключая управляющих)
+            from shared.services.contract_validation_service import build_active_contract_filter
+            from datetime import date
+            
             employees_count_result = await self.session.execute(
                 select(func.count(Contract.id.distinct())).where(
-                    Contract.owner_id == user_id,
-                    Contract.is_active == True,
-                    Contract.is_manager == False
+                    and_(
+                        Contract.owner_id == user_id,
+                        build_active_contract_filter(date.today()),
+                        Contract.is_manager == False
+                    )
                 )
             )
             current_employees = employees_count_result.scalar() or 0
@@ -119,9 +124,11 @@ class LimitsService:
             # Получаем количество управляющих
             managers_count_result = await self.session.execute(
                 select(func.count(Contract.id.distinct())).where(
-                    Contract.owner_id == user_id,
-                    Contract.is_active == True,
-                    Contract.is_manager == True
+                    and_(
+                        Contract.owner_id == user_id,
+                        build_active_contract_filter(date.today()),
+                        Contract.is_manager == True
+                    )
                 )
             )
             current_managers = managers_count_result.scalar() or 0
@@ -440,20 +447,27 @@ class LimitsService:
                 )
                 current_objects = objects_count_result.scalar() or 0
                 
+                from shared.services.contract_validation_service import build_active_contract_filter
+                from datetime import date
+                
                 employees_count_result = await self.session.execute(
                     select(func.count(Contract.id.distinct())).where(
-                        Contract.owner_id == user_id,
-                        Contract.is_active == True,
-                        Contract.is_manager == False
+                        and_(
+                            Contract.owner_id == user_id,
+                            build_active_contract_filter(date.today()),
+                            Contract.is_manager == False
+                        )
                     )
                 )
                 current_employees = employees_count_result.scalar() or 0
                 
                 managers_count_result = await self.session.execute(
                     select(func.count(Contract.id.distinct())).where(
-                        Contract.owner_id == user_id,
-                        Contract.is_active == True,
-                        Contract.is_manager == True
+                        and_(
+                            Contract.owner_id == user_id,
+                            build_active_contract_filter(date.today()),
+                            Contract.is_manager == True
+                        )
                     )
                 )
                 current_managers = managers_count_result.scalar() or 0
@@ -523,20 +537,27 @@ class LimitsService:
                 )
                 current_objects = objects_count_result.scalar() or 0
                 
+                from shared.services.contract_validation_service import build_active_contract_filter
+                from datetime import date
+                
                 employees_count_result = await self.session.execute(
                     select(func.count(Contract.id.distinct())).where(
-                        Contract.owner_id == user_id,
-                        Contract.is_active == True,
-                        Contract.is_manager == False
+                        and_(
+                            Contract.owner_id == user_id,
+                            build_active_contract_filter(date.today()),
+                            Contract.is_manager == False
+                        )
                     )
                 )
                 current_employees = employees_count_result.scalar() or 0
                 
                 managers_count_result = await self.session.execute(
                     select(func.count(Contract.id.distinct())).where(
-                        Contract.owner_id == user_id,
-                        Contract.is_active == True,
-                        Contract.is_manager == True
+                        and_(
+                            Contract.owner_id == user_id,
+                            build_active_contract_filter(date.today()),
+                            Contract.is_manager == True
+                        )
                     )
                 )
                 current_managers = managers_count_result.scalar() or 0

@@ -122,14 +122,18 @@ async def manager_payroll_list(
             accessible_objects = objects_result.scalars().all()
             accessible_object_ids = [obj.id for obj in accessible_objects]
 
-            # Контракт активен, если is_active=True И status='active'
-            active_contracts_query = select(Contract.employee_id).where(
-                Contract.owner_id == user_id,
-                Contract.is_active == True,
-                Contract.status == 'active',
-            )
-            active_contracts_result = await db.execute(active_contracts_query)
-            active_employee_ids = set(active_contracts_result.scalars().all())
+            from shared.services.contract_validation_service import is_contract_terminated_for_payroll
+            
+            # Получаем все контракты и определяем активных сотрудников
+            contracts_query = select(Contract).where(Contract.owner_id == user_id)
+            contracts_result = await db.execute(contracts_query)
+            contracts = contracts_result.scalars().all()
+            
+            active_employee_ids: set[int] = set()
+            for contract in contracts:
+                # Контракт активен для работы, если не уволен для расчётного листа
+                if not is_contract_terminated_for_payroll(contract):
+                    active_employee_ids.add(contract.employee_id)
 
         if object_id_int and object_id_int not in accessible_object_ids:
             raise HTTPException(status_code=403, detail="Нет доступа к указанному объекту")

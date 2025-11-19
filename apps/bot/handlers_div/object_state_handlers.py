@@ -74,9 +74,14 @@ async def _handle_open_object(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
         
         # Найти активные договоры по employee_id
+        from shared.services.contract_validation_service import build_active_contract_filter
+        from datetime import date
+        
         contracts_query = select(Contract).where(
-            Contract.employee_id == db_user.id,
-            Contract.status == 'active'
+            and_(
+                Contract.employee_id == db_user.id,
+                build_active_contract_filter(date.today())
+            )
         )
         contracts_result = await session.execute(contracts_query)
         contracts = contracts_result.scalars().all()

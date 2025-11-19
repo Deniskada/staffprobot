@@ -226,10 +226,13 @@ class TariffService:
             return True
         
         # Подсчитываем количество сотрудников пользователя
+        from shared.services.contract_validation_service import build_active_contract_filter
+        from datetime import date
+        
         query = select(func.count()).select_from(Contract).where(
             and_(
                 Contract.owner_id == user_id,
-                Contract.status == "active"
+                build_active_contract_filter(date.today())
             )
         )
         result = await self.session.execute(query)

@@ -43,11 +43,13 @@ class EmployeeObjectsService:
                 logger.info(f"User {telegram_id} role: {user_role}, roles: {user_roles}")
                 
                 # Получаем активные договоры пользователя
+                from shared.services.contract_validation_service import build_active_contract_filter
+                from datetime import date
+                
                 contracts_query = select(Contract).where(
                     and_(
                         Contract.employee_id == user.id,
-                        Contract.status == 'active',
-                        Contract.is_active == True
+                        build_active_contract_filter(date.today())
                     )
                 )
                 
@@ -202,10 +204,13 @@ class EmployeeObjectsService:
                     return obj is not None
                 
                 # Для сотрудников проверяем наличие активного договора с доступом к этому объекту
+                from shared.services.contract_validation_service import build_active_contract_filter
+                from datetime import date
+                
                 contracts_query = select(Contract).where(
                     and_(
                         Contract.employee_id == user.id,
-                        Contract.status == 'active'
+                        build_active_contract_filter(date.today())
                     )
                 )
                 
@@ -244,10 +249,13 @@ class EmployeeObjectsService:
                     return []
                 
                 # Получаем активные договоры
+                from shared.services.contract_validation_service import build_active_contract_filter
+                from datetime import date
+                
                 contracts_query = select(Contract).where(
                     and_(
                         Contract.employee_id == user.id,
-                        Contract.status == 'active'
+                        build_active_contract_filter(date.today())
                     )
                 )
                 

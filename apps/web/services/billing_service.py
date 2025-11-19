@@ -248,11 +248,16 @@ class BillingService:
         
         # Считаем количество уникальных сотрудников (employee_id) по активным контрактам владельца
         # Contract связан с владельцем напрямую через owner_id
+        from shared.services.contract_validation_service import build_active_contract_filter
+        from datetime import date
+        
         employees_count_result = await self.session.execute(
             select(func.count(func.distinct(Contract.employee_id)))
             .where(
-                Contract.owner_id == user_id,
-                Contract.status == "active"
+                and_(
+                    Contract.owner_id == user_id,
+                    build_active_contract_filter(date.today())
+                )
             )
         )
         employees_count = employees_count_result.scalar() or 0

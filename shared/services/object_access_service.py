@@ -154,10 +154,13 @@ class ObjectAccessService:
             from domain.entities.contract import Contract
             import json
             
+            from shared.services.contract_validation_service import build_active_contract_filter
+            from datetime import date
+            
             contracts_query = select(Contract).where(
                 and_(
                     Contract.employee_id == user_id,
-                    Contract.status == "active"
+                    build_active_contract_filter(date.today())
                 )
             )
             contracts_result = await self.db.execute(contracts_query)

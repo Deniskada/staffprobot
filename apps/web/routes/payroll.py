@@ -365,11 +365,15 @@ async def owner_payroll_list(
                 "is_active": False,
             }
 
-        contracts_status_query = select(Contract.employee_id, Contract.is_active, Contract.status).where(Contract.owner_id == owner_id)
-        contracts_status_result = await db.execute(contracts_status_query)
+        from shared.services.contract_validation_service import is_contract_terminated_for_payroll
+        
+        contracts_query = select(Contract).where(Contract.owner_id == owner_id)
+        contracts_result = await db.execute(contracts_query)
+        contracts = contracts_result.scalars().all()
+        
         active_employee_ids: set[int] = set()
-        for emp_id, is_active, status in contracts_status_result.all():
-            emp_id = int(emp_id)
+        for contract in contracts:
+            emp_id = int(contract.employee_id)
             if emp_id not in summary_map:
                 summary_map[emp_id] = {
                     "employee_id": emp_id,
@@ -380,8 +384,8 @@ async def owner_payroll_list(
                     "latest_entry_id": None,
                     "is_active": False,
                 }
-            # Контракт активен, если is_active=True И status='active'
-            if is_active and status == 'active':
+            # Контракт активен для работы, если не уволен для расчётного листа
+            if not is_contract_terminated_for_payroll(contract):
                 active_employee_ids.add(emp_id)
 
         for entry_obj in entries:

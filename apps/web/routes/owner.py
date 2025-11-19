@@ -3002,12 +3002,20 @@ async def api_calendar_plan_shift(
                 raise HTTPException(status_code=400, detail="Пользователь не является сотрудником")
 
             # Проверяем, что у сотрудника есть договор с владельцем (кроме случая, когда сотрудник — это сам владелец)
+            from shared.services.contract_validation_service import build_active_contract_filter
+            from datetime import date as date_type
+            
             contract = None
             if not is_owner_assignee:
+                # Для планирования используем дату тайм-слота
+                shift_date = timeslot.slot_date if timeslot.slot_date else date_type.today()
+                
                 contract_query = select(Contract).where(
-                    Contract.employee_id == employee_id,
-                    Contract.owner_id == user_id,
-                    Contract.status == "active"
+                    and_(
+                        Contract.employee_id == employee_id,
+                        Contract.owner_id == user_id,
+                        build_active_contract_filter(shift_date)
+                    )
                 )
                 contracts = (await session.execute(contract_query)).scalars().all()
                 if not contracts:
@@ -3231,11 +3239,18 @@ async def check_employee_availability_owner(
                 raise HTTPException(status_code=404, detail="Сотрудник не найден")
 
             # Проверяем, что у сотрудника есть договор с владельцем
+            from shared.services.contract_validation_service import build_active_contract_filter
+            from datetime import date as date_type
+            
+            # Для проверки доступности используем дату тайм-слота
+            shift_date = timeslot.slot_date if timeslot.slot_date else date_type.today()
+            
             contract_query = select(Contract).where(
-                Contract.employee_id == employee_id,
-                Contract.owner_id == user_id,
-                Contract.is_active == True,
-                Contract.status == "active"
+                and_(
+                    Contract.employee_id == employee_id,
+                    Contract.owner_id == user_id,
+                    build_active_contract_filter(shift_date)
+                )
             )
             contract = (await session.execute(contract_query)).scalar_one_or_none()
             if not contract:
