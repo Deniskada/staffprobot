@@ -1191,6 +1191,7 @@ class ContractService:
                 "updated_at": contract.updated_at,
                 "signed_at": contract.signed_at,
                 "terminated_at": contract.terminated_at,
+                "termination_date": contract.termination_date,
                 "owner": {
                     "id": owner.id,
                     "telegram_id": owner.telegram_id,
