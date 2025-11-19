@@ -365,10 +365,10 @@ async def owner_payroll_list(
                 "is_active": False,
             }
 
-        contracts_status_query = select(Contract.employee_id, Contract.is_active).where(Contract.owner_id == owner_id)
+        contracts_status_query = select(Contract.employee_id, Contract.is_active, Contract.status).where(Contract.owner_id == owner_id)
         contracts_status_result = await db.execute(contracts_status_query)
         active_employee_ids: set[int] = set()
-        for emp_id, is_active in contracts_status_result.all():
+        for emp_id, is_active, status in contracts_status_result.all():
             emp_id = int(emp_id)
             if emp_id not in summary_map:
                 summary_map[emp_id] = {
@@ -380,7 +380,8 @@ async def owner_payroll_list(
                     "latest_entry_id": None,
                     "is_active": False,
                 }
-            if is_active:
+            # Контракт активен, если is_active=True И status='active'
+            if is_active and status == 'active':
                 active_employee_ids.add(emp_id)
 
         for entry_obj in entries:

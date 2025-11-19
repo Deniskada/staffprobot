@@ -122,9 +122,11 @@ async def manager_payroll_list(
             accessible_objects = objects_result.scalars().all()
             accessible_object_ids = [obj.id for obj in accessible_objects]
 
+            # Контракт активен, если is_active=True И status='active'
             active_contracts_query = select(Contract.employee_id).where(
                 Contract.owner_id == user_id,
                 Contract.is_active == True,
+                Contract.status == 'active',
             )
             active_contracts_result = await db.execute(active_contracts_query)
             active_employee_ids = set(active_contracts_result.scalars().all())
