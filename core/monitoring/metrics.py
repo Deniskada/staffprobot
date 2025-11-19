@@ -94,6 +94,16 @@ bot_commands_total = Counter(
     ['command']
 )
 
+bot_polling_conflicts_total = Counter(
+    'staffprobot_bot_polling_conflicts_total',
+    'Total Telegram polling conflicts'
+)
+
+bot_polling_heartbeat_timestamp = Gauge(
+    'staffprobot_bot_polling_heartbeat_timestamp',
+    'Timestamp of the last bot polling heartbeat (unix seconds)'
+)
+
 # Системные метрики
 app_info = Info(
     'staffprobot_app_info',

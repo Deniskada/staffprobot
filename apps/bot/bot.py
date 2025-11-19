@@ -21,6 +21,10 @@ from telegram.ext import (
 
 from core.cache.redis_cache import cache
 from core.config.settings import settings
+from core.monitoring.metrics import (
+    bot_polling_conflicts_total,
+    bot_polling_heartbeat_timestamp,
+)
 from apps.scheduler.reminder_scheduler import ReminderScheduler
 from .handlers_div import (
     start_command,
@@ -194,6 +198,7 @@ class StaffProBot:
     async def _error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик ошибок бота."""
         if isinstance(context.error, Conflict):
+            bot_polling_conflicts_total.inc()
             logger.error(
                 "Telegram polling conflict detected",
                 extra={
@@ -334,6 +339,7 @@ class StaffProBot:
                     self._build_lock_payload(include_timestamp=True),
                     ex=self.LOCK_TTL_SECONDS
                 )
+                bot_polling_heartbeat_timestamp.set(datetime.now(timezone.utc).timestamp())
         except asyncio.CancelledError:
             logger.debug("Polling lock refresh cancelled")
         except Exception as exc:

@@ -21,7 +21,8 @@ celery_app = Celery(
         "core.celery.tasks.adjustment_tasks",  # Phase 4A
         "core.celery.tasks.task_assignment",  # Tasks v2: автоназначение
         "core.celery.tasks.task_bonuses",  # Tasks v2: бонусы/штрафы
-        "core.celery.tasks.billing_tasks"  # Iteration 39: биллинг и автопродление подписок
+        "core.celery.tasks.billing_tasks",  # Iteration 39: биллинг и автопродление подписок
+        "core.celery.tasks.bot_monitoring_tasks",
     ]
 )
 
@@ -131,6 +132,11 @@ celery_app.conf.update(
             'task': 'activate-scheduled-subscriptions',
             'schedule': 300,  # каждые 5 минут
         },
+        # Iteration 45: мониторинг heartbeat Telegram-бота
+        'monitor-bot-heartbeat': {
+            'task': 'monitor_bot_heartbeat',
+            'schedule': 60,  # каждую минуту
+        },
     },
     
     # Маршрутизация задач
@@ -156,6 +162,7 @@ celery_app.conf.update(
         'check-expiring-subscriptions': {'queue': 'celery'},  # Iteration 39: проверка истекающих подписок
         'check-expired-subscriptions': {'queue': 'celery'},  # Iteration 39: проверка истёкших подписок
         'activate-scheduled-subscriptions': {'queue': 'celery'},  # Iteration 39: активация отложенных подписок
+        'monitor_bot_heartbeat': {'queue': 'celery'},
     },
 )
 

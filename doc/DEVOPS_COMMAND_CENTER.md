@@ -58,6 +58,29 @@ DevOps Command Center — это централизованная система
 
 **Доступ:** owner, superadmin
 
+### 5. Telegram Bot Monitoring & Runbook
+
+- Redis lock `bot_polling_lock` хранит `{"host","pid","env","ts"}` активного polling‑процесса. Проверка:\
+  `docker compose -f docker-compose.prod.yml exec redis redis-cli get bot_polling_lock`
+- Heartbeat (`bot_polling_heartbeat`) обновляется каждые 20 сек.; Celery‑задача `monitor_bot_heartbeat` проверяет его каждую минуту.
+- Prometheus:
+  - `staffprobot_bot_polling_conflicts_total` — число `telegram.error.Conflict`
+  - `staffprobot_bot_polling_heartbeat_timestamp` — UNIX timestamp последнего heartbeat
+- Alert логика:
+  - конфликт → structured log + increment метрики;
+  - heartbeat старше 5 минут → IN_APP + Telegram уведомление (NotificationType.SYSTEM_MAINTENANCE) всем суперадминам.
+- Runbook «бот не отвечает»:
+  1. `docker compose -f docker-compose.prod.yml logs bot --tail 200`
+  2. Проверить lock/heartbeat (см. команды выше)
+  3. Если lock завис — `python scripts/release_bot_lock.py`
+  4. Очистить очередь: `curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN_PROD/getUpdates?offset=-1&drop_pending_updates=true"`
+  5. Перезапустить контейнер: `docker compose -f docker-compose.prod.yml restart bot`
+  6. Убедиться, что `bot_polling_heartbeat` появился и метрика обновилась.
+- Чек-лист перед запуском dev‑бота:
+  - `.env` содержит `TELEGRAM_BOT_TOKEN_DEV`, а не prod токен
+  - `redis-cli get bot_polling_lock` → пусто или текущая машина
+  - После остановки dev‑бота вызвать `drop_pending_updates=true`
+
 ### 5. GitHub Actions CI/CD
 
 **Workflow:** `.github/workflows/main.yml`
