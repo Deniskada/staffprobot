@@ -29,6 +29,7 @@ from apps.web.utils.timezone_utils import WebTimezoneHelper
 from shared.services.role_based_login_service import RoleBasedLoginService
 from shared.services.calendar_filter_service import CalendarFilterService
 from shared.services.object_access_service import ObjectAccessService
+from shared.models.calendar_data import TimeslotStatus
 from shared.services.shift_history_service import ShiftHistoryService
 from shared.services.shift_notification_service import ShiftNotificationService
 from shared.services.cancellation_policy_service import CancellationPolicyService
@@ -1171,7 +1172,7 @@ async def employee_calendar(
         if month is None:
             month = today.month
 
-        # Получаем объекты, доступные сотруднику по активным договорам
+        # Получаем объекты, доступные сотруднику через ObjectAccessService
         from sqlalchemy.orm import selectinload
         from domain.entities.contract import Contract
         from domain.entities.object import Object
@@ -1179,32 +1180,29 @@ async def employee_calendar(
         from domain.entities.shift_schedule import ShiftSchedule
         from domain.entities.shift import Shift
 
-        # Активные договоры сотрудника
-        contracts_query = select(Contract).where(
-            and_(Contract.employee_id == user_id, Contract.is_active == True)
-        )
-        contracts = (await db.execute(contracts_query)).scalars().all()
+        # Получаем доступные объекты через ObjectAccessService
+        telegram_id = current_user.get("telegram_id") or current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "telegram_id", None)
+        if not telegram_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        access_service = ObjectAccessService(db)
+        accessible_objects = await access_service.get_accessible_objects(telegram_id, "employee")
+        all_object_ids = [obj["id"] for obj in accessible_objects]
 
-        # Список доступных object_ids из allowed_objects договоров
-        object_ids = []
-        import json as _json
-        for c in contracts:
-            if c and c.allowed_objects:
-                allowed = c.allowed_objects if isinstance(c.allowed_objects, list) else _json.loads(c.allowed_objects)
-                for oid in allowed:
-                    if oid not in object_ids:
-                        object_ids.append(oid)
+        # Опциональная фильтрация по выбранному объекту (только для данных календаря)
+        object_ids = all_object_ids.copy()  # Для данных календаря
+        if object_id and object_id in all_object_ids:
+            object_ids = [object_id]  # Фильтруем данные календаря
 
-        # Опциональная фильтрация по выбранному объекту
-        if object_id and object_id in object_ids:
-            object_ids = [object_id]
-
-        # Карта объектов
+        # Карта объектов и список для фильтра (ВСЕГДА все доступные объекты)
         objects_map = {}
-        if object_ids:
-            objs_q = select(Object).where(Object.id.in_(object_ids))
+        objects_list = []  # Список объектов для фильтра (все доступные)
+        if all_object_ids:
+            objs_q = select(Object).where(Object.id.in_(all_object_ids))
             objs = (await db.execute(objs_q)).scalars().all()
             objects_map = {o.id: o for o in objs}
+            # Преобразуем в список словарей для шаблона (ВСЕ доступные объекты)
+            objects_list = [{"id": o.id, "name": o.name} for o in objs]
 
         # Тайм-слоты с текущего месяца до конца года (как у владельца)
         timeslots_data = []
@@ -1357,6 +1355,8 @@ async def employee_calendar(
             "show_today_button": True,
             "current_employee_id": user_id,
             "current_employee_name": employee_display_name,
+            "objects": objects_list,
+            "selected_object_id": object_id,
         })
     except Exception as e:
         logger.error(f"Ошибка загрузки календаря: {e}")
@@ -2298,6 +2298,8 @@ async def employee_calendar_api_data(
         # Преобразуем в формат, совместимый с существующим JavaScript
         timeslots_data = []
         for ts in calendar_data.timeslots:
+            if ts.status == TimeslotStatus.HIDDEN:
+                continue
             timeslots_data.append({
                 "id": ts.id,
                 "object_id": ts.object_id,
@@ -2309,7 +2311,11 @@ async def employee_calendar_api_data(
                 "max_employees": ts.max_employees,
                 "current_employees": ts.current_employees,
                 "available_slots": ts.available_slots,
+                "occupied_minutes": ts.occupied_minutes,
+                "free_minutes": ts.free_minutes,
+                "occupancy_ratio": ts.occupancy_ratio,
                 "status": ts.status.value,
+                "status_label": ts.status_label,
                 "is_active": ts.is_active,
                 "notes": ts.notes,
                 "work_conditions": ts.work_conditions,

@@ -78,7 +78,7 @@
                 </div>
                 {% endif %}
                 
-                {% if objects and objects|length > 1 and current_user.role != 'employee' %}
+                {% if objects and objects|length > 1 %}
                 <div class="form-group mb-0 me-2" style="min-width: 180px;">
                     <select class="form-select form-select-sm" id="objectFilter" onchange="filterByObject()">
                         <option value="">Все объекты</option>

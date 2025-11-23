@@ -1007,6 +1007,34 @@ class UniversalCalendarManager {
     refresh() {
         // Перезагрузить данные календаря без изменения позиции
         console.log('[UniversalCalendar] Refreshing calendar data...');
+        
+        // Определяем видимый месяц
+        const visibleMonth = this.getVisibleMonthFromScroll();
+        if (visibleMonth) {
+            // Очищаем кэш для видимого месяца и соседних месяцев, чтобы принудительно перезагрузить
+            const monthKey = `${visibleMonth.year}-${visibleMonth.month}`;
+            this.loadedMonths.delete(monthKey);
+            
+            // Очищаем кэш для предыдущего и следующего месяцев
+            const prevMonth = new Date(visibleMonth.year, visibleMonth.month - 2, 1);
+            const nextMonth = new Date(visibleMonth.year, visibleMonth.month, 1);
+            const prevMonthKey = `${prevMonth.getFullYear()}-${prevMonth.getMonth() + 1}`;
+            const nextMonthKey = `${nextMonth.getFullYear()}-${nextMonth.getMonth() + 1}`;
+            this.loadedMonths.delete(prevMonthKey);
+            this.loadedMonths.delete(nextMonthKey);
+            
+            // Устанавливаем currentDate на видимый месяц для корректной загрузки
+            const visibleDate = new Date(visibleMonth.year, visibleMonth.month - 1, 1);
+            this.currentDate = visibleDate;
+        } else {
+            // Если не удалось определить видимый месяц, очищаем весь кэш
+            this.loadedMonths.clear();
+        }
+        
+        // Очищаем calendarData, чтобы принудительно перезагрузить
+        this.calendarData = null;
+        
+        // Загружаем данные с учетом фильтра из URL
         this.loadCalendarData(null, null, null, true); // skipAutoScroll = true
     }
 }
