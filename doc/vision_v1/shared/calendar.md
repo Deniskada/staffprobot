@@ -30,7 +30,7 @@
   - `api_employees:*` — JSON-ответы панелей сотрудников (TTL 2 мин)
 
 - **Инвалидация:**
-  - При create/update/delete тайм-слота → `calendar_timeslots:*`, `calendar_shifts:*`, `api_response:*`, `api_objects:*`
+  - При create/update/delete тайм-слота → `calendar_timeslots:*`, `calendar_shifts:*`, `api_response:*`, `api_objects:*` (исправлено 23.11.2025: добавлена инвалидация кэша после создания тайм-слотов)
   - При открытии/закрытии смены → `calendar_shifts:*`, `api_response:*`
   - При изменении контракта → `api_employees:*`, `api_objects:*`
   - При изменении объекта → `api_objects:*`, включая `api_objects:employee_*`

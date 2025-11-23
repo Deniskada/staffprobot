@@ -513,6 +513,18 @@ async def create_timeslot(
         
         logger.info(f"Created {created_count} timeslots for {len(selected_objects)} objects")
         
+        # Инвалидация кэша календаря и связанных API после создания тайм-слотов
+        try:
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_timeslots:*")
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
+            await cache.clear_pattern("api_objects:*")
+            logger.info("Cache invalidated after timeslot creation")
+        except Exception as e:
+            # Не блокируем ответ при ошибке очистки кэша
+            logger.warning(f"Error clearing cache after timeslot creation: {e}")
+        
         return RedirectResponse(url=f"/owner/timeslots/object/{object_id}", status_code=status.HTTP_302_FOUND)
         
     except HTTPException:

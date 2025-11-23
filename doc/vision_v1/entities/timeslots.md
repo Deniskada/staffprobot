@@ -11,6 +11,9 @@
 - [GET] `/owner/timeslots/object/{object_id}` — (apps/web/routes/owner_timeslots.py) — редирект на `/owner/timeslots?object_id={id}` (303)
 - [GET] `/owner/timeslots/object/{object_id}/create` — (apps/web/routes/owner_timeslots.py) — форма создания тайм-слота
 - [POST] `/owner/timeslots/object/{object_id}/create` — (apps/web/routes/owner_timeslots.py) — создание тайм-слота
+  - Поддерживает создание одного тайм-слота или серии (по дням недели)
+  - Защита от дубликатов: проверяет только активные тайм-слоты (`is_active == True`), удаленные тайм-слоты можно пересоздать (исправлено 23.11.2025)
+  - После создания автоматически инвалидирует кэш календаря: `calendar_timeslots:*`, `calendar_shifts:*`, `api_response:*`, `api_objects:*` (исправлено 23.11.2025)
 - [GET] `/owner/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py) — форма редактирования
 - [POST] `/owner/timeslots/{timeslot_id}/edit` — (apps/web/routes/owner_timeslots.py) — обновление тайм-слота
 - [POST] `/owner/timeslots/{timeslot_id}/delete` — (apps/web/routes/owner_timeslots.py) — удаление

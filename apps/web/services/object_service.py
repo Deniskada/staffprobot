@@ -776,16 +776,47 @@ class TimeSlotService:
                 return None
             
             # Проверяем дубликаты: тот же объект, дата, start_time, end_time
+            # Учитываем только активные тайм-слоты (удаленные можно пересоздать)
+            slot_date_val = timeslot_data.get('slot_date', datetime.now().date())
+            start_time_val = time.fromisoformat(timeslot_data['start_time'])
+            end_time_val = time.fromisoformat(timeslot_data['end_time'])
+            
             duplicate_q = select(TimeSlot).where(
                 TimeSlot.object_id == object_id,
-                TimeSlot.slot_date == timeslot_data.get('slot_date', datetime.now().date()),
-                TimeSlot.start_time == time.fromisoformat(timeslot_data['start_time']),
-                TimeSlot.end_time == time.fromisoformat(timeslot_data['end_time'])
+                TimeSlot.slot_date == slot_date_val,
+                TimeSlot.start_time == start_time_val,
+                TimeSlot.end_time == end_time_val,
+                TimeSlot.is_active == True  # Проверяем только активные тайм-слоты
             )
+            # Важно: делаем flush, чтобы видеть все изменения в текущей транзакции
+            await self.db.flush()
+            
+            # Важно: проверяем только активные тайм-слоты (удаленные можно пересоздать)
             dup_res = await self.db.execute(duplicate_q)
-            if dup_res.scalar_one_or_none():
-                logger.info(f"Skip duplicate timeslot for object {object_id} on {timeslot_data.get('slot_date')} {timeslot_data.get('start_time')}-{timeslot_data.get('end_time')}")
+            existing_timeslot = dup_res.scalar_one_or_none()
+            if existing_timeslot:
+                logger.info(
+                    f"Skip duplicate active timeslot for object {object_id} on {slot_date_val} "
+                    f"{start_time_val}-{end_time_val} (existing ID: {existing_timeslot.id})"
+                )
                 return None
+            
+            # Дополнительная проверка: если есть неактивный тайм-слот с такими же параметрами, логируем
+            # Это не блокирует создание, только информационно
+            inactive_duplicate_q = select(TimeSlot).where(
+                TimeSlot.object_id == object_id,
+                TimeSlot.slot_date == slot_date_val,
+                TimeSlot.start_time == start_time_val,
+                TimeSlot.end_time == end_time_val,
+                TimeSlot.is_active == False  # Проверяем неактивные тайм-слоты для информации
+            )
+            inactive_dup_res = await self.db.execute(inactive_duplicate_q)
+            inactive_timeslot = inactive_dup_res.scalar_one_or_none()
+            if inactive_timeslot:
+                logger.debug(
+                    f"Found inactive timeslot {inactive_timeslot.id} for object {object_id} on {slot_date_val} "
+                    f"{start_time_val}-{end_time_val}, will create new active one"
+                )
 
             # Создаем тайм-слот
             new_timeslot = TimeSlot(
