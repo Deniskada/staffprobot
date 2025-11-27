@@ -292,19 +292,23 @@ class NotificationCenter {
         const priorityBadge = this.getPriorityBadge(notification.priority);
         const typeBadge = this.getTypeBadge(notification.type);
         
+        // Убираем HTML теги из title и message
+        const cleanTitle = this.stripHtml(notification.title);
+        const cleanMessage = this.stripHtml(notification.message);
+        
         return `
             <div class="notification-item ${isUnread ? 'unread' : 'read'} ${isUrgent ? 'urgent' : ''} with-checkbox" 
                  data-id="${notification.id}">
                 <input type="checkbox" class="form-check-input notification-checkbox" 
                        data-id="${notification.id}">
                 <div class="notification-header">
-                    <div class="notification-title">${this.escapeHtml(notification.title)}</div>
+                    <div class="notification-title">${this.escapeHtml(cleanTitle)}</div>
                     <div>
                         ${priorityBadge}
                         ${typeBadge}
                     </div>
                 </div>
-                <div class="notification-message">${this.escapeHtml(notification.message)}</div>
+                <div class="notification-message">${this.escapeHtml(cleanMessage)}</div>
                 <div class="notification-meta">
                     <span><i class="bi bi-clock"></i> ${timeAgo}</span>
                     ${isUnread ? '<span class="badge bg-primary">Новое</span>' : ''}
@@ -702,6 +706,13 @@ class NotificationCenter {
         if (diff < 604800) return `${Math.floor(diff / 86400)} д назад`;
         
         return date.toLocaleDateString('ru-RU');
+    }
+    
+    stripHtml(html) {
+        // Убираем HTML теги, оставляем только текст
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        return div.textContent || div.innerText || '';
     }
     
     escapeHtml(text) {
