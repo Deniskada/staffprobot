@@ -66,6 +66,8 @@
 - [POST] `/owner/employees/contract/{contract_id}/activate`  — (apps/web/routes/owner.py)
 - [GET] `/owner/employees/contract/{contract_id}/edit`  — (apps/web/routes/owner.py)
 - [POST] `/owner/employees/contract/{contract_id}/edit`  — (apps/web/routes/owner.py)
+  - При снятии прав управляющего (`is_manager = False`) автоматически удаляется роль "manager" из `User.roles`, если у пользователя нет других активных договоров с `is_manager=True` (исправлено 27.11.2025)
+  - При снятии прав управляющего также удаляются права на объекты (`ManagerObjectPermission`)
 - [GET] `/owner/employees/contract/{contract_id}/pdf`  — (apps/web/routes/owner.py)
 - [POST] `/owner/employees/contract/{contract_id}/terminate`  — (apps/web/routes/owner.py)
 - [GET] `/owner/employees/create`  — (apps/web/routes/owner.py)

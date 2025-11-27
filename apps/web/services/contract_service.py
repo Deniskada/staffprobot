@@ -1462,6 +1462,7 @@ class ContractService:
             # Сохраняем старый статус для проверки изменений
             old_status = contract.status
             old_is_active = contract.is_active
+            old_is_manager = contract.is_manager
             
             # Валидация use_contract_rate + hourly_rate
             if "use_contract_rate" in contract_data:
@@ -1527,6 +1528,43 @@ class ContractService:
                 contract.is_active = contract_data["is_active"]
             if "is_manager" in contract_data:
                 contract.is_manager = contract_data["is_manager"]
+                
+                # Если изменился статус управляющего, обновляем роли и права
+                if old_is_manager != contract.is_manager:
+                    role_service = RoleService(session)
+                    
+                    if contract.is_manager:
+                        # Стал управляющим - добавляем роль
+                        await role_service.assign_manager_role(contract.employee_id)
+                        logger.info(f"Assigned manager role to user {contract.employee_id} (contract {contract.id})")
+                    else:
+                        # Перестал быть управляющим - удаляем права на объекты
+                        permission_service = ManagerPermissionService(session)
+                        old_permissions = await permission_service.get_contract_permissions(contract.id)
+                        for permission in old_permissions:
+                            await permission_service.delete_permission(permission.id)
+                        logger.info(f"Deleted {len(old_permissions)} manager permissions for contract {contract.id}")
+                        
+                        # Проверяем, есть ли у пользователя другие активные договоры с is_manager=True
+                        other_manager_contracts_query = select(Contract).where(
+                            and_(
+                                Contract.employee_id == contract.employee_id,
+                                Contract.id != contract.id,
+                                Contract.is_manager == True,
+                                Contract.is_active == True,
+                                Contract.status == 'active'
+                            )
+                        )
+                        other_manager_contracts_result = await session.execute(other_manager_contracts_query)
+                        other_manager_contracts = other_manager_contracts_result.scalars().all()
+                        
+                        if not other_manager_contracts:
+                            # Нет других активных договоров с is_manager=True - удаляем роль
+                            await role_service.remove_manager_role(contract.employee_id)
+                            logger.info(f"Removed manager role from user {contract.employee_id} (no other manager contracts)")
+                        else:
+                            logger.info(f"User {contract.employee_id} still has {len(other_manager_contracts)} other manager contracts")
+            
             if "manager_permissions" in contract_data:
                 contract.manager_permissions = contract_data["manager_permissions"]
                 
@@ -1539,12 +1577,13 @@ class ContractService:
                         await permission_service.delete_permission(permission.id)
                     
                     # Создаем новые права
-                    for object_id in contract.allowed_objects:
-                        await permission_service.create_permission(
-                            contract.id, 
-                            object_id, 
-                            contract.manager_permissions
-                        )
+                    if contract.manager_permissions:
+                        for object_id in contract.allowed_objects:
+                            await permission_service.create_permission(
+                                contract.id, 
+                                object_id, 
+                                contract.manager_permissions
+                            )
             
             contract.updated_at = datetime.now()
             await session.commit()
