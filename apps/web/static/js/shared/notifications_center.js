@@ -71,8 +71,8 @@ class NotificationCenter {
             this.resetAndReload();
         });
         
-        // Отметить все как прочитанные
-        document.getElementById('mark-all-read-btn')?.addEventListener('click', () => {
+        // Отметить все как прочитанные (в центре уведомлений)
+        document.getElementById('mark-all-read-center-btn')?.addEventListener('click', () => {
             this.markAllAsRead();
         });
         
