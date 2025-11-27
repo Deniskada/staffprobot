@@ -2,16 +2,12 @@
 
 {% block title %}Центр уведомлений - StaffProBot{% endblock %}
 
-{% block extra_css %}
-<link rel="stylesheet" href="{{ '/static/css/shared/notifications_center.css' | static_version }}">
-{% endblock %}
-
 {% block content %}
 <!-- Подключаем shared компонент -->
 {% include "shared/notifications/center.html" %}
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ '/static/js/shared/notifications_center.js' | static_version }}"></script>
+<script src="{{ 'js/shared/notifications_center.js' | static_version }}"></script>
 {% endblock %}
 
