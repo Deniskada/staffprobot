@@ -19,6 +19,7 @@ from apps.web.dependencies import get_current_user_dependency
 from core.database.session import get_db_session, get_async_session
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from domain.entities import User, Object, Application, Interview, ShiftSchedule, Shift, TimeSlot
+from domain.entities.org_structure import OrgStructureUnit
 from domain.entities.contract import Contract
 from domain.entities.application import ApplicationStatus
 from domain.entities.payroll_entry import PayrollEntry
@@ -186,7 +187,7 @@ async def load_employee_earnings(
         select(PayrollEntry)
         .options(
             selectinload(PayrollEntry.payments),
-            selectinload(PayrollEntry.object_).selectinload(Object.org_unit).selectinload("parent"),
+            selectinload(PayrollEntry.object_).selectinload(Object.org_unit),
         )
         .where(
             PayrollEntry.employee_id == user_id,
@@ -233,11 +234,51 @@ async def load_employee_earnings(
     schedule_cache: Dict[int, PaymentSchedule] = {}
 
     async def get_schedule_for_object(object_entity: Optional[Object]) -> Optional[PaymentSchedule]:
+        """Получить график выплат для объекта с безопасной обработкой lazy loading."""
         if object_entity is None:
             return None
-        schedule_id = object_entity.get_effective_payment_schedule_id()
+        
+        try:
+            # Получаем schedule_id безопасным способом через SQL запрос, если нужно
+            schedule_id = None
+            
+            # Сначала проверяем payment_schedule_id объекта
+            if object_entity.payment_schedule_id is not None:
+                schedule_id = object_entity.payment_schedule_id
+            elif object_entity.org_unit is not None:
+                # Используем SQL запрос для получения schedule_id с учетом наследования
+                org_unit = object_entity.org_unit
+                
+                # Рекурсивно ищем schedule_id в цепочке предков через SQL
+                current_unit_id = org_unit.id
+                max_depth = 10  # Защита от бесконечной рекурсии
+                depth = 0
+                
+                while current_unit_id and depth < max_depth:
+                    unit_query = select(OrgStructureUnit).where(OrgStructureUnit.id == current_unit_id)
+                    unit_result = await db.execute(unit_query)
+                    unit = unit_result.scalar_one_or_none()
+                    
+                    if not unit:
+                        break
+                    
+                    if unit.payment_schedule_id is not None:
+                        schedule_id = unit.payment_schedule_id
+                        break
+                    
+                    current_unit_id = unit.parent_id
+                    depth += 1
+        except Exception as e:
+            logger.warning(
+                f"Error getting payment schedule for object {object_entity.id if object_entity else None}",
+                error=str(e),
+                exc_info=True
+            )
+            return None
+        
         if not schedule_id:
             return None
+        
         if schedule_id not in schedule_cache:
             schedule_query = select(PaymentSchedule).where(PaymentSchedule.id == schedule_id)
             schedule_result = await db.execute(schedule_query)
