@@ -102,7 +102,8 @@ class NotificationService:
         channel: Optional[NotificationChannel] = None,
         limit: int = 50,
         offset: int = 0,
-        include_read: bool = True
+        include_read: bool = True,
+        sort_by: str = "date"
     ) -> List[Notification]:
         """
         Получение уведомлений пользователя с фильтрацией.
@@ -115,6 +116,7 @@ class NotificationService:
             limit: Макс. кол-во результатов
             offset: Смещение для пагинации
             include_read: Включать ли прочитанные (по умолчанию да)
+            sort_by: Сортировка (date или priority)
             
         Returns:
             Список уведомлений
@@ -137,11 +139,20 @@ class NotificationService:
                 if not include_read:
                     query = query.where(Notification.status != NotificationStatus.READ)
                 
-                # Сортировка: сначала непрочитанные, затем по дате создания
-                query = query.order_by(
-                    desc(Notification.status != NotificationStatus.READ),
-                    desc(Notification.created_at)
-                )
+                # Сортировка
+                if sort_by == "priority":
+                    # Сортируем по приоритету (URGENT > HIGH > NORMAL > LOW), затем по дате
+                    query = query.order_by(
+                        desc(Notification.status != NotificationStatus.READ),
+                        desc(Notification.priority),
+                        desc(Notification.created_at)
+                    )
+                else:
+                    # По умолчанию: сначала непрочитанные, затем по дате создания
+                    query = query.order_by(
+                        desc(Notification.status != NotificationStatus.READ),
+                        desc(Notification.created_at)
+                    )
                 
                 # Пагинация
                 query = query.limit(limit).offset(offset)

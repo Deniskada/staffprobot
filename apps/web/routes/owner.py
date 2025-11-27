@@ -468,7 +468,40 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
     meta_service = NotificationTypeMetaService()
     
     # Получить настройки пользователя
-    user_settings = await notification_service.get_user_notification_settings(user_id)
+    user_settings = await notification_service.get_user_notification_settings
+
+
+@router.get("/notifications/center", response_class=HTMLResponse, name="owner_notifications_center")
+async def owner_notifications_center(request: Request, session: AsyncSession = Depends(get_db_session)):
+    """Центр уведомлений владельца"""
+    current_user = await get_current_user(request)
+    if not current_user:
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+    
+    user_role = current_user.get("role", "employee")
+    if user_role != "owner":
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    
+    telegram_id = current_user.get("id")
+    
+    # Получить User.id для контекста
+    from sqlalchemy import select
+    from domain.entities.user import User
+    user_result = await session.execute(
+        select(User.id).where(User.telegram_id == telegram_id)
+    )
+    user_id = user_result.scalar_one_or_none()
+    
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    owner_context = await get_owner_context(user_id, session)
+    
+    return templates.TemplateResponse("owner/notifications/center.html", {
+        "request": request,
+        "current_user": current_user,
+        **owner_context
+    })(user_id)
     
     # Получить типы, сгруппированные по категориям (только для настройки владельцем)
     types_grouped = await meta_service.get_types_grouped_by_category(

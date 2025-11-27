@@ -36,7 +36,43 @@
 - Перед коммитом: быстрый diff по `doc/vision_v1` и запуск автогенерации при необходимости.
 - При обнаружении несоответствий — завести задачу на коррекцию документации.
 
-## Недавние изменения (main, 19.11.2025)
+## Недавние изменения (main, 28.11.2025)
+
+### Центр уведомлений (Notification Center) ✅
+
+**Статус:** Завершено (owner + manager)
+- **Новый функционал:**
+  - Полноценная страница центра уведомлений с infinite scroll, фильтрацией и группировкой.
+  - Доступ: `/owner/notifications/center` и `/manager/notifications/center`.
+  - Кнопка "Показать все уведомления" в дропдауне колокольчика.
+  - **Фильтры:** по статусу (все/непрочитанные/прочитанные), по категории (смены/договоры/объекты/отзывы/задачи/платежи/системные), сортировка (дата/приоритет), режим отображения (список/группировка).
+  - **Действия:** отметить как прочитанное (одно/массово), удалить (одно/массово), перейти к связанному объекту.
+  - **Визуальная иерархия:** непрочитанные (жирный шрифт, синяя граница), срочные (красная граница), прочитанные (серые).
+  - **Infinite Scroll:** автоматическая подгрузка по 30 уведомлений при прокрутке.
+  - **Группировка:** Accordion для категорий с счетчиками и иконками.
+- **API endpoints (новые):**
+  - `GET /api/notifications/center` — список уведомлений с пагинацией (параметры: limit, offset, type_filter, status_filter, sort_by).
+  - `GET /api/notifications/center/grouped` — уведомления с группировкой по категориям (параметры: limit, offset, group_by).
+  - `POST /api/notifications/{id}/mark-read` — отметить одно уведомление как прочитанное.
+  - `POST /api/notifications/mark-read-bulk` — массовая отметка (body: {notification_ids: [...]}).
+  - `POST /api/notifications/{id}/delete` — удалить одно уведомление.
+  - `POST /api/notifications/delete-bulk` — массовое удаление (body: {notification_ids: [...]}).
+  - `GET /api/notifications/{id}/action-url` — получить URL для перехода к связанному объекту.
+- **Сервисы:**
+  - `shared/services/notification_action_service.py` — определение action_url по типу уведомления и роли пользователя.
+  - Обновлен `shared/services/notification_service.py` — добавлен параметр `sort_by` в `get_user_notifications`.
+- **Frontend компоненты:**
+  - `apps/web/templates/shared/notifications/center.html` — общий шаблон центра уведомлений.
+  - `apps/web/static/js/shared/notifications_center.js` — JS класс NotificationCenter с логикой infinite scroll, группировки, фильтрации и массовых действий.
+  - `apps/web/templates/owner/notifications/center.html` — страница для owner.
+  - `apps/web/templates/manager/notifications/center.html` — страница для manager.
+- **Интеграция:**
+  - Обновлены `apps/web/templates/owner/base_owner.html` и `apps/web/templates/manager/base_manager.html` — добавлена кнопка "Показать все уведомления" в дропдаун колокольчика.
+  - Роуты в `apps/web/routes/owner.py` и `apps/web/routes/manager.py`.
+- **Правила документации:**
+  - При добавлении новых типов уведомлений обновлять `domain/entities/notification.py` и `shared/services/notification_action_service.py` (маппинг типов на action_url).
+  - При изменении API endpoints обновлять `doc/vision_v1/shared/notifications.md`.
+  - При изменении UI/UX центра уведомлений обновлять `doc/vision_v1/shared/notifications.md` (раздел "Центр уведомлений").
 
 ### Расчётные листы уволенных сотрудников (Iteration 46) ✅
 

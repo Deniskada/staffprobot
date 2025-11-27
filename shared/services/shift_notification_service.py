@@ -242,10 +242,21 @@ class ShiftNotificationService:
 
             owner_id = shift.object.owner_id
             if not owner_id:
+                logger.debug(
+                    "No owner_id for shift, skipping notification",
+                    shift_id=shift_id,
+                    object_id=shift.object_id if shift.object else None,
+                )
                 return
 
             channels = await self._get_channels(owner_id, NotificationType.SHIFT_STARTED)
             if not channels:
+                logger.warning(
+                    "No notification channels enabled for owner, skipping shift started notification",
+                    owner_id=owner_id,
+                    shift_id=shift_id,
+                    notification_type=NotificationType.SHIFT_STARTED.value,
+                )
                 return
 
             employee_name = self._build_user_name(shift.user.first_name, shift.user.last_name, shift.user.username)
@@ -623,6 +634,15 @@ class ShiftNotificationService:
             channels.append(NotificationChannel.EMAIL)
         if prefs.get("sms", False):
             channels.append(NotificationChannel.SMS)
+
+        logger.debug(
+            "Notification channels for user",
+            user_id=user_id,
+            notification_type=notif_type.value,
+            settings=settings,
+            prefs=prefs,
+            channels=[ch.value for ch in channels],
+        )
 
         return channels
 

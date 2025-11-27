@@ -1,0 +1,295 @@
+<!-- Общий шаблон центра уведомлений -->
+<!-- Используется owner и manager ролями -->
+
+<div class="container-fluid mt-4" id="notifications-center">
+    <!-- Заголовок -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>
+                <i class="bi bi-bell-fill text-primary"></i>
+                Центр уведомлений
+            </h1>
+            <p class="text-muted mb-0">
+                Все ваши уведомления в одном месте
+                <span id="unread-count-text" class="badge bg-primary ms-2">0 непрочитанных</span>
+            </p>
+        </div>
+        <div>
+            <button class="btn btn-outline-primary" id="mark-all-read-btn">
+                <i class="bi bi-check-all"></i> Отметить все как прочитанные
+            </button>
+        </div>
+    </div>
+
+    <!-- Фильтры и сортировка -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <!-- Фильтр по статусу -->
+                <div class="col-md-3">
+                    <label class="form-label">Статус:</label>
+                    <select class="form-select" id="status-filter">
+                        <option value="all">Все</option>
+                        <option value="unread" selected>Непрочитанные</option>
+                        <option value="read">Прочитанные</option>
+                    </select>
+                </div>
+
+                <!-- Фильтр по категории -->
+                <div class="col-md-3">
+                    <label class="form-label">Категория:</label>
+                    <select class="form-select" id="category-filter">
+                        <option value="">Все категории</option>
+                        <option value="shifts">Смены</option>
+                        <option value="contracts">Договоры</option>
+                        <option value="objects">Объекты</option>
+                        <option value="reviews">Отзывы</option>
+                        <option value="tasks">Задачи</option>
+                        <option value="payments">Платежи</option>
+                        <option value="system">Системные</option>
+                    </select>
+                </div>
+
+                <!-- Сортировка -->
+                <div class="col-md-3">
+                    <label class="form-label">Сортировка:</label>
+                    <select class="form-select" id="sort-by">
+                        <option value="date" selected>По дате</option>
+                        <option value="priority">По приоритету</option>
+                    </select>
+                </div>
+
+                <!-- Режим отображения -->
+                <div class="col-md-3">
+                    <label class="form-label">Отображение:</label>
+                    <select class="form-select" id="view-mode">
+                        <option value="list">Список</option>
+                        <option value="grouped" selected>Группировка</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Панель массовых действий (скрыта по умолчанию) -->
+    <div class="card shadow-sm mb-3 d-none" id="bulk-actions-panel">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span id="selected-count">0</span> выбрано
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-primary" id="bulk-mark-read">
+                        <i class="bi bi-check"></i> Отметить прочитанными
+                    </button>
+                    <button class="btn btn-sm btn-danger" id="bulk-delete">
+                        <i class="bi bi-trash"></i> Удалить
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" id="bulk-cancel">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список уведомлений -->
+    <div id="notifications-container">
+        <!-- Accordion для группированного view -->
+        <div id="notifications-grouped-view" class="accordion">
+            <!-- Группы будут добавлены динамически -->
+        </div>
+
+        <!-- Простой список для list view -->
+        <div id="notifications-list-view">
+            <!-- Уведомления будут добавлены динамически -->
+        </div>
+    </div>
+
+    <!-- Индикатор загрузки -->
+    <div class="text-center py-4 d-none" id="loading-indicator">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+        <p class="text-muted mt-2">Загрузка уведомлений...</p>
+    </div>
+
+    <!-- Сообщение об отсутствии уведомлений -->
+    <div class="text-center py-5 d-none" id="no-notifications">
+        <i class="bi bi-inbox" style="font-size: 4rem; color: #dee2e6;"></i>
+        <p class="text-muted mt-3">Нет уведомлений</p>
+    </div>
+
+    <!-- Сообщение о конце списка -->
+    <div class="text-center py-3 d-none" id="end-of-list">
+        <p class="text-muted">Все уведомления загружены</p>
+    </div>
+</div>
+
+<style>
+/* Стили для центра уведомлений */
+#notifications-center {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.notification-item {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background: #fff;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.notification-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.notification-item.unread {
+    border-left: 4px solid #0d6efd;
+    background: #f8f9fa;
+    font-weight: 500;
+}
+
+.notification-item.read {
+    border-left: 4px solid #6c757d;
+    opacity: 0.85;
+}
+
+.notification-item.urgent {
+    border-left-color: #dc3545 !important;
+    border-left-width: 4px !important;
+}
+
+.notification-checkbox {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+}
+
+.notification-item.with-checkbox {
+    padding-left: 3rem;
+}
+
+.notification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items-start;
+    margin-bottom: 0.5rem;
+}
+
+.notification-title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.notification-message {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.notification-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.notification-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.notification-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.notification-type-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    font-size: 1.25rem;
+}
+
+.icon-shifts { background: #e3f2fd; color: #1976d2; }
+.icon-contracts { background: #f3e5f5; color: #7b1fa2; }
+.icon-objects { background: #e8f5e9; color: #388e3c; }
+.icon-reviews { background: #fff8e1; color: #f57c00; }
+.icon-tasks { background: #fce4ec; color: #c2185b; }
+.icon-payments { background: #e0f2f1; color: #00796b; }
+.icon-system { background: #f5f5f5; color: #616161; }
+
+.category-header {
+    background: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+}
+
+.category-header:hover {
+    background: #e9ecef;
+}
+
+.category-header.category-shifts { border-left-color: #1976d2; }
+.category-header.category-contracts { border-left-color: #7b1fa2; }
+.category-header.category-objects { border-left-color: #388e3c; }
+.category-header.category-reviews { border-left-color: #f57c00; }
+.category-header.category-tasks { border-left-color: #c2185b; }
+.category-header.category-payments { border-left-color: #00796b; }
+.category-header.category-system { border-left-color: #616161; }
+
+#bulk-actions-panel {
+    position: sticky;
+    top: 70px;
+    z-index: 100;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .notification-meta {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .notification-actions {
+        flex-direction: column;
+    }
+    
+    .notification-actions button {
+        width: 100%;
+    }
+    
+    .card-body .row.g-3 {
+        gap: 0.5rem !important;
+    }
+}
+</style>
+

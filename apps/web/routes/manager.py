@@ -594,6 +594,30 @@ async def manager_index(request: Request):
     return RedirectResponse(url="/manager/dashboard", status_code=302)
 
 
+@router.get("/notifications/center", response_class=HTMLResponse)
+async def manager_notifications_center(
+    request: Request,
+    current_user: dict = Depends(require_manager_or_owner)
+):
+    """Центр уведомлений управляющего."""
+    try:
+        async with get_async_session() as db:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Пользователь не найден")
+            
+            manager_context = await get_manager_context(user_id, db)
+            
+            return templates.TemplateResponse("manager/notifications/center.html", {
+                "request": request,
+                "current_user": current_user,
+                **manager_context
+            })
+    except Exception as e:
+        logger.error(f"Error loading manager notifications center: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def manager_dashboard(
     request: Request,
