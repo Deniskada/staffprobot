@@ -74,6 +74,7 @@
   - **Важно:** Поля профиля (`first_name`, `last_name`, `phone`, `email`, `birth_date`) сохраняются в `User` при создании договора
 - [GET] `/owner/employees/{employee_id}`  — (apps/web/routes/owner.py)
 - [GET] `/owner/employees/{employee_id}/edit`  — (apps/web/routes/owner.py) — форма редактирования профиля сотрудника (имя, фамилия, телефон, email, дата рождения)
+  - `employee_id` в URL — это `telegram_id` сотрудника (исправлено 27.11.2025: устранена ошибка поиска сотрудника по внутреннему ID вместо telegram_id)
 - [POST] `/owner/employees/{employee_id}/edit`  — (apps/web/routes/owner.py) — сохранение изменений профиля сотрудника
 - [GET] `/owner/object/{object_id}`  — (apps/web/routes/owner_timeslots.py)
 - [GET] `/owner/object/{object_id}/create`  — (apps/web/routes/owner_timeslots.py)

@@ -895,10 +895,18 @@ class ContractService:
             if not owner:
                 return None
             
-            # Получаем сотрудника с договорами (включая неактивные)
+            # Находим сотрудника по telegram_id (employee_id - это telegram_id из URL)
+            employee_query = select(User).where(User.telegram_id == employee_id)
+            employee_result = await session.execute(employee_query)
+            employee_user = employee_result.scalar_one_or_none()
+            
+            if not employee_user:
+                return None
+            
+            # Получаем сотрудника с договорами (включая неактивные) по внутреннему ID
             query = select(Contract).where(
                 and_(
-                    Contract.employee_id == employee_id,
+                    Contract.employee_id == employee_user.id,  # Используем внутренний ID сотрудника
                     Contract.owner_id == owner.id
                 )
             ).options(
