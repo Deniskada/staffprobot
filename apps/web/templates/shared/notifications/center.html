@@ -293,3 +293,20 @@
 }
 </style>
 
+<script>
+// Инициализируем сразу после загрузки этого template
+document.addEventListener('DOMContentLoaded', function() {
+    // Небольшая задержка, чтобы убедиться что все элементы отрендерены
+    setTimeout(function() {
+        console.log('[NotificationCenter] Template loaded, checking elements...');
+        const center = document.getElementById('notifications-center');
+        if (center) {
+            console.log('[NotificationCenter] Center element found, initializing...');
+            // Инициализация будет в отдельном скрипте
+        } else {
+            console.error('[NotificationCenter] Center element still not found after DOMContentLoaded');
+        }
+    }, 100);
+});
+</script>
+

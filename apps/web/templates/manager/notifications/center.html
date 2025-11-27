@@ -5,9 +5,8 @@
 {% block content %}
 <!-- Подключаем shared компонент -->
 {% include "shared/notifications/center.html" %}
-{% endblock %}
 
-{% block extra_js %}
-<script src="{{ 'js/shared/notifications_center.js' | static_version }}"></script>
+<!-- Скрипт загружается сразу после контента для гарантии наличия элементов -->
+<script src="{{ 'js/shared/notifications_center.js' | static_version }}" defer></script>
 {% endblock %}
 
