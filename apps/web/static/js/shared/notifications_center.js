@@ -72,16 +72,19 @@ class NotificationCenter {
     }
     
     setupInfiniteScroll() {
+        const sentinel = document.getElementById('end-of-list');
+        if (!sentinel) {
+            console.warn('[NotificationCenter] Sentinel element not found for infinite scroll');
+            return;
+        }
+        
         const observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && !this.loading && this.hasMore) {
                 this.loadNotifications(false);
             }
         }, { threshold: 0.1 });
         
-        const sentinel = document.getElementById('end-of-list');
-        if (sentinel) {
-            observer.observe(sentinel);
-        }
+        observer.observe(sentinel);
     }
     
     async loadNotifications(reset = false) {
@@ -192,6 +195,11 @@ class NotificationCenter {
         const container = document.getElementById('notifications-list-view');
         const groupedContainer = document.getElementById('notifications-grouped-view');
         
+        if (!container || !groupedContainer) {
+            console.error('[NotificationCenter] Containers not found for list view');
+            return;
+        }
+        
         container.classList.remove('d-none');
         groupedContainer.classList.add('d-none');
         
@@ -204,6 +212,11 @@ class NotificationCenter {
     renderGroupedView() {
         const container = document.getElementById('notifications-grouped-view');
         const listContainer = document.getElementById('notifications-list-view');
+        
+        if (!container || !listContainer) {
+            console.error('[NotificationCenter] Containers not found for grouped view');
+            return;
+        }
         
         container.classList.remove('d-none');
         listContainer.classList.add('d-none');
@@ -498,7 +511,11 @@ class NotificationCenter {
             if (response.ok) {
                 const data = await response.json();
                 const count = data.count || 0;
-                document.getElementById('unread-count-text').textContent = `${count} непрочитанных`;
+                
+                const countElement = document.getElementById('unread-count-text');
+                if (countElement) {
+                    countElement.textContent = `${count} непрочитанных`;
+                }
                 
                 // Обновляем бейдж в колокольчике
                 const badge = document.getElementById(`${this.userRole}-notifications-badge`);
@@ -532,6 +549,10 @@ class NotificationCenter {
     updateEmptyState() {
         const empty = document.getElementById('no-notifications');
         const endOfList = document.getElementById('end-of-list');
+        
+        if (!empty || !endOfList) {
+            return;
+        }
         
         if (this.notifications.length === 0) {
             empty.classList.remove('d-none');
