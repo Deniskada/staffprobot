@@ -49,7 +49,8 @@ class NotificationCenter {
         
         document.getElementById('view-mode')?.addEventListener('change', (e) => {
             this.viewMode = e.target.value;
-            this.renderNotifications();
+            // При смене режима перезагружаем данные
+            this.resetAndReload();
         });
         
         // Отметить все как прочитанные
@@ -113,9 +114,11 @@ class NotificationCenter {
                 // Для простоты используем grouped endpoint
             }
             
+            // Используем правильный endpoint в зависимости от режима
             let endpoint = '/api/notifications/center';
-            if (this.viewMode === 'grouped' && !reset) {
+            if (this.viewMode === 'grouped') {
                 endpoint = '/api/notifications/center/grouped';
+                params.set('limit', 100); // Для grouped загружаем больше
             }
             
             const response = await fetch(`${endpoint}?${params}`, {
