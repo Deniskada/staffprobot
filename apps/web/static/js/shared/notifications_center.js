@@ -24,6 +24,24 @@ class NotificationCenter {
     
     init() {
         console.log('[NotificationCenter] Initializing...');
+        console.log('[NotificationCenter] View mode:', this.viewMode);
+        
+        // Проверяем наличие ключевых элементов
+        const center = document.getElementById('notifications-center');
+        const grouped = document.getElementById('notifications-grouped-view');
+        const list = document.getElementById('notifications-list-view');
+        
+        console.log('[NotificationCenter] Elements found:', {
+            center: !!center,
+            grouped: !!grouped,
+            list: !!list
+        });
+        
+        if (!center) {
+            console.error('[NotificationCenter] Main container #notifications-center not found! Cannot initialize.');
+            return;
+        }
+        
         this.setupEventListeners();
         this.setupInfiniteScroll();
         this.loadNotifications(true);
