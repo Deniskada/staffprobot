@@ -225,6 +225,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ super() }}
 <script>
     // Обработка клика на "Запланированные" - переход в календарь с скроллом на сегодня
     document.addEventListener('DOMContentLoaded', function() {
