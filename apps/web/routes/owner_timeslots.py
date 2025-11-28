@@ -24,7 +24,7 @@ async def timeslots_all_list(
     request: Request,
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session),
-    object_id: Optional[int] = Query(None),
+    object_id: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
     sort_by: str = Query("slot_date"),
@@ -32,7 +32,15 @@ async def timeslots_all_list(
 ):
     """Список всех тайм-слотов с фильтром по объектам"""
     try:
-        logger.info(f"Loading all timeslots with filters: object_id={object_id}, date_from={date_from}, date_to={date_to}")
+        # Безопасное преобразование object_id
+        object_id_int = None
+        if object_id and object_id.strip():
+            try:
+                object_id_int = int(object_id)
+            except ValueError:
+                logger.warning(f"Invalid object_id value: {object_id}")
+        
+        logger.info(f"Loading all timeslots with filters: object_id={object_id_int}, date_from={date_from}, date_to={date_to}")
         
         object_service = ObjectService(db)
         timeslot_service = TimeSlotService(db)
@@ -41,13 +49,13 @@ async def timeslots_all_list(
         all_objects = await object_service.get_objects_by_owner(current_user["telegram_id"])
         
         # Если указан object_id, фильтруем по нему
-        if object_id:
-            obj = await object_service.get_object_by_id(object_id, current_user["telegram_id"])
+        if object_id_int:
+            obj = await object_service.get_object_by_id(object_id_int, current_user["telegram_id"])
             if not obj:
                 raise HTTPException(status_code=404, detail="Объект не найден")
             
             timeslots = await timeslot_service.get_timeslots_by_object(
-                object_id, 
+                object_id_int, 
                 current_user["telegram_id"],
                 date_from=date_from,
                 date_to=date_to,
@@ -106,7 +114,7 @@ async def timeslots_all_list(
             "title": "Тайм-слоты",
             "timeslots": timeslots_data,
             "objects": objects_list,
-            "selected_object_id": object_id,
+            "selected_object_id": object_id_int,
             "selected_object": selected_object,
             "first_available_object_id": first_available_object_id,
             "current_user": current_user,
