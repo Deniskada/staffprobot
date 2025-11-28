@@ -1645,6 +1645,24 @@ async def employee_calendar_timeslot_detail(
         raise HTTPException(status_code=500, detail="Ошибка загрузки деталей тайм-слота")
 
 
+@router.get("/notifications/center", response_class=HTMLResponse)
+async def employee_notifications_center(
+    request: Request,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Центр уведомлений для сотрудника.
+    """
+    return templates.TemplateResponse(
+        "employee/notifications/center.html",
+        {
+            "request": request,
+            "current_user": current_user,
+        }
+    )
+
+
 @router.get("/api/employees")
 async def employee_api_employees(
     current_user: dict = Depends(require_employee_or_applicant),
