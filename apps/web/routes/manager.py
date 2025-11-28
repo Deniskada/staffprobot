@@ -1705,10 +1705,24 @@ async def manager_employee_detail(
         if employee_id == user_id:
             raise HTTPException(status_code=403, detail="Вы не можете управлять своими договорами через этот интерфейс")
         
+        # Получаем owner_id для управляющего (ищем через его активные договоры)
+        owner_query = select(Contract.owner_id).where(
+            and_(
+                Contract.employee_id == user_id,
+                Contract.is_manager == True,
+                Contract.is_active == True
+            )
+        ).limit(1)
+        owner_result = await db.execute(owner_query)
+        owner_id = owner_result.scalar_one_or_none()
+        
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="У вас нет прав управляющего")
+        
         # Получаем информацию о сотруднике через сервис
         from apps.web.services.contract_service import ContractService
         contract_service = ContractService()
-        employee_info = await contract_service.get_employee_by_id(employee_id, current_user["id"])
+        employee_info = await contract_service.get_employee_by_id(employee_id, owner_id)
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="У вас нет договоров с этим сотрудником")
@@ -1786,10 +1800,28 @@ async def manager_employee_edit_form(
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
         
+        # Запрещаем управляющему редактировать свою страницу как сотрудника
+        if employee_id == user_id:
+            raise HTTPException(status_code=403, detail="Вы не можете редактировать свои договоры через этот интерфейс")
+        
+        # Получаем owner_id для управляющего (ищем через его активные договоры)
+        owner_query = select(Contract.owner_id).where(
+            and_(
+                Contract.employee_id == user_id,
+                Contract.is_manager == True,
+                Contract.is_active == True
+            )
+        ).limit(1)
+        owner_result = await db.execute(owner_query)
+        owner_id = owner_result.scalar_one_or_none()
+        
+        if not owner_id:
+            raise HTTPException(status_code=403, detail="У вас нет прав управляющего")
+        
         # Получаем информацию о сотруднике через сервис
         from apps.web.services.contract_service import ContractService
         contract_service = ContractService()
-        employee_info = await contract_service.get_employee_by_id(employee_id, current_user["id"])
+        employee_info = await contract_service.get_employee_by_id(employee_id, owner_id)
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="Сотрудник не найден или у вас нет прав на его редактирование")

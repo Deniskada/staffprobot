@@ -6087,9 +6087,9 @@ async def owner_employee_detail(
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
         
-        # Получаем информацию о сотруднике через сервис (employee_id - это telegram_id)
+        # Получаем информацию о сотруднике через сервис (employee_id - это внутренний user_id)
         contract_service = ContractService()
-        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, user_id)
+        employee_info = await contract_service.get_employee_by_id(employee_id, user_id)
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="У вас нет договоров с этим сотрудником")
@@ -6136,8 +6136,8 @@ async def owner_employee_edit_form(
         # Получаем информацию о сотруднике
         from apps.web.services.contract_service import ContractService
         contract_service = ContractService()
-        # employee_id - это telegram_id
-        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, user_id)
+        # employee_id - это внутренний user_id
+        employee_info = await contract_service.get_employee_by_id(employee_id, user_id)
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="Сотрудник не найден или у вас нет прав на его редактирование")

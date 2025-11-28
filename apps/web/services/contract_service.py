@@ -884,30 +884,22 @@ class ContractService:
                 ]
             }
     
-    async def get_employee_by_telegram_id(self, employee_id: int, owner_telegram_id: int) -> Optional[Dict[str, Any]]:
-        """Получение информации о сотруднике по telegram_id владельца."""
+    async def get_employee_by_id(self, employee_id: int, owner_id: int) -> Optional[Dict[str, Any]]:
+        """Получение информации о сотруднике по внутреннему user_id.
+        
+        Args:
+            employee_id: внутренний user_id сотрудника (НЕ telegram_id)
+            owner_id: внутренний user_id владельца (НЕ telegram_id)
+        
+        Returns:
+            Dict с информацией о сотруднике и его договорах или None
+        """
         async with get_async_session() as session:
-            # Сначала находим владельца по telegram_id
-            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
-            owner_result = await session.execute(owner_query)
-            owner = owner_result.scalar_one_or_none()
-            
-            if not owner:
-                return None
-            
-            # Находим сотрудника по telegram_id (employee_id - это telegram_id из URL)
-            employee_query = select(User).where(User.telegram_id == employee_id)
-            employee_result = await session.execute(employee_query)
-            employee_user = employee_result.scalar_one_or_none()
-            
-            if not employee_user:
-                return None
-            
-            # Получаем сотрудника с договорами (включая неактивные) по внутреннему ID
+            # Получаем сотрудника с договорами (включая неактивные) по внутренним IDs
             query = select(Contract).where(
                 and_(
-                    Contract.employee_id == employee_user.id,  # Используем внутренний ID сотрудника
-                    Contract.owner_id == owner.id
+                    Contract.employee_id == employee_id,
+                    Contract.owner_id == owner_id
                 )
             ).options(
                 selectinload(Contract.employee)
