@@ -1654,11 +1654,27 @@ async def employee_notifications_center(
     """
     Центр уведомлений для сотрудника.
     """
+    # Получаем user_id
+    from shared.services.user_service import get_user_id_from_current_user
+    user_id = await get_user_id_from_current_user(current_user, db)
+    
+    # Получаем интерфейсы
+    from apps.web.services.interface_service import get_available_interfaces
+    available_interfaces = get_available_interfaces(current_user)
+    
+    # Подсчет заявок для навигации
+    applications_count = await db.execute(
+        select(func.count(Application.id)).where(Application.applicant_id == user_id)
+    )
+    applications_count = applications_count.scalar() or 0
+    
     return templates.TemplateResponse(
         "employee/notifications/center.html",
         {
             "request": request,
             "current_user": current_user,
+            "available_interfaces": available_interfaces,
+            "applications_count": applications_count,
         }
     )
 
