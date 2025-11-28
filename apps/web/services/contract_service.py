@@ -951,7 +951,7 @@ class ContractService:
                 } for contract in contracts]
             }
     
-    async def get_employee_by_id(self, employee_id: int, manager_telegram_id: int) -> Optional[Dict[str, Any]]:
+    async def get_employee_by_id_for_manager(self, employee_id: int, manager_telegram_id: int) -> Optional[Dict[str, Any]]:
         """Получение информации о сотруднике по внутреннему ID (для управляющих)."""
         async with get_async_session() as session:
             # Сначала находим управляющего по telegram_id
