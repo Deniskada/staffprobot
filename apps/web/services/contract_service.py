@@ -844,47 +844,6 @@ class ContractService:
             return True
     
     async def get_employee_by_id(self, employee_id: int, owner_id: int) -> Optional[Dict[str, Any]]:
-        """Получение сотрудника по ID с проверкой прав владельца."""
-        async with get_async_session() as session:
-            # Проверяем, что у владельца есть договор с этим сотрудником
-            query = select(Contract).where(
-                and_(
-                    Contract.owner_id == owner_id,
-                    Contract.employee_id == employee_id,
-                    Contract.is_active == True
-                )
-            ).options(selectinload(Contract.employee))
-            
-            result = await session.execute(query)
-            contracts = result.scalars().all()
-            
-            if not contracts:
-                return None
-            
-            employee = contracts[0].employee
-            return {
-                "id": employee.id,
-                "telegram_id": employee.telegram_id,
-                "first_name": employee.first_name,
-                "last_name": employee.last_name,
-                "username": employee.username,
-                "created_at": employee.created_at,
-                "contracts": [
-                    {
-                        "id": contract.id,
-                        "contract_number": contract.contract_number,
-                        "title": contract.title,
-                        "status": contract.status,
-                        "hourly_rate": contract.hourly_rate,
-                        "start_date": contract.start_date,
-                        "end_date": contract.end_date,
-                        "allowed_objects": contract.allowed_objects or []
-                    }
-                    for contract in contracts
-                ]
-            }
-    
-    async def get_employee_by_id(self, employee_id: int, owner_id: int) -> Optional[Dict[str, Any]]:
         """Получение информации о сотруднике по внутреннему user_id.
         
         Args:
@@ -896,6 +855,7 @@ class ContractService:
         """
         async with get_async_session() as session:
             # Получаем сотрудника с договорами (включая неактивные) по внутренним IDs
+            print(f"[DEBUG] get_employee_by_id: Searching contracts for employee_id={employee_id}, owner_id={owner_id}")
             logger.info(f"get_employee_by_id: Searching contracts for employee_id={employee_id}, owner_id={owner_id}")
             query = select(Contract).where(
                 and_(
@@ -906,8 +866,10 @@ class ContractService:
                 selectinload(Contract.employee)
             )
             
+            print(f"[DEBUG] get_employee_by_id: Executing query...")
             result = await session.execute(query)
             contracts = result.scalars().all()
+            print(f"[DEBUG] get_employee_by_id: Found {len(contracts)} contracts")
             logger.info(f"get_employee_by_id: Found {len(contracts)} contracts")
             
             if not contracts:
