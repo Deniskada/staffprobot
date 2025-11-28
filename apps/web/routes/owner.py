@@ -6089,7 +6089,7 @@ async def owner_employee_detail(
         
         # Получаем информацию о сотруднике через сервис (employee_id - это telegram_id)
         contract_service = ContractService()
-        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, current_user["id"])
+        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, user_id)
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="У вас нет договоров с этим сотрудником")
@@ -6137,7 +6137,7 @@ async def owner_employee_edit_form(
         from apps.web.services.contract_service import ContractService
         contract_service = ContractService()
         # employee_id - это telegram_id
-        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, current_user["id"])
+        employee_info = await contract_service.get_employee_by_telegram_id(employee_id, user_id)
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="Сотрудник не найден или у вас нет прав на его редактирование")
