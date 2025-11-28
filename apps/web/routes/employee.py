@@ -1657,9 +1657,20 @@ async def employee_notifications_center(
     # Получаем user_id (функция определена выше в этом файле)
     user_id = await get_user_id_from_current_user(current_user, db)
     
-    # Получаем интерфейсы
-    from apps.web.services.interface_service import get_available_interfaces
-    available_interfaces = get_available_interfaces(current_user)
+    # Определяем доступные интерфейсы на основе ролей пользователя
+    available_interfaces = []
+    user_roles = current_user.get("roles", []) if isinstance(current_user, dict) else []
+    
+    if "admin" in user_roles:
+        available_interfaces.append({"title": "Администратор", "url": "/admin"})
+    if "owner" in user_roles:
+        available_interfaces.append({"title": "Владелец", "url": "/owner"})
+    if "manager" in user_roles:
+        available_interfaces.append({"title": "Управляющий", "url": "/manager"})
+    if "employee" in user_roles or current_user.get("role") == "employee":
+        available_interfaces.append({"title": "Сотрудник", "url": "/employee"})
+    if not available_interfaces:  # Если нет ролей, значит соискатель
+        available_interfaces.append({"title": "Соискатель", "url": "/employee"})
     
     # Подсчет заявок для навигации
     applications_count = await db.execute(
