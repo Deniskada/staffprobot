@@ -77,11 +77,9 @@ async def get_user_id_from_current_user(current_user, session):
     if isinstance(current_user, dict):
         # current_user - это словарь из JWT payload
         telegram_id = current_user.get("telegram_id") or current_user.get("id")
-        logger.info(f"get_user_id_from_current_user: telegram_id={telegram_id}")
         user_query = select(User).where(User.telegram_id == telegram_id)
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
-        logger.info(f"get_user_id_from_current_user: user_obj={user_obj}, user_id={user_obj.id if user_obj else None}")
         return user_obj.id if user_obj else None
     else:
         # current_user - это объект User
@@ -6086,15 +6084,12 @@ async def owner_employee_detail(
         
         # Получаем внутренний user_id владельца
         user_id = await get_user_id_from_current_user(current_user, db)
-        logger.info(f"owner_employee_detail: employee_id={employee_id}, user_id={user_id}")
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
         
         # Получаем информацию о сотруднике через сервис (employee_id - это внутренний user_id)
         contract_service = ContractService()
-        logger.info(f"owner_employee_detail: calling get_employee_by_id({employee_id}, {user_id})")
         employee_info = await contract_service.get_employee_by_id(employee_id, user_id)
-        logger.info(f"owner_employee_detail: employee_info={employee_info}")
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="У вас нет договоров с этим сотрудником")
