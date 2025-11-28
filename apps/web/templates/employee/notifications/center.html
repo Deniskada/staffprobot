@@ -1,0 +1,14 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}Центр уведомлений - StaffProBot{% endblock %}
+
+{% block content %}
+<!-- Подключаем shared компонент -->
+{% include "shared/notifications/center.html" %}
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script src="{{ 'js/shared/notifications_center.js' | static_version }}"></script>
+{% endblock %}
+

@@ -76,6 +76,45 @@
                 
                 <ul class="navbar-nav">
                     {% if current_user %}
+                        <!-- Колокольчик уведомлений -->
+                        <li class="nav-item dropdown">
+                            <button class="nav-link btn btn-link text-decoration-none dropdown-toggle" 
+                                    id="employeeNotificationsDropdown"
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false"
+                                    aria-label="Уведомления"
+                                    style="border: none; background: none; color: inherit;">
+                                <i class="bi bi-bell"></i>
+                                <span id="employee-notifications-badge" class="badge bg-danger ms-1 d-none"></span>
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-end" 
+                                 aria-labelledby="employeeNotificationsDropdown"
+                                 style="min-width: 350px; max-width: 400px;"
+                                 id="employee-notifications-dropdown"
+                                 data-bs-auto-close="outside">
+                                <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Уведомления</h6>
+                                    <button class="btn btn-sm btn-link text-decoration-none" 
+                                            id="mark-all-read-btn"
+                                            title="Отметить все как прочитанные">
+                                        <i class="bi bi-check2-all"></i> Все прочитаны
+                                    </button>
+                                </div>
+                                <div id="notifications-list" style="max-height: 400px; overflow-y: auto;">
+                                    <div class="text-center py-3 text-muted">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Загрузка...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="px-3 py-2 border-top">
+                                    <a href="/employee/notifications/center" class="btn btn-sm btn-outline-primary w-100">
+                                        <i class="bi bi-bell-fill"></i> Показать все уведомления
+                                    </a>
+                                </div>
+                            </div>
+                        </li>
+                        
                         <!-- Переключатель ролей -->
                         {% if available_interfaces and available_interfaces|length > 1 %}
                         <li class="nav-item dropdown">
@@ -149,6 +188,8 @@
     <script src="/static/js/shared/calendar.js"></script>
     <script src="/static/js/shared/calendar_panels.js"></script>
     
-    {% block extra_js %}{% endblock %}
+    {% block extra_js %}
+    <script src="{{ 'js/shared/notifications_dropdown.js' | static_version }}"></script>
+    {% endblock %}
 </body>
 </html>
