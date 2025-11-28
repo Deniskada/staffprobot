@@ -1,7 +1,7 @@
 /**
  * Дропдаун уведомлений для колокольчика
  * Показывает 10 последних уведомлений и кнопку "Отметить все как прочитанные"
- * Поддерживает owner и manager роли
+ * Поддерживает owner, manager и employee роли
  */
 (() => {
     function initNotificationsDropdown() {
@@ -10,15 +10,19 @@
         // Определяем роль по наличию элементов
         const ownerDropdown = document.getElementById('owner-notifications-dropdown');
         const managerDropdown = document.getElementById('manager-notifications-dropdown');
+        const employeeDropdown = document.getElementById('employee-notifications-dropdown');
         
-        console.log('[notifications_dropdown] ownerDropdown:', !!ownerDropdown, 'managerDropdown:', !!managerDropdown);
+        console.log('[notifications_dropdown] ownerDropdown:', !!ownerDropdown, 'managerDropdown:', !!managerDropdown, 'employeeDropdown:', !!employeeDropdown);
         
-        const dropdownElement = ownerDropdown || managerDropdown;
+        const dropdownElement = ownerDropdown || managerDropdown || employeeDropdown;
         const listContainer = document.getElementById('notifications-list');
         const markAllBtn = document.getElementById('mark-all-read-btn');
         const dropdownButton = document.getElementById('ownerNotificationsDropdown') || 
-                               document.getElementById('managerNotificationsDropdown');
-        const badgeId = ownerDropdown ? 'owner-notifications-badge' : 'manager-notifications-badge';
+                               document.getElementById('managerNotificationsDropdown') ||
+                               document.getElementById('employeeNotificationsDropdown');
+        const badgeId = ownerDropdown ? 'owner-notifications-badge' : 
+                        managerDropdown ? 'manager-notifications-badge' : 
+                        'employee-notifications-badge';
 
         console.log('[notifications_dropdown] Элементы:', {
             dropdownElement: !!dropdownElement,
