@@ -6148,7 +6148,7 @@ async def owner_employee_edit_form(
         # Получаем объект User из БД для редактирования
         from sqlalchemy import select
         from domain.entities.user import User
-        employee_user_query = select(User).where(User.telegram_id == employee_id)
+        employee_user_query = select(User).where(User.id == employee_id)
         result = await db.execute(employee_user_query)
         employee_user = result.scalar_one_or_none()
         
@@ -6187,11 +6187,11 @@ async def owner_employee_edit(
             
             form_data = await request.form()
             
-            # Получаем сотрудника (employee_id - это telegram_id)
+            # Получаем сотрудника (employee_id - это внутренний user_id)
             from sqlalchemy import select
             from domain.entities.user import User
             
-            employee_query = select(User).where(User.telegram_id == employee_id)
+            employee_query = select(User).where(User.id == employee_id)
             result = await db.execute(employee_query)
             employee = result.scalar_one_or_none()
             
