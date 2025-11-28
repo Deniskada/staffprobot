@@ -1654,8 +1654,7 @@ async def employee_notifications_center(
     """
     Центр уведомлений для сотрудника.
     """
-    # Получаем user_id
-    from shared.services.user_service import get_user_id_from_current_user
+    # Получаем user_id (функция определена выше в этом файле)
     user_id = await get_user_id_from_current_user(current_user, db)
     
     # Получаем интерфейсы
