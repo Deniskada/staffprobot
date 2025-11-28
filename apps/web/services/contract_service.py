@@ -896,6 +896,7 @@ class ContractService:
         """
         async with get_async_session() as session:
             # Получаем сотрудника с договорами (включая неактивные) по внутренним IDs
+            logger.info(f"get_employee_by_id: Searching contracts for employee_id={employee_id}, owner_id={owner_id}")
             query = select(Contract).where(
                 and_(
                     Contract.employee_id == employee_id,
@@ -907,8 +908,16 @@ class ContractService:
             
             result = await session.execute(query)
             contracts = result.scalars().all()
+            logger.info(f"get_employee_by_id: Found {len(contracts)} contracts")
             
             if not contracts:
+                # Проверим, есть ли вообще такой employee_id
+                check_query = select(Contract).where(Contract.employee_id == employee_id)
+                check_result = await session.execute(check_query)
+                all_contracts = check_result.scalars().all()
+                logger.warning(f"get_employee_by_id: Employee {employee_id} has {len(all_contracts)} total contracts, but none with owner {owner_id}")
+                if all_contracts:
+                    logger.warning(f"get_employee_by_id: Contract owners: {[c.owner_id for c in all_contracts]}")
                 return None
             
             # Берем первого сотрудника (все договоры с одним сотрудником)
