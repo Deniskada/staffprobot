@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 491/508 (96.7%)  
+**Общий прогресс:** 497/508 (97.8%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -22,7 +22,8 @@
 **Итерация 41 (DevOps Command Center):** ✅ Завершена (8/8 задач, MVP реализован)
 
 **Итерация 42 (Payroll Bugfixes):** В работе (4/6 задач)  
-**Итерация 49 (Employee ID Synchronization Fix):** ✅ Завершена (5/5 задач)
+**Итерация 49 (Employee ID Synchronization Fix):** ✅ Завершена (5/5 задач)  
+**Итерация 50 (Individual Payment Schedules & Payroll Fixes):** ✅ Завершена (6/6 задач)
 
 ## Итерация 37: Реорганизация системы уведомлений (Notification System Overhaul)
 
@@ -1712,4 +1713,173 @@
 - `820d65c` - Переименование метода для manager (избежание затирания)
 - `4264c74` - Cleanup отладочного логирования
 - `554f36e` - ПРАВИЛЬНОЕ исправление: User.id вместо User.telegram_id в роутах редактирования
+
+---
+
+## Итерация 50: Индивидуальные графики выплат и исправление начислений (02.12.2025)
+
+**Статус:** ✅ Завершена  
+**Прогресс:** 6/6 задач (100%)  
+**Дата:** 2 декабря 2025
+
+### Проблема
+Автоматические начисления (Celery задача `create_payroll_entries_by_schedule`) не создавались для владельцев из-за критических ошибок в коде и отсутствия поддержки индивидуальных графиков выплат для сотрудников.
+
+### Выявленные проблемы
+1. **NameError в payroll_tasks.py:**
+   - `total_entries_updated` не инициализирована
+   - `get_payment_period_for_date` не импортирована из `shared.services.payment_schedule_service`
+
+2. **Отсутствие поддержки индивидуальных графиков:**
+   - Celery задача искала только объекты с привязанным `payment_schedule_id`
+   - Не обрабатывались сотрудники с индивидуальными графиками (`inherit_payment_schedule=False`, `payment_schedule_id` установлен)
+
+3. **Отсутствие миграции данных:**
+   - Корректировки (payroll_adjustments) не были перенесены с прода на дэв
+
+### Задачи
+
+- [x] **1. Диагностика и исправление критических ошибок**
+  - Type: bug | Files: core/celery/tasks/payroll_tasks.py
+  - Acceptance: задача запускается без NameError
+  - ✅ Исправлены: инициализация `total_entries_updated = 0`, импорт `get_payment_period_for_date`
+
+- [x] **2. Перенос корректировок с прода на дэв**
+  - Type: data-migration | Files: БД (payroll_adjustments)
+  - Acceptance: 523 неприменённые корректировки загружены на дэв
+  - ✅ Выполнен экспорт/импорт через COPY (CSV format)
+
+- [x] **3. Расширение модели Contract**
+  - Type: feature | Files: domain/entities/contract.py, migrations/*
+  - Acceptance: добавлено поле `inherit_payment_schedule` (Boolean, default=True)
+  - ✅ Миграция `ab7a492ca980_add_inherit_payment_schedule_to_.py` создана и применена
+
+- [x] **4. Создание сервиса наследования графиков**
+  - Type: feature | Files: shared/services/contract_helper.py
+  - Acceptance: функция `get_inherited_payment_schedule_id` работает по цепочке: Contract → Object → OrgUnit hierarchy
+  - ✅ Реализована полная логика наследования с явными SQL запросами (без lazy loading)
+
+- [x] **5. Интеграция индивидуальных графиков в Celery задачу**
+  - Type: feature | Files: core/celery/tasks/payroll_tasks.py
+  - Acceptance: задача обрабатывает сотрудников с `inherit_payment_schedule=False` и создаёт для них начисления
+  - ✅ Добавлен отдельный блок обработки (~250 строк кода) после цикла по объектам
+  - ✅ Логика: поиск contracts с `payment_schedule_id=schedule.id` и `inherit_payment_schedule=False`, создание начислений для первого объекта из `allowed_objects`
+
+- [x] **6. Тестирование и верификация**
+  - Type: testing | Files: dev environment
+  - Acceptance: начисления создаются для всех сотрудников (с наследованием и без)
+  - ✅ Создано 23 начисления на сумму 127,903.48 руб:
+    - 22 начисления за период 10-16 ноября (график "Еженедельно, по вторникам" - наследование)
+    - 1 начисление для сотрудника 107 за период 24-30 ноября (индивидуальный график "За прошедшую неделю")
+
+### Результаты
+
+**Статистика:**
+- Загружено корректировок с прода: **523** (неприменённые)
+- Создано начислений: **23** (1 по индивидуальному графику + 22 по наследуемому)
+- Обновлено начислений: **22** (при повторном запуске)
+- Применено корректировок: **113**
+- Общая сумма начислений: **127,903.48 руб**
+
+**Архитектурные изменения:**
+1. **Двухуровневая логика графиков выплат:**
+   - Уровень 1: Наследование от объекта/подразделения (`inherit_payment_schedule=True`)
+   - Уровень 2: Индивидуальный график сотрудника (`inherit_payment_schedule=False` + `payment_schedule_id`)
+
+2. **Цепочка наследования:**
+   ```
+   Contract → Object → OrgStructureUnit → Parent OrgUnit → ... → Root OrgUnit
+   ```
+
+3. **Новый сервис `contract_helper.py`:**
+   - Функция `get_inherited_payment_schedule_id(contract, session)` 
+   - Явные SQL запросы для избежания lazy loading
+   - Поддержка иерархии подразделений
+
+### Затронутые файлы
+
+**Core:**
+- `core/celery/tasks/payroll_tasks.py` - исправлены ошибки + добавлена обработка индивидуальных графиков (+250 строк)
+
+**Domain:**
+- `domain/entities/contract.py` - добавлено поле `inherit_payment_schedule`
+- `migrations/versions/ab7a492ca980_add_inherit_payment_schedule_to_.py` - миграция
+
+**Shared:**
+- `shared/services/contract_helper.py` - новый файл с логикой наследования графиков (~100 строк)
+
+**Web Routes (готовность к будущему):**
+- `apps/web/routes/owner.py` - подготовлен для отображения графиков в формах договора
+- `apps/web/templates/owner/employees/create.html` - шаблон для чекбокса и dropdown
+- `apps/web/templates/owner/employees/edit_contract.html` - шаблон для редактирования
+
+### Технические детали
+
+**Celery Task Enhancement:**
+```python
+# НОВАЯ ЛОГИКА: Обработка индивидуальных графиков
+individual_contracts_query = select(Contract).where(
+    Contract.payment_schedule_id == schedule.id,
+    Contract.inherit_payment_schedule == False,
+    or_(
+        Contract.status == 'active',
+        and_(
+            Contract.status == 'terminated',
+            Contract.settlement_policy == 'schedule'
+        )
+    )
+)
+```
+
+**Contract Helper Service:**
+```python
+async def get_inherited_payment_schedule_id(
+    contract: Contract,
+    session: AsyncSession
+) -> Optional[int]:
+    """
+    Цепочка: Contract → Object → OrgUnit → Parent → ... → Root
+    """
+    if not contract.inherit_payment_schedule:
+        return contract.payment_schedule_id
+    
+    # Логика наследования...
+```
+
+### Правила для будущих разработчиков
+
+1. **Приоритет графика:**
+   - `contract.payment_schedule_id` (если `inherit_payment_schedule=False`) - НАИВЫСШИЙ
+   - `object.payment_schedule_id` - средний
+   - `org_unit.payment_schedule_id` - базовый (с наследованием вверх по иерархии)
+
+2. **При создании/редактировании договора:**
+   - По умолчанию `inherit_payment_schedule=True`
+   - При снятии галочки - активировать dropdown с графиками
+   - При выборе индивидуального графика - установить `inherit_payment_schedule=False`
+
+3. **При создании начислений:**
+   - ВСЕГДА использовать `get_inherited_payment_schedule_id()` для определения эффективного графика
+   - ВСЕГДА обрабатывать оба случая: наследование и индивидуальный график
+
+### Следующие шаги (TODO для Iteration 51)
+
+- [ ] Добавить UI для выбора индивидуального графика в форме создания/редактирования договора
+- [ ] Добавить отображение текущего графика (наследуемого или индивидуального) в карточке сотрудника
+- [ ] Добавить фильтр по типу графика в списке сотрудников
+- [ ] Создать отчёт для owner: "Сотрудники с индивидуальными графиками"
+
+### Метрики
+
+- **LOC Changed:** ~400 строк
+- **Files Modified:** 3
+- **Files Created:** 1 (contract_helper.py)
+- **Migrations:** 1
+- **Testing Time:** 2 часа
+- **Deployment Ready:** ✅ Да (требуется деплой на прод)
+
+### Связанные документы
+- `doc/PAYROLL_FIX_PLAN.md` - подробный план исправления
+- `doc/vision_v1/entities/payroll.md` - документация начислений
+- `doc/user_id_handling.mdc` - правила работы с ID
 

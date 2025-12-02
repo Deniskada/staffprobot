@@ -123,6 +123,71 @@
                 </div>
 
                 <div class="row">
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <div class="form-check mb-2">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="inherit_payment_schedule" 
+                                       name="inherit_payment_schedule"
+                                       {% if contract.inherit_payment_schedule %}checked{% endif %}
+                                       onchange="togglePaymentScheduleInheritance()">
+                                <label class="form-check-label" for="inherit_payment_schedule">
+                                    Наследовать график выплат от объекта
+                                    <i class="fas fa-info-circle text-muted" 
+                                       data-bs-toggle="tooltip" 
+                                       title="Цепочка наследования: Сотрудник → Объект → Подразделение → иерархия подразделений"></i>
+                                </label>
+                            </div>
+                            
+                            <div id="payment_schedule_select_container">
+                                <label for="payment_schedule_id" class="form-label">График выплат</label>
+                                <div class="input-group">
+                                    <select class="form-select" 
+                                            id="payment_schedule_id" 
+                                            name="payment_schedule_id"
+                                            {% if contract.inherit_payment_schedule %}disabled{% endif %}
+                                            onchange="updateContractScheduleActions()">
+                                        <option value="">{% if contract.inherit_payment_schedule %}Наследуется от объекта{% else %}Не выбран{% endif %}</option>
+                                        {% if payment_schedules %}
+                                            {% for schedule in payment_schedules %}
+                                            <option value="{{ schedule.id }}" 
+                                                    data-description="{{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}"
+                                                    data-is-custom="{{ 'true' if schedule.is_custom else 'false' }}"
+                                                    {% if contract.payment_schedule_id == schedule.id %}selected{% endif %}>
+                                                {{ schedule.name }}{% if schedule.is_custom %} (кастомный){% endif %}
+                                            </option>
+                                            {% endfor %}
+                                            <option value="create_new" style="font-weight: bold; color: #0d6efd;">
+                                                ➕ Создать новый график
+                                            </option>
+                                        {% endif %}
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" id="view_contract_schedule_btn" onclick="viewContractSchedule()" style="display: none;">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary" id="edit_contract_schedule_btn" onclick="editContractSchedule()" style="display: none;">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted" id="contract_schedule_description_text">
+                                    {% if contract.payment_schedule_id and not contract.inherit_payment_schedule %}
+                                    {% for schedule in payment_schedules %}
+                                    {% if schedule.id == contract.payment_schedule_id %}
+                                    {{ schedule.payment_period.get('description', '') if schedule.payment_period else '' }}
+                                    {% endif %}
+                                    {% endfor %}
+                                    {% endif %}
+                                </small>
+                                <small class="form-text text-muted d-block mt-1">
+                                    График наследуется: Объект → Подразделение → родительские подразделения
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="start_date" class="form-label">
@@ -351,5 +416,138 @@ function toggleManagerPermissions() {
         });
     }
 }
+
+// Функция для переключения наследования графика выплат
+function togglePaymentScheduleInheritance() {
+    const checkbox = document.getElementById('inherit_payment_schedule');
+    const select = document.getElementById('payment_schedule_id');
+    
+    if (checkbox.checked) {
+        select.disabled = true;
+        select.value = '';
+        select.options[0].text = 'Наследуется от объекта';
+    } else {
+        select.disabled = false;
+        select.options[0].text = 'Не выбран';
+    }
+    updateContractScheduleActions();
+}
+
+function updateContractScheduleActions() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const selectedValue = scheduleSelect.value;
+    const descEl = document.getElementById('contract_schedule_description_text');
+    const viewBtn = document.getElementById('view_contract_schedule_btn');
+    const editBtn = document.getElementById('edit_contract_schedule_btn');
+    
+    // Обработка создания нового графика
+    if (selectedValue === 'create_new') {
+        createNewContractSchedule();
+        scheduleSelect.value = '';
+        return;
+    }
+    
+    // Обновляем описание
+    if (selectedValue && selectedValue !== '') {
+        const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+        const description = selectedOption.getAttribute('data-description') || '';
+        descEl.textContent = description;
+        
+        // Показываем кнопки просмотра/редактирования
+        viewBtn.style.display = 'inline-block';
+        const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+        editBtn.style.display = isCustom ? 'inline-block' : 'none';
+    } else {
+        descEl.textContent = '';
+        viewBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+    }
+}
+
+function createNewContractSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    
+    // Инициализируем редактор если еще не создан
+    if (!window.contractPaymentScheduleEditor) {
+        window.contractPaymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
+        window.contractPaymentScheduleEditor.init();
+    }
+    
+    // Показываем модальное окно для создания нового графика
+    window.paymentScheduleEditor = window.contractPaymentScheduleEditor;
+    window.contractPaymentScheduleEditor.show();
+    
+    // Сбросить выбор на предыдущий
+    scheduleSelect.selectedIndex = 0;
+}
+
+function viewContractSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const scheduleId = scheduleSelect.value;
+    
+    if (scheduleId) {
+        window.open(`/owner/payment-schedules/${scheduleId}/view`, '_blank', 'width=800,height=600');
+    }
+}
+
+function editContractSchedule() {
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    const selectedOption = scheduleSelect.options[scheduleSelect.selectedIndex];
+    const scheduleId = scheduleSelect.value;
+    const isCustom = selectedOption.getAttribute('data-is-custom') === 'true';
+    
+    if (!isCustom) {
+        alert('Можно редактировать только кастомные графики');
+        return;
+    }
+    
+    // Инициализируем редактор если еще не создан
+    if (!window.contractPaymentScheduleEditor) {
+        window.contractPaymentScheduleEditor = new PaymentScheduleEditor('paymentScheduleModal', null);
+        window.contractPaymentScheduleEditor.init();
+    }
+    
+    // Загрузить данные графика для редактирования
+    window.paymentScheduleEditor = window.contractPaymentScheduleEditor;
+    window.contractPaymentScheduleEditor.loadSchedule(scheduleId);
+    window.contractPaymentScheduleEditor.show();
+}
+
+// Отслеживаем изменение выбора объектов (если есть)
+document.addEventListener('DOMContentLoaded', function() {
+    const objectCheckboxes = document.querySelectorAll('input[name="allowed_objects"]');
+    
+    if (objectCheckboxes) {
+        objectCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                updatePaymentScheduleInheritance();
+            });
+        });
+    }
+    
+    // Инициализация при загрузке
+    updateContractScheduleActions();
+});
+
+function updatePaymentScheduleInheritance() {
+    const objectCheckboxes = document.querySelectorAll('input[name="allowed_objects"]:checked');
+    const inheritCheckbox = document.getElementById('inherit_payment_schedule');
+    const scheduleSelect = document.getElementById('payment_schedule_id');
+    
+    if (objectCheckboxes.length > 1) {
+        // Более 1 объекта - снять чекбокс, активировать select
+        inheritCheckbox.checked = false;
+        scheduleSelect.disabled = false;
+        scheduleSelect.options[0].text = 'Не выбран';
+        updateContractScheduleActions();
+    }
+}
 </script>
+
+<!-- Подключение редактора графиков выплат -->
+<script src="{{ 'js/shared/payment_schedule_editor.js' | static_version }}"></script>
+
+<!-- Модальное окно редактора графиков -->
+{% include 'shared/payment_schedule_editor_modal.html' %}
+
 {% endblock %}

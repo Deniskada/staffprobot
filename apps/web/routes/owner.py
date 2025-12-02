@@ -6050,6 +6050,17 @@ async def owner_employees_create_form(
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(internal_user_id)
         
+        # Получаем графики выплат (системные + кастомные владельца)
+        from domain.entities.payment_schedule import PaymentSchedule
+        schedules_query = select(PaymentSchedule).where(
+            PaymentSchedule.is_active == True
+        ).where(
+            (PaymentSchedule.owner_id == None) |  # Системные
+            (PaymentSchedule.owner_id == internal_user_id)  # Кастомные владельца
+        ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
+        schedules_result = await db.execute(schedules_query)
+        payment_schedules = schedules_result.scalars().all()
+        
         return templates.TemplateResponse(
             "owner/employees/create.html",
             {
@@ -6063,7 +6074,8 @@ async def owner_employees_create_form(
                 "available_interfaces": available_interfaces,
                 "owner_tags": owner_tags,
                 "current_date": current_date,
-                "employee_telegram_id": employee_telegram_id
+                "employee_telegram_id": employee_telegram_id,
+                "payment_schedules": payment_schedules  # Графики выплат
             }
         )
     except Exception as e:
@@ -6250,6 +6262,8 @@ async def owner_employees_create_contract(
     phone: Optional[str] = Form(None),
     email: Optional[str] = Form(None),
     birth_date: Optional[str] = Form(None),
+    inherit_payment_schedule: bool = Form(True),
+    payment_schedule_id: Optional[int] = Form(None),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -6357,7 +6371,9 @@ async def owner_employees_create_contract(
             "allowed_objects": allowed_objects,
             "is_manager": is_manager,
             "manager_permissions": manager_permissions_dict if manager_permissions_dict else None,
-            "values": dynamic_values if dynamic_values else None
+            "values": dynamic_values if dynamic_values else None,
+            "inherit_payment_schedule": inherit_payment_schedule,
+            "payment_schedule_id": payment_schedule_id
         }
         
         contract = await contract_service.create_contract(current_user["id"], contract_data)
@@ -6468,6 +6484,17 @@ async def owner_contract_edit_form(
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(internal_user_id)
         
+        # Получаем графики выплат (системные + кастомные владельца)
+        from domain.entities.payment_schedule import PaymentSchedule
+        schedules_query = select(PaymentSchedule).where(
+            PaymentSchedule.is_active == True
+        ).where(
+            (PaymentSchedule.owner_id == None) |  # Системные
+            (PaymentSchedule.owner_id == internal_user_id)  # Кастомные владельца
+        ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
+        schedules_result = await db.execute(schedules_query)
+        payment_schedules = schedules_result.scalars().all()
+        
         return templates.TemplateResponse(
             "owner/employees/edit_contract.html",
             {
@@ -6479,7 +6506,8 @@ async def owner_contract_edit_form(
                 "available_interfaces": available_interfaces,
                 "owner_tags": owner_tags,
                 "title": f"Редактирование договора {contract.get('title', 'Без названия')}",
-                "current_user": current_user
+                "current_user": current_user,
+                "payment_schedules": payment_schedules  # Графики выплат
             }
         )
     except HTTPException:
@@ -6505,6 +6533,8 @@ async def owner_contract_edit(
     allowed_objects: List[int] = Form(default=[]),
     is_manager: bool = Form(False),
     manager_permissions: List[str] = Form(default=[]),
+    inherit_payment_schedule: bool = Form(True),
+    payment_schedule_id: Optional[int] = Form(None),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -6548,7 +6578,9 @@ async def owner_contract_edit(
             "allowed_objects": allowed_objects,
             "is_manager": is_manager,
             "manager_permissions": manager_permissions_dict if manager_permissions_dict else None,
-            "values": dynamic_values if dynamic_values else None
+            "values": dynamic_values if dynamic_values else None,
+            "inherit_payment_schedule": inherit_payment_schedule,
+            "payment_schedule_id": payment_schedule_id
         }
         
         # Получаем внутренний ID пользователя

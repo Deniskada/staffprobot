@@ -138,8 +138,24 @@ async def create_contract_form(
             'current_year': str(datetime.now().year)
         })
     
+    # Получаем доступные графики выплат (системные + кастомные владельца)
+    from domain.entities.payment_schedule import PaymentSchedule
+    async with get_async_session() as session_schedules:
+        # Получаем внутренний ID владельца (уже есть в session выше)
+        owner_internal_id = internal_user_id if user_role == "owner" else user_obj.id
+        
+        # Фильтруем графики (системные + свои кастомные)
+        schedules_query = select(PaymentSchedule).where(
+            PaymentSchedule.is_active == True
+        ).where(
+            (PaymentSchedule.owner_id == None) |  # Системные
+            (PaymentSchedule.owner_id == owner_internal_id)  # Кастомные владельца
+        ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
+        schedules_result = await session_schedules.execute(schedules_query)
+        payment_schedules = schedules_result.scalars().all()
+    
     return templates.TemplateResponse(
-        "employees/create.html",
+        "owner/employees/create.html",
         {
             "request": request,
             "title": "Создание договора",
@@ -150,7 +166,8 @@ async def create_contract_form(
             "templates_json": templates_json,  # Добавляем JSON данные для JavaScript
             "current_date": current_date,
             "employee_telegram_id": employee_telegram_id,
-            "owner_tags": owner_tags  # Теги владельца для JavaScript
+            "owner_tags": owner_tags,  # Теги владельца для JavaScript
+            "payment_schedules": payment_schedules  # Графики выплат
         }
     )
 
@@ -165,7 +182,9 @@ async def create_contract(
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
-    allowed_objects: List[int] = Form(default=[])
+    allowed_objects: List[int] = Form(default=[]),
+    inherit_payment_schedule: Optional[bool] = Form(False),
+    payment_schedule_id: Optional[int] = Form(None)
 ):
     """Создание договора с сотрудником."""
     # Проверяем авторизацию
@@ -233,7 +252,9 @@ async def create_contract(
             "end_date": end_date_obj,
             "template_id": template_id,
             "allowed_objects": allowed_objects,
-            "values": dynamic_values if dynamic_values else None
+            "values": dynamic_values if dynamic_values else None,
+            "inherit_payment_schedule": inherit_payment_schedule,
+            "payment_schedule_id": payment_schedule_id
         }
         
         contract = await contract_service.create_contract(owner_telegram_id, contract_data)
@@ -322,15 +343,35 @@ async def edit_contract_form(request: Request, contract_id: int):
     objects = await contract_service.get_owner_objects(current_user["id"])
     templates_list = await contract_service.get_contract_templates()
     
+    # Получаем доступные графики выплат (системные + кастомные владельца)
+    from domain.entities.payment_schedule import PaymentSchedule
+    async with get_async_session() as session_schedules:
+        # Получаем внутренний ID владельца
+        user_query = select(User).where(User.telegram_id == current_user["id"])
+        user_result = await session_schedules.execute(user_query)
+        user_obj = user_result.scalar_one_or_none()
+        owner_internal_id = user_obj.id if user_obj else None
+        
+        # Фильтруем графики (системные + свои кастомные)
+        schedules_query = select(PaymentSchedule).where(
+            PaymentSchedule.is_active == True
+        ).where(
+            (PaymentSchedule.owner_id == None) |  # Системные
+            (PaymentSchedule.owner_id == owner_internal_id)  # Кастомные владельца
+        ).order_by(PaymentSchedule.is_custom.asc(), PaymentSchedule.id.asc())
+        schedules_result = await session_schedules.execute(schedules_query)
+        payment_schedules = schedules_result.scalars().all()
+    
     return templates.TemplateResponse(
-        "employees/edit_contract.html",
+        "owner/employees/edit_contract.html",
         {
             "request": request,
             "contract": contract,
             "objects": objects,
             "templates": templates_list,
             "title": "Редактирование договора",
-            "current_user": current_user
+            "current_user": current_user,
+            "payment_schedules": payment_schedules  # Графики выплат
         }
     )
 
@@ -346,7 +387,9 @@ async def update_contract(
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
     template_id: Optional[int] = Form(None),
-    allowed_objects: List[int] = Form(default=[])
+    allowed_objects: List[int] = Form(default=[]),
+    inherit_payment_schedule: Optional[bool] = Form(False),
+    payment_schedule_id: Optional[int] = Form(None)
 ):
     """Обновление договора (каноничный endpoint)."""
     # Проверяем авторизацию
@@ -372,7 +415,9 @@ async def update_contract(
             "start_date": start_date_obj,
             "end_date": end_date_obj,
             "template_id": template_id,
-            "allowed_objects": allowed_objects
+            "allowed_objects": allowed_objects,
+            "inherit_payment_schedule": inherit_payment_schedule,
+            "payment_schedule_id": payment_schedule_id
         }
         
         success = await contract_service.update_contract_by_telegram_id(

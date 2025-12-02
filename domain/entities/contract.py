@@ -49,6 +49,7 @@ class Contract(Base):
     payment_system_id = Column(Integer, ForeignKey("payment_systems.id", ondelete="SET NULL"), nullable=True, index=True)
     use_contract_payment_system = Column(Boolean, default=False, nullable=False, index=True)  # Приоритет системы оплаты договора
     payment_schedule_id = Column(Integer, ForeignKey("payment_schedules.id", ondelete="SET NULL"), nullable=True, index=True)
+    inherit_payment_schedule = Column(Boolean, default=True, nullable=False)  # Наследовать график выплат от подразделения
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=True)  # None = бессрочный
     
