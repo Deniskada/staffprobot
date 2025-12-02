@@ -64,14 +64,24 @@ async def get_payment_period_for_date(
         if payments:
             matching_payment = None
             for payment in payments:
-                next_payment_str = payment.get("next_payment_date")
-                if not next_payment_str:
-                    continue
-                try:
-                    next_payment = date.fromisoformat(next_payment_str)
-                except (ValueError, TypeError):
-                    continue
-                if next_payment == target_date:
+                # Определить день выплаты для этого payment
+                if payment.get("is_start_of_month", False):
+                    # Первая выплата - используем payment_day из графика
+                    payment_day_of_month = schedule.payment_day
+                else:
+                    # Остальные выплаты - извлекаем день из next_payment_date
+                    next_payment_str = payment.get("next_payment_date")
+                    if next_payment_str:
+                        try:
+                            next_payment = date.fromisoformat(next_payment_str)
+                            payment_day_of_month = next_payment.day
+                        except (ValueError, TypeError):
+                            continue
+                    else:
+                        continue
+                
+                # Проверяем день месяца вместо точной даты
+                if target_date.day == payment_day_of_month:
                     matching_payment = payment
                     break
 
@@ -80,16 +90,45 @@ async def get_payment_period_for_date(
 
             start_offset = matching_payment.get("start_offset", 0)
             end_offset = matching_payment.get("end_offset", 0)
+            is_end_of_month = matching_payment.get("is_end_of_month", False)
 
-            period_start = target_date + timedelta(days=start_offset)
-            period_end = target_date + timedelta(days=end_offset)
-
-            if matching_payment.get("is_end_of_month", False):
-                if period_end.month == 12:
-                    next_month_start = date(period_end.year + 1, 1, 1)
+            if is_end_of_month:
+                # Для is_end_of_month период охватывает вторую половину предыдущего месяца
+                # Нужно найти день окончания первой выплаты из первого payment
+                
+                # Находим предыдущий месяц относительно target_date
+                if target_date.month == 1:
+                    prev_month = 12
+                    prev_year = target_date.year - 1
                 else:
-                    next_month_start = date(period_end.year, period_end.month + 1, 1)
+                    prev_month = target_date.month - 1
+                    prev_year = target_date.year
+                
+                # Последний день предыдущего месяца
+                if prev_month == 12:
+                    next_month_start = date(prev_year + 1, 1, 1)
+                else:
+                    next_month_start = date(prev_year, prev_month + 1, 1)
                 period_end = next_month_start - timedelta(days=1)
+                
+                # Найти первую выплату чтобы определить день окончания первого периода
+                first_payment_end_day = None
+                for p in payments:
+                    if p.get("is_start_of_month", False):
+                        # Первая выплата: payment_day + end_offset = день окончания
+                        # Например: 25 + (-10) = 15
+                        first_payment_end_day = schedule.payment_day + p.get("end_offset", 0)
+                        break
+                
+                if first_payment_end_day:
+                    # period_start = день после окончания первого периода
+                    period_start = date(prev_year, prev_month, first_payment_end_day + 1)
+                else:
+                    # Fallback: используем стандартный расчёт
+                    period_start = target_date + timedelta(days=start_offset)
+            else:
+                period_start = target_date + timedelta(days=start_offset)
+                period_end = target_date + timedelta(days=end_offset)
 
             return {"period_start": period_start, "period_end": period_end}
 
