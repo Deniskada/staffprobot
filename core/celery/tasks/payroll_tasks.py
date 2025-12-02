@@ -18,6 +18,7 @@ from domain.entities.payroll_entry import PayrollEntry
 from domain.entities.payroll_adjustment import PayrollAdjustment
 from domain.entities.org_structure import OrgStructureUnit
 from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+from shared.services.payment_schedule_service import get_payment_period_for_date
 
 
 @celery_app.task(name="create_payroll_entries_by_schedule")
@@ -60,6 +61,7 @@ def create_payroll_entries_by_schedule(target_date: str = None):
                 logger.info(f"Found {len(schedules)} active payment schedules to check")
                 
                 total_entries_created = 0
+                total_entries_updated = 0
                 total_adjustments_applied = 0
                 errors = []
                 
@@ -462,6 +464,7 @@ def create_payroll_entries_by_schedule(target_date: str = None):
                 logger.info(
                     f"Payroll entries creation completed",
                     entries_created=total_entries_created,
+                    entries_updated=total_entries_updated,
                     adjustments_applied=total_adjustments_applied,
                     errors_count=len(errors)
                 )
@@ -470,6 +473,7 @@ def create_payroll_entries_by_schedule(target_date: str = None):
                     'success': True,
                     'date': today.isoformat(),
                     'entries_created': total_entries_created,
+                    'entries_updated': total_entries_updated,
                     'adjustments_applied': total_adjustments_applied,
                     'errors': errors
                 }
