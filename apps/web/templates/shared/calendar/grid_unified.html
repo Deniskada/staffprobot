@@ -6,7 +6,7 @@
         <div class="calendar-navigation">
             <div class="nav-group">
                 <!-- Легенда слева -->
-                <div class="legend-left">
+                <div class="legend-left d-none d-md-block">
                     <div class="calendar-legend" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size: 0.875rem;">
                         <div style="display:flex; align-items:center; gap:4px;">
                             <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#e8f5e9; border:1px solid #43a047;"></span>
@@ -28,7 +28,7 @@
                 </div>
                 
                 <!-- Переключатель месяцев в центре -->
-                <div class="month-selector">
+                <div class="month-selector d-none d-md-block">
                     <div class="month-picker">
                         <div class="month-display" id="monthDisplay" style="background: #6c757d; padding: 8px 16px; font-size: 14px; box-shadow: none;">
                             <span class="month-name" id="monthName">{{ calendar_title or 'Календарь' }}</span>
@@ -64,7 +64,7 @@
                     </div>
                 </div>
             </div>
-            <div class="nav-actions">
+            <div class="nav-actions d-none d-md-flex">
                 {% if org_units and org_units|length > 0 and current_user.role != 'employee' %}
                 <div class="form-group mb-0 me-2" style="min-width: 180px;">
                     <select class="form-select form-select-sm" id="orgUnitFilter" onchange="filterByOrgUnit()">
@@ -92,11 +92,33 @@
                 {% endif %}
                 
                 {% if show_today_button %}
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="goToToday()">
+                <button type="button" class="btn btn-sm btn-outline-primary d-none d-md-inline-block" onclick="goToToday()">
                     <i class="bi bi-calendar-today"></i> Сегодня
                 </button>
                 {% endif %}
             </div>
+            
+            <!-- Мобильная навигация (только для дневного вида) -->
+            <div class="mobile-day-navigation d-md-none" id="mobileDayNavigation" style="display: none;">
+                <div class="mobile-nav-row">
+                    <button type="button" class="btn btn-sm btn-outline-secondary mobile-nav-btn" id="prevDayBtn" title="Предыдущий день">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary mobile-nav-today" id="todayBtn">
+                        Сегодня
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mobile-nav-btn" id="nextDayBtn" title="Следующий день">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <input type="date" class="form-control form-control-sm mobile-date-input" id="mobileDateInput" />
+                    <button type="button" class="btn btn-sm btn-outline-primary mobile-filters-btn" id="mobileFiltersBtn" title="Фильтры">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Чипсы выбранных фильтров (мобильные) -->
+            <div class="mobile-filter-chips" id="mobileFilterChips" style="display: none;"></div>
         </div>
 
         <!-- Заголовки дней недели (фиксированные) -->
@@ -115,6 +137,51 @@
     <div class="calendar-scrollable">
         <div class="calendar-grid" id="calendarGrid">
             <!-- Calendar days will be created by JavaScript -->
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно фильтров (мобильные) - вне calendar-wrapper для правильного z-index -->
+<div class="modal fade" id="mobileFiltersModal" tabindex="-1" aria-labelledby="mobileFiltersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mobileFiltersModalLabel">Фильтры</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                {% if org_units and org_units|length > 0 and current_user.role != 'employee' %}
+                <div class="mb-3">
+                    <label for="mobileOrgUnitFilter" class="form-label">Подразделение</label>
+                    <select class="form-select" id="mobileOrgUnitFilter">
+                        <option value="">Все подразделения</option>
+                        {% for unit in org_units %}
+                        <option value="{{ unit.id }}" {% if unit.id == selected_org_unit_id %}selected{% endif %} style="padding-left: {{ unit.level * 12 }}px;">
+                            {{ unit.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                {% if objects and objects|length > 1 %}
+                <div class="mb-3">
+                    <label for="mobileObjectFilter" class="form-label">Объект</label>
+                    <select class="form-select" id="mobileObjectFilter">
+                        <option value="">Все объекты</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" data-org-unit="{{ obj.org_unit_id or '' }}" {% if obj.id == selected_object_id %}selected{% endif %}>
+                            {{ obj.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="mobileFiltersReset">Сбросить</button>
+                <button type="button" class="btn btn-primary" id="mobileFiltersApply">Применить</button>
+            </div>
         </div>
     </div>
 </div>
@@ -464,9 +531,11 @@ window.unifiedCalendar = {
         if (typeof shift.schedule_id !== 'undefined' && shift.schedule_id !== null) {
             element.setAttribute('data-schedule-id', shift.schedule_id);
         }
-        element.onclick = () => {
+        element.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
             if (window.universalCalendar && window.universalCalendar.onShiftClick) {
-                window.universalCalendar.onShiftClick(shift.id);
+                window.universalCalendar.onShiftClick(shift.id, event);
             } else {
                 showShiftDetails(shift.id);
             }

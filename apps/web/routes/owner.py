@@ -2525,11 +2525,30 @@ async def owner_calendar_api_data(
             object_filter=object_filter
         )
         
+        # Логируем, сколько тайм-слотов пришло из CalendarFilterService
+        logger.info(f"Owner calendar API: received {len(calendar_data.timeslots)} timeslots from CalendarFilterService")
+        for ts in calendar_data.timeslots[:5]:  # Первые 5 для примера
+            logger.info(f"  - Timeslot {ts.id}: date={ts.date}, status={ts.status}, start_time={ts.start_time}")
+        
         # Преобразуем в формат, совместимый с существующим JavaScript
+        # Для мобильного дневного вида показываем все тайм-слоты, включая свободные
         timeslots_data = []
+        now = datetime.now()
+        hidden_count = 0
+        skipped_count = 0
         for ts in calendar_data.timeslots:
+            # Пропускаем только тайм-слоты в прошлом со статусом HIDDEN
+            # Для будущих дней показываем все тайм-слоты, включая свободные
             if ts.status == TimeslotStatus.HIDDEN:
-                continue
+                hidden_count += 1
+                # Проверяем, не в прошлом ли тайм-слот
+                slot_datetime = datetime.combine(ts.date, ts.start_time)
+                if slot_datetime < now:
+                    skipped_count += 1
+                    continue  # Пропускаем только тайм-слоты в прошлом
+                # Для будущих дней меняем статус на AVAILABLE, чтобы они отображались
+                ts.status = TimeslotStatus.AVAILABLE
+                ts.status_label = "Свободно"
             timeslots_data.append({
                 "id": ts.id,
                 "object_id": ts.object_id,
@@ -2555,6 +2574,8 @@ async def owner_calendar_api_data(
                 "can_plan": ts.can_plan,
                 "can_view": ts.can_view
             })
+        
+        logger.info(f"Owner calendar API: processed {len(timeslots_data)} timeslots (hidden: {hidden_count}, skipped: {skipped_count})")
         
         shifts_data = []
         for s in calendar_data.shifts:

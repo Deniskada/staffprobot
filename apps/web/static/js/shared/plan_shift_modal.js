@@ -10,6 +10,7 @@
     lockedEmployeeId: null,
     lockedEmployeeName: null,
     lockEmployeeSelection: false,
+    scheduleId: null,  // ID запланированной смены для режима редактирования
     notify: (message, type = 'info') => {
       if (type === 'error') {
         window.alert(message);
@@ -533,9 +534,6 @@
         <div class="scheduler-static-wrapper" id="schedulerSummaryWrapper"></div>
       </div>
       <div id="schedulerExistingSummary" class="mt-3"></div>
-      <div class="mt-2 text-muted" style="font-size: 12px;">
-        Бегунки прилипают к границам тайм-слота, уже запланированных смен и шагу ${SNAP_INTERVAL_MINUTES} минут.
-      </div>
     `;
 
     const trackElement = document.getElementById('schedulerTrack');
@@ -1023,10 +1021,10 @@
               </div>
               <div class="modal-body">
                 <div class="mb-3">
-                  <div class="alert alert-secondary mb-3">
-                    <div><strong>Дата:</strong> ${slotDate || '—'}</div>
-                    <div><strong>Время:</strong> ${timeRange || '—'}</div>
-                    <div><strong>Объект:</strong> ${objectName || '—'}</div>
+                  <div class="d-flex flex-wrap gap-2 mb-3" style="gap: 0.5rem;">
+                    <span class="badge bg-secondary">${slotDate || '—'}</span>
+                    <span class="badge bg-secondary">${timeRange || '—'}</span>
+                    <span class="badge bg-secondary">${objectName || '—'}</span>
                   </div>
                   <label for="employeeSelectModal" class="form-label">Выберите сотрудника *</label>
                   <select class="form-select" id="employeeSelectModal" required>
@@ -1057,6 +1055,25 @@
       if (!modalElement || !confirmButton) {
         notify('Не удалось открыть окно', 'error');
         return;
+      }
+      
+      // Определяем, есть ли запланированная смена для редактирования
+      const scheduleId = activeConfig.scheduleId;
+      const isEditMode = scheduleId !== null && scheduleId !== undefined;
+      
+      // Изменяем заголовок и текст кнопки для режима редактирования
+      const modalTitle = modalElement.querySelector('.modal-title');
+      if (modalTitle) {
+        modalTitle.innerHTML = isEditMode 
+          ? '<i class="bi bi-pencil"></i> Изменить запланированную смену'
+          : '<i class="bi bi-person-plus"></i> Добавить сотрудника в тайм-слот';
+      }
+      
+      // Изменяем текст кнопки
+      if (isEditMode) {
+        confirmButton.innerHTML = '<i class="bi bi-check-lg"></i> Изменить';
+      } else {
+        confirmButton.innerHTML = '<i class="bi bi-check-lg"></i> Добавить';
       }
 
       modalElement.dataset.selectedStart = startValue;
@@ -1222,13 +1239,36 @@
           modalInstance.hide();
           notify(result?.message || 'Смена успешно запланирована', 'success');
 
+          // Извлекаем дату планирования из ответа или из формы
+          let plannedDate = null;
+          if (result && result.shift && result.shift.planned_start) {
+            plannedDate = new Date(result.shift.planned_start);
+          } else if (result && result.planned_date) {
+            plannedDate = new Date(result.planned_date);
+          } else {
+            // Пытаемся извлечь из формы
+            const dateInput = modalElement.querySelector('input[name="date"]');
+            const startTimeInput = modalElement.querySelector('input[name="start_time"]');
+            if (dateInput && startTimeInput) {
+              const dateStr = dateInput.value;
+              const timeStr = startTimeInput.value;
+              if (dateStr && timeStr) {
+                plannedDate = new Date(`${dateStr}T${timeStr}`);
+              }
+            }
+          }
+          
           if (activeConfig.onSuccess) {
-            activeConfig.onSuccess({ message: result?.message, raw: result });
+            activeConfig.onSuccess({ 
+              message: result?.message, 
+              raw: result,
+              plannedDate: plannedDate
+            });
           }
           if (activeConfig.refreshCalendar) {
-            activeConfig.refreshCalendar();
+            activeConfig.refreshCalendar(plannedDate);
           } else if (window.universalCalendar && typeof window.universalCalendar.refresh === 'function') {
-            window.universalCalendar.refresh();
+            window.universalCalendar.refresh(plannedDate);
           }
         } catch (error) {
           notify(error.message || 'Ошибка планирования смены', 'error');
@@ -1237,7 +1277,11 @@
           }
         } finally {
           confirmButton.removeAttribute('disabled');
-          confirmButton.innerHTML = '<i class="bi bi-check-lg"></i> Добавить';
+          // Восстанавливаем текст кнопки в зависимости от режима
+          const isEditMode = activeConfig.scheduleId !== null && activeConfig.scheduleId !== undefined;
+          confirmButton.innerHTML = isEditMode 
+            ? '<i class="bi bi-check-lg"></i> Изменить'
+            : '<i class="bi bi-check-lg"></i> Добавить';
         }
       });
 

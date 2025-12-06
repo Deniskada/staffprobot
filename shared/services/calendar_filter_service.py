@@ -540,13 +540,12 @@ class CalendarFilterService:
                 capacity_minutes = slot_duration_minutes * max_employees
                 now_local = now_utc.astimezone(tz)
 
+                # Для тайм-слотов, которые уже начались, помечаем как HIDDEN, но НЕ пропускаем
+                # чтобы они все равно попали в результат для обработки
                 if slot_start_local <= now_local:
                     timeslot.status = TimeslotStatus.HIDDEN
                     timeslot.status_label = ""
-                    timeslot.free_minutes = 0.0
-                    timeslot.occupied_minutes = 0.0
-                    timeslot.occupancy_ratio = 0.0
-                    continue
+                    # Не пропускаем, продолжаем обработку, чтобы тайм-слот попал в результат
 
                 direct_shifts = shifts_by_timeslot.get(timeslot.id, [])
                 fallback_candidates = fallback_shifts_by_object.get(timeslot.object_id, [])
@@ -652,6 +651,7 @@ class CalendarFilterService:
                 timeslot.available_slots = max(0, max_employees - max_concurrency)
 
                 slot_in_past = slot_end_local <= now_local
+                slot_in_future = slot_start_local > now_local
 
                 if capacity_minutes > 0 and free_minutes <= 29:
                     timeslot.status = TimeslotStatus.FULLY_FILLED
@@ -663,7 +663,9 @@ class CalendarFilterService:
                     timeslot.status = TimeslotStatus.AVAILABLE
                     timeslot.status_label = "Свободно"
 
-                if slot_in_past and occupancy_ratio < 0.999:
+                # Помечаем как HIDDEN только тайм-слоты в прошлом, которые не полностью заполнены
+                # Для будущих дней показываем все тайм-слоты, включая свободные
+                if slot_in_past and occupancy_ratio < 0.999 and not slot_in_future:
                     timeslot.status = TimeslotStatus.HIDDEN
 
                 formatted_free = self._format_minutes(timeslot.free_minutes) if timeslot.free_minutes > 0 else "0 м"
