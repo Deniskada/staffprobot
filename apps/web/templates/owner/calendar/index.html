@@ -113,19 +113,201 @@ footer {
         // Создаем экземпляр универсального календаря
         if (typeof UniversalCalendarManager !== 'undefined') {
             window.universalCalendar = new UniversalCalendarManager({
-                currentDate: new Date({{ year }}, {{ month - 1 }}, 1),
+                currentDate: new Date(), // Позиционируемся на текущую дату
                 viewType: 'month',
                 baseUrl: '/owner/calendar',
                 userRole: 'owner',
                 apiEndpoint: '/owner/calendar/api/data',
                 onShiftClick: function(shiftId, event) {
-                    console.log('Shift clicked:', shiftId);
+                    console.log('Shift clicked:', shiftId, 'event:', event, 'isMobile:', window.universalCalendar?.isMobile, 'shiftKey:', event?.shiftKey);
+                    
+                    // Проверяем, является ли устройство мобильным
+                    const isMobile = window.universalCalendar && window.universalCalendar.isMobile;
+                    console.log('isMobile check:', isMobile, 'event.shiftKey:', event?.shiftKey, 'condition:', isMobile || (event && event.shiftKey));
+                    
                     if (shiftId.toString().startsWith('schedule_')) {
                         const scheduleId = shiftId.toString().replace('schedule_', '');
-                        if (event && event.shiftKey) {
-                            window.location.href = `/owner/shifts/${scheduleId}?shift_type=schedule`;
-                            return;
+                        
+                        // Для мобильного вида при простом клике открываем модалку одиночного планирования
+                        // Для полного календаря только с зажатым Shift открываем модалку одиночного планирования
+                        if (isMobile || (event && event.shiftKey)) {
+                            console.log('Opening modal for shift:', shiftId);
+                            // Предотвращаем всплытие события
+                            if (event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                            }
+                            
+                            // Получаем данные смены из календаря
+                            // Ищем в разных местах: shifts, shiftsByDate, и в универсальном календаре
+                            let shift = window.calendarData?.shifts?.find(s => s.id === shiftId);
+                            if (!shift && window.universalCalendar?.calendarData) {
+                                shift = window.universalCalendar.calendarData.shifts?.find(s => s.id === shiftId);
+                            }
+                            // Если не нашли, ищем по schedule_id
+                            if (!shift && window.calendarData?.shifts) {
+                                const scheduleIdNum = parseInt(scheduleId);
+                                shift = window.calendarData.shifts.find(s => 
+                                    s.schedule_id === scheduleIdNum || 
+                                    s.id === `schedule_${scheduleIdNum}` ||
+                                    s.id === scheduleIdNum
+                                );
+                            }
+                            console.log('Found shift:', shift, 'time_slot_id:', shift?.time_slot_id, 'searching for:', shiftId);
+                            
+                            if (shift && window.PlanShiftModal) {
+                                // Открываем модалку с данными смены - используем ту же модалку, что и для тайм-слотов
+                                const timeslotId = shift.time_slot_id;
+                                console.log('timeslotId:', timeslotId);
+                                
+                                // Если timeslotId найден, проверяем его существование
+                                if (timeslotId && window.PlanShiftModal.open) {
+                                    console.log('Opening modal with timeslotId:', timeslotId);
+                                    
+                                    // Проверяем, существует ли тайм-слот в данных календаря
+                                    let finalTimeslotId = timeslotId;
+                                    const timeslotExists = window.calendarData?.timeslots?.some(ts => ts.id == timeslotId);
+                                    
+                                    if (!timeslotExists) {
+                                        console.log('Timeslot not found in calendar data, trying to find by object_id and date');
+                                        // Если тайм-слот не найден, ищем по object_id и дате
+                                        if (shift.object_id && shift.planned_start) {
+                                            const shiftDate = shift.planned_start.split('T')[0];
+                                            
+                                            // Ищем в данных календаря
+                                            let timeslot = window.calendarData?.timeslots?.find(ts => 
+                                                ts.object_id == shift.object_id && 
+                                                ts.date === shiftDate
+                                            );
+                                            
+                                            if (timeslot) {
+                                                console.log('Found timeslot by object_id and date in calendar data:', timeslot.id);
+                                                finalTimeslotId = timeslot.id;
+                                            } else {
+                                                // Если не нашли в данных календаря, запрашиваем через API
+                                                console.log('Timeslot not in calendar data, fetching from API for object_id:', shift.object_id, 'date:', shiftDate);
+                                                fetch(`/owner/calendar/api/data?start_date=${shiftDate}&end_date=${shiftDate}&object_ids=${shift.object_id}`)
+                                                    .then(response => response.json())
+                                                    .then(data => {
+                                                        if (data.timeslots && data.timeslots.length > 0) {
+                                                            // Берем первый тайм-слот для этого объекта и даты
+                                                            const foundTimeslot = data.timeslots[0];
+                                                            console.log('Found timeslot from API:', foundTimeslot.id);
+                                                            
+                                                            // Обновляем calendarData
+                                                            if (!window.calendarData) {
+                                                                window.calendarData = {};
+                                                            }
+                                                            if (!window.calendarData.timeslots) {
+                                                                window.calendarData.timeslots = [];
+                                                            }
+                                                            if (!window.calendarData.timeslots.find(ts => ts.id == foundTimeslot.id)) {
+                                                                window.calendarData.timeslots.push(foundTimeslot);
+                                                            }
+                                                            
+                                                            // Предзаполняем сотрудника и передаем schedule_id для редактирования
+                                                            const employeeId = shift.user_id || shift.employee_id;
+                                                            const shiftScheduleId = shift.schedule_id || parseInt(scheduleId);
+                                                            
+                                                            if (employeeId) {
+                                                                window.PlanShiftModal.configure({
+                                                                    preselectedEmployeeId: employeeId,
+                                                                    scheduleId: shiftScheduleId
+                                                                });
+                                                            } else {
+                                                                window.PlanShiftModal.configure({
+                                                                    scheduleId: shiftScheduleId
+                                                                });
+                                                            }
+                                                            
+                                                            // Открываем модалку
+                                                            window.PlanShiftModal.open(foundTimeslot.id);
+                                                        } else {
+                                                            console.error('No timeslots found in API response');
+                                                            notifyCalendar('Тайм-слот не найден для этого объекта и даты', 'error');
+                                                        }
+                                                    })
+                                                    .catch(error => {
+                                                        console.error('Error fetching timeslot from API:', error);
+                                                        notifyCalendar('Ошибка загрузки тайм-слота', 'error');
+                                                    });
+                                                return; // Выходим, так как открытие модалки будет в then
+                                            }
+                                        } else {
+                                            console.error('Cannot find timeslot: missing object_id or planned_start');
+                                            notifyCalendar('Не удалось определить тайм-слот для этой смены', 'error');
+                                            return;
+                                        }
+                                    }
+                                    
+                                    // Предзаполняем сотрудника и передаем schedule_id для редактирования
+                                    const employeeId = shift.user_id || shift.employee_id;
+                                    const shiftScheduleId = shift.schedule_id || parseInt(scheduleId);
+                                    
+                                    if (employeeId) {
+                                        window.PlanShiftModal.configure({
+                                            preselectedEmployeeId: employeeId,
+                                            scheduleId: shiftScheduleId  // Передаем schedule_id для режима редактирования
+                                        });
+                                    } else {
+                                        window.PlanShiftModal.configure({
+                                            scheduleId: shiftScheduleId
+                                        });
+                                    }
+                                    // Открываем модалку для тайм-слота (та же, что и при клике на свободный тайм-слот)
+                                    window.PlanShiftModal.open(finalTimeslotId);
+                                    return;
+                                }
+                                
+                                // Если timeslotId не найден, пытаемся получить его из API
+                                fetch(`/owner/shifts/api/schedule/${scheduleId}/object-id`)
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        // Пытаемся найти тайм-слот по object_id и дате смены
+                                        if (data.object_id && shift.planned_start) {
+                                            const shiftDate = shift.planned_start.split('T')[0];
+                                            // Ищем тайм-слоты для этого объекта и даты
+                                            if (window.calendarData && window.calendarData.timeslots) {
+                                                const timeslot = window.calendarData.timeslots.find(ts => 
+                                                    ts.object_id == data.object_id && 
+                                                    ts.date === shiftDate
+                                                );
+                                                if (timeslot && window.PlanShiftModal.open) {
+                                                    const employeeId = data.employee_id || shift.user_id || shift.employee_id;
+                                                    const shiftScheduleId = shift.schedule_id || parseInt(scheduleId);
+                                                    
+                                                    if (employeeId) {
+                                                        window.PlanShiftModal.configure({
+                                                            preselectedEmployeeId: employeeId,
+                                                            scheduleId: shiftScheduleId
+                                                        });
+                                                    } else {
+                                                        window.PlanShiftModal.configure({
+                                                            scheduleId: shiftScheduleId
+                                                        });
+                                                    }
+                                                    // Открываем модалку для тайм-слота (та же, что и при клике на свободный тайм-слот)
+                                                    window.PlanShiftModal.open(timeslot.id);
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                        // Если не удалось найти тайм-слот, показываем ошибку
+                                        notifyCalendar('Не удалось найти тайм-слот для этой смены', 'error');
+                                    })
+                                    .catch(error => {
+                                        console.error('Error fetching schedule data:', error);
+                                        notifyCalendar('Ошибка загрузки данных смены', 'error');
+                                    });
+                                return;
+                            } else {
+                                console.log('Shift or PlanShiftModal not found, shift:', shift, 'PlanShiftModal:', window.PlanShiftModal);
+                            }
+                        } else {
+                            console.log('Not mobile and no shiftKey, going to plan page');
                         }
+                        
+                        // Для десктопного вида без Shift - переход на страницу массового планирования
                         // Получаем object_id из данных календаря
                         let objectId = null;
                         if (window.calendarData && window.calendarData.shifts) {
@@ -164,6 +346,13 @@ footer {
                 },
                 onTimeslotClick: function(timeslotId) {
                     console.log('Timeslot clicked:', timeslotId);
+                    // Очищаем scheduleId при клике на тайм-слот (не на смену)
+                    if (window.PlanShiftModal) {
+                        window.PlanShiftModal.configure({
+                            scheduleId: null,
+                            preselectedEmployeeId: null
+                        });
+                    }
                     let objectId = null;
                     let employeeId = null;
                     if (window.calendarData) {
@@ -240,9 +429,9 @@ if (window.PlanShiftModal) {
         planShiftEndpoint: '/owner/api/calendar/plan-shift',
         notify: notifyCalendar,
         preparePlannedShifts: true,
-        refreshCalendar: () => {
+        refreshCalendar: (plannedDate) => {
             if (window.universalCalendar && typeof window.universalCalendar.refresh === 'function') {
-                window.universalCalendar.refresh();
+                window.universalCalendar.refresh(plannedDate);
             } else {
                 setTimeout(() => window.location.reload(), 800);
             }
