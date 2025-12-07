@@ -1,6 +1,6 @@
 # Roadmap (из @tasklist.md)
 
-**Общий прогресс:** 498/515 (96.7%)  
+**Общий прогресс:** 504/521 (96.7%)  
 **Итерация 23 (Employee Payment Accounting):** Фазы 0-4В ✅ | Фаза 5: 5/7 задач | DoD: 6/8 критериев  
 **Итерация 24 (Notification System):** ✅ Завершена (7/7 задач)  
 **Итерация 25 (Admin Notifications Management):** ✅ 80% завершена (20/25 задач)  
@@ -25,7 +25,7 @@
 **Итерация 49 (Employee ID Synchronization Fix):** ✅ Завершена (5/5 задач)  
 **Итерация 50 (Individual Payment Schedules & Payroll Fixes):** ✅ Завершена (6/6 задач)  
 **Итерация 51 (Monthly Payment Schedules Period Calculation Fix):** ✅ Завершена (1/1 задача)  
-**Итерация 52 (Mobile Calendar Adaptation):** В работе (Фаза 1: 0/6 задач)
+**Итерация 52 (Mobile Calendar Adaptation):** В работе (Фаза 1: 6/6 задач ✅)
 
 ## Итерация 37: Реорганизация системы уведомлений (Notification System Overhaul)
 
