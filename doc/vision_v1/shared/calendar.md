@@ -4,6 +4,8 @@
 
 ### Основные эндпоинты календаря
 - [GET] `/owner/calendar/api/data` — (apps/web/routes/owner.py) данные календаря владельца с кэшированием (TTL 2 мин)
+  - **Параметры:** `start_date`, `end_date`, `object_ids` (опционально), `org_unit_id` (устаревший, используйте `org_unit_ids`), `org_unit_ids` (ID подразделений через запятую, включает всех потомков через `_get_all_descendants`)
+  - **Ответ:** JSON с `timeslots` (включая флаги `fully_occupied`, `has_free_track`), `shifts`, `metadata`
 - [GET] `/manager/calendar/api/data` — (apps/web/routes/manager.py) данные календаря управляющего с кэшированием (TTL 2 мин)
 - [GET] `/employee/api/calendar/data` — (apps/web/routes/employee.py) данные календаря сотрудника с кэшированием (TTL 2 мин)
 - [GET] `/owner/calendar/api/timeslot/{timeslot_id}` / `/manager/calendar/api/timeslot/{timeslot_id}` / `/employee/calendar/api/timeslot/{timeslot_id}` — детальные данные тайм-слота для модалки быстрого планирования (распределение по трекам, занятые интервалы, локализованные времена)
@@ -46,6 +48,8 @@
 
 ## Shared сервисы
 - `shared/services/calendar_filter_service.py` — CalendarFilterService с кэшированием методов _get_timeslots() и _get_shifts()
+  - Метод `_update_timeslot_statuses()` вычисляет флаги `fully_occupied` (тайм-слот полностью покрыт запланированной сменой) и `has_free_track` (есть хотя бы один свободный трек для активных смен)
+  - Флаги передаются в API ответ и используются на фронте для фильтрации тайм-слотов
 
 ## Shared шаблоны
 - `templates/shared/calendar/*` (grid, timeslot, navigation, shift)
@@ -54,6 +58,9 @@
 
 ## Shared JS/CSS
 - `static/js/shared/universal_calendar.js` — универсальный менеджер календаря с ленивой подгрузкой месяцев (scroll → `loadMonthRange()`), повторным `renderCalendarGrid` и сохранением позиции скролла
+  - **Мобильная адаптация (Iteration 52):** дневной вид по умолчанию на мобильных устройствах, навигация по дням, поддержка свайпов, модальное окно фильтров
+  - **Фильтрация тайм-слотов:** скрытие полностью занятых тайм-слотов на основе флагов `fully_occupied` и `has_free_track` из API
+  - **Фильтр подразделений:** поддержка `org_unit_ids` (массив) с автоматическим включением всех потомков через API, иерархическое отображение в дропдауне с символами вложенности (├─)
 - `static/js/shared/calendar.js` — вспомогательные функции
 - `static/js/shared/calendar_panels.js` — панели drag&drop с кэшем в памяти (objectsData, employeesData)
 - `static/js/shared/plan_shift_modal.js` — общий модуль модального быстрого планирования (tabs «Время смены N», рендер шкалы по трекам, автоматический выбор свободного интервала, снэппинг 30 мин, блокировка селекта у роли employee)
@@ -77,11 +84,16 @@
 - Автоскролл к текущему дню при инициализации выполняется с флагом `initialAutoScrollInProgress`, чтобы не триггерить `checkAndLoadAdjacentMonths()` и не подгружать соседние месяцы до ручной прокрутки (фикс от 18.11.2025).
 - Прокрутка инициирует `handleScroll()` → `checkAndLoadAdjacentMonths()` → `loadMonthRange()`, когда флагов загрузки/навигации нет. Диапазон по умолчанию: текущий месяц + следующий.
 - После получения данных вызывается `mergeMonthData()` + `processCalendarData()`, затем `onDataLoaded` перерисовывает сетку (`renderCalendarGrid`) и обновляет `window.calendarData`.
-- Метод `refresh()` перезагружает данные календаря с сохранением фильтров из URL (`object_id`, `org_unit_id`):
+- Метод `refresh()` перезагружает данные календаря с сохранением фильтров из URL (`object_id`, `org_unit_ids`):
   - Определяет видимый месяц через `getVisibleMonthFromScroll()`
   - Очищает кэш загруженных месяцев для видимого и соседних месяцев
   - Устанавливает `currentDate` на видимый месяц для корректной загрузки
   - Загружает данные с учетом фильтров из URL (фикс от 20.11.2025)
+- **Фильтрация по подразделениям (обновлено 08.12.2025):**
+  - Поддержка `org_unit_ids` (массив ID через запятую) вместо устаревшего `org_unit_id`
+  - API автоматически получает всех потомков выбранного подразделения через `OrgStructureService._get_all_descendants()`
+  - Дропдаун подразделений показывает иерархию с отступами и символами вложенности (├─)
+  - Чипсы выбранных фильтров отображают название выбранного узла
 
 ## Модальное окно планирования
 
