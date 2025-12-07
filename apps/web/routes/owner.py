@@ -3031,14 +3031,16 @@ async def owner_calendar_quick_create_timeslot(
 
 
 @router.post("/api/calendar/plan-shift")
+@router.put("/api/calendar/plan-shift")
 async def api_calendar_plan_shift(
     request: Request,
     timeslot_id: int = Body(...),
     employee_id: int = Body(...),
     start_time: Optional[str] = Body(None),
-    end_time: Optional[str] = Body(None)
+    end_time: Optional[str] = Body(None),
+    schedule_id: Optional[int] = Body(None)
 ):
-    """API: планирование смены для сотрудника в тайм-слот."""
+    """API: планирование или обновление смены для сотрудника в тайм-слот."""
     current_user = await get_current_user(request)
     if not current_user:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
@@ -3179,23 +3181,42 @@ async def api_calendar_plan_shift(
             slot_datetime = tz.localize(slot_datetime_naive).astimezone(pytz.UTC)
             end_datetime = tz.localize(end_datetime_naive).astimezone(pytz.UTC)
             
-            # Проверяем, что сотрудник не занят в это время
+            # Режим редактирования: обновление существующей смены
+            is_edit_mode = schedule_id is not None
+            existing_schedule = None
+            
+            if is_edit_mode:
+                # Получаем существующую смену для редактирования
+                existing_schedule_query = select(ShiftSchedule).where(ShiftSchedule.id == schedule_id)
+                existing_schedule = (await session.execute(existing_schedule_query)).scalar_one_or_none()
+                if not existing_schedule:
+                    raise HTTPException(status_code=404, detail="Запланированная смена не найдена")
+                
+                # Проверяем права доступа: смена должна принадлежать объекту владельца
+                if existing_schedule.object_id != timeslot.object_id:
+                    raise HTTPException(status_code=403, detail="Нет доступа к этой смене")
+            
+            # Проверяем, что сотрудник не занят в это время (исключая редактируемую смену)
             existing_schedule_query = select(ShiftSchedule).where(
                 ShiftSchedule.user_id == employee_id,
                 ShiftSchedule.planned_start < end_datetime,
                 ShiftSchedule.planned_end > slot_datetime,
                 ShiftSchedule.status.in_(["planned", "confirmed"])
             )
+            if is_edit_mode:
+                existing_schedule_query = existing_schedule_query.where(ShiftSchedule.id != schedule_id)
             existing_schedules = (await session.execute(existing_schedule_query)).scalars().all()
             if existing_schedules:
                 raise HTTPException(status_code=400, detail="Сотрудник уже запланирован на это время")
 
-            # Проверяем лимит по количеству сотрудников в тайм-слоте
+            # Проверяем лимит по количеству сотрудников в тайм-слоте (исключая редактируемую смену)
             max_employees = timeslot.max_employees or 1
             current_slot_schedules_query = select(ShiftSchedule).where(
                 ShiftSchedule.time_slot_id == timeslot_id,
                 ShiftSchedule.status.in_(["planned", "confirmed"])
             )
+            if is_edit_mode:
+                current_slot_schedules_query = current_slot_schedules_query.where(ShiftSchedule.id != schedule_id)
             current_slot_schedules = (await session.execute(current_slot_schedules_query)).scalars().all()
             overlapping_schedules = [
                 sched for sched in current_slot_schedules
@@ -3222,58 +3243,202 @@ async def api_calendar_plan_shift(
                 elif timeslot.object and timeslot.object.hourly_rate:
                     effective_rate = timeslot.object.hourly_rate
             
-            # Создаем запланированную смену
-            new_schedule = ShiftSchedule(
-                user_id=int(employee_id),
-                object_id=int(timeslot.object_id),
-                time_slot_id=int(timeslot_id),
-                planned_start=slot_datetime,
-                planned_end=end_datetime,
-                status="planned",
-                hourly_rate=effective_rate,
-                notes="Запланировано через drag&drop"
-            )
-            session.add(new_schedule)
-            await session.flush()
-
             actor_role = "owner" if "owner" in user_roles else "superadmin"
             history_service = ShiftHistoryService(session)
-            await history_service.log_event(
-                operation="schedule_plan",
-                source="web",
-                actor_id=user_id,
-                actor_role=actor_role,
-                schedule_id=new_schedule.id,
-                old_status=None,
-                new_status="planned",
-                payload={
-                    "object_id": int(timeslot.object_id),
-                    "time_slot_id": int(timeslot_id),
-                    "employee_id": int(employee_id),
-                    "planned_start": slot_datetime.isoformat(),
-                    "planned_end": end_datetime.isoformat(),
-                    "origin": "owner_calendar",
-                },
-            )
-            await session.commit()
             
-            # Очищаем кэш календаря для немедленного отображения
-            from core.cache.redis_cache import cache
-            await cache.clear_pattern("calendar_shifts:*")
-            await cache.clear_pattern("api_response:*")
-            logger.info(f"Calendar cache cleared after planning shift {new_schedule.id}")
+            if is_edit_mode:
+                # Обновляем существующую смену
+                old_status = existing_schedule.status
+                old_employee_id = existing_schedule.user_id
+                old_start = existing_schedule.planned_start
+                old_end = existing_schedule.planned_end
+                
+                existing_schedule.user_id = int(employee_id)
+                existing_schedule.planned_start = slot_datetime
+                existing_schedule.planned_end = end_datetime
+                if effective_rate is not None:
+                    existing_schedule.hourly_rate = effective_rate
+                
+                await history_service.log_event(
+                    operation="schedule_update",
+                    source="web",
+                    actor_id=user_id,
+                    actor_role=actor_role,
+                    schedule_id=existing_schedule.id,
+                    old_status=old_status,
+                    new_status=old_status,  # Статус не меняется при обновлении
+                    payload={
+                        "object_id": int(timeslot.object_id),
+                        "time_slot_id": int(timeslot_id),
+                        "old_employee_id": int(old_employee_id),
+                        "new_employee_id": int(employee_id),
+                        "old_planned_start": old_start.isoformat() if old_start else None,
+                        "old_planned_end": old_end.isoformat() if old_end else None,
+                        "new_planned_start": slot_datetime.isoformat(),
+                        "new_planned_end": end_datetime.isoformat(),
+                        "origin": "owner_calendar",
+                    },
+                )
+                await session.commit()
+                
+                # Очищаем кэш календаря
+                from core.cache.redis_cache import cache
+                await cache.clear_pattern("calendar_shifts:*")
+                await cache.clear_pattern("api_response:*")
+                logger.info(f"Calendar cache cleared after updating shift {existing_schedule.id}")
 
-            return {
-                "success": True,
-                "message": f"Смена запланирована для {employee.first_name or employee.username}",
-                "schedule_id": new_schedule.id
-            }
+                return {
+                    "success": True,
+                    "message": f"Смена обновлена для {employee.first_name or employee.username}",
+                    "schedule_id": existing_schedule.id
+                }
+            else:
+                # Создаем новую запланированную смену
+                new_schedule = ShiftSchedule(
+                    user_id=int(employee_id),
+                    object_id=int(timeslot.object_id),
+                    time_slot_id=int(timeslot_id),
+                    planned_start=slot_datetime,
+                    planned_end=end_datetime,
+                    status="planned",
+                    hourly_rate=effective_rate,
+                    notes="Запланировано через drag&drop"
+                )
+                session.add(new_schedule)
+                await session.flush()
+
+                await history_service.log_event(
+                    operation="schedule_plan",
+                    source="web",
+                    actor_id=user_id,
+                    actor_role=actor_role,
+                    schedule_id=new_schedule.id,
+                    old_status=None,
+                    new_status="planned",
+                    payload={
+                        "object_id": int(timeslot.object_id),
+                        "time_slot_id": int(timeslot_id),
+                        "employee_id": int(employee_id),
+                        "planned_start": slot_datetime.isoformat(),
+                        "planned_end": end_datetime.isoformat(),
+                        "origin": "owner_calendar",
+                    },
+                )
+                await session.commit()
+                
+                # Очищаем кэш календаря для немедленного отображения
+                from core.cache.redis_cache import cache
+                await cache.clear_pattern("calendar_shifts:*")
+                await cache.clear_pattern("api_response:*")
+                logger.info(f"Calendar cache cleared after planning shift {new_schedule.id}")
+
+                return {
+                    "success": True,
+                    "message": f"Смена запланирована для {employee.first_name or employee.username}",
+                    "schedule_id": new_schedule.id
+                }
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error planning shift: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка планирования смены: {str(e)}")
+
+
+@router.delete("/api/calendar/plan-shift/{schedule_id}")
+async def api_calendar_delete_shift(
+    request: Request,
+    schedule_id: int
+):
+    """API: удаление запланированной смены."""
+    current_user = await get_current_user(request)
+    if not current_user:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+    
+    # Проверяем роли (поддержка множественных ролей)
+    user_roles = current_user.get("roles", [])
+    if isinstance(user_roles, str):
+        user_roles = [user_roles]
+    if "owner" not in user_roles and "superadmin" not in user_roles:
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    try:
+        async with get_async_session() as session:
+            from sqlalchemy import select
+            from domain.entities.user import User
+            from domain.entities.object import Object
+            from domain.entities.shift_schedule import ShiftSchedule
+            from shared.services.shift_history_service import ShiftHistoryService
+
+            # Получаем внутренний ID владельца
+            user_id = await get_user_id_from_current_user(current_user, session)
+            if not user_id:
+                raise HTTPException(status_code=404, detail="Владелец не найден")
+            
+            logger.info(f"Deleting shift schedule {schedule_id} by user_id: {user_id}")
+
+            # Получаем запланированную смену
+            schedule_query = select(ShiftSchedule).options(selectinload(ShiftSchedule.object)).where(
+                ShiftSchedule.id == schedule_id
+            )
+            schedule = (await session.execute(schedule_query)).scalar_one_or_none()
+            if not schedule:
+                raise HTTPException(status_code=404, detail="Запланированная смена не найдена")
+            
+            # Проверяем, что смена принадлежит объекту владельца
+            object_query = select(Object).where(
+                Object.id == schedule.object_id,
+                Object.owner_id == user_id
+            )
+            obj = (await session.execute(object_query)).scalar_one_or_none()
+            if not obj:
+                raise HTTPException(status_code=403, detail="Нет доступа к этой смене")
+            
+            # Проверяем, что смена может быть удалена (только planned или confirmed)
+            if schedule.status not in ["planned", "confirmed"]:
+                raise HTTPException(status_code=400, detail="Нельзя удалить смену со статусом " + schedule.status)
+            
+            # Логируем удаление в историю
+            actor_role = "owner" if "owner" in user_roles else "superadmin"
+            history_service = ShiftHistoryService(session)
+            await history_service.log_event(
+                operation="schedule_delete",
+                source="web",
+                actor_id=user_id,
+                actor_role=actor_role,
+                schedule_id=schedule.id,
+                old_status=schedule.status,
+                new_status="cancelled",
+                payload={
+                    "object_id": schedule.object_id,
+                    "time_slot_id": schedule.time_slot_id,
+                    "employee_id": schedule.user_id,
+                    "planned_start": schedule.planned_start.isoformat() if schedule.planned_start else None,
+                    "planned_end": schedule.planned_end.isoformat() if schedule.planned_end else None,
+                    "origin": "owner_calendar",
+                },
+            )
+            
+            # Удаляем смену
+            await session.delete(schedule)
+            await session.commit()
+            
+            # Очищаем кэш календаря
+            from core.cache.redis_cache import cache
+            await cache.clear_pattern("calendar_shifts:*")
+            await cache.clear_pattern("api_response:*")
+            logger.info(f"Calendar cache cleared after deleting shift {schedule_id}")
+
+            return {
+                "success": True,
+                "message": "Смена успешно удалена"
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting shift: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления смены: {str(e)}")
 
 
 @router.post("/api/calendar/check-availability")

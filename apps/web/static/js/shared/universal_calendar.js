@@ -741,11 +741,7 @@ class UniversalCalendarManager {
             // КРИТИЧЕСКИ ВАЖНО: Обновляем window.calendarData для доступа из onShiftClick
             window.calendarData = this.calendarData;
             
-            // Вызываем onDataLoaded если есть
-            if (this.onDataLoaded) {
-                this.onDataLoaded(this.calendarData);
-            }
-            
+            // ДЛЯ DAY VIEW не вызываем onDataLoaded (иначе создаётся grid для month и падает createCalendarGrid)
             // Рендерим дневной вид
             this.renderDayViewHTML(date);
             

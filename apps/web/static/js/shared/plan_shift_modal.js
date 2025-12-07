@@ -327,6 +327,10 @@
       return;
     }
 
+    const scheduleId = config.scheduleId;
+    const editingShift = config.editingShift;
+    const isEditMode = scheduleId !== null && scheduleId !== undefined && editingShift !== null;
+    
     const plannedIntervals = (config.plannedShifts || [])
       .map((shift, index) => {
         const start = timeStringToMinutes(shift.start_time);
@@ -339,21 +343,27 @@
             ? String(shift.user_id)
             : `unknown_${index}`;
         const trackId = `employee-${userKey}`;
+        const isEditing = isEditMode && (shift.id === scheduleId || String(shift.id) === String(scheduleId));
         return {
           startMinutes: Math.max(slotStartMinutes, Math.min(start, slotEndMinutes)),
           endMinutes: Math.max(slotStartMinutes, Math.min(end, slotEndMinutes)),
           userId: shift.user_id ?? `unknown_${index}`,
           userName: shift.user_name,
           trackId,
-          original: shift
+          original: shift,
+          isEditing: isEditing
         };
       })
       .filter(Boolean)
       .sort((a, b) => a.startMinutes - b.startMinutes);
 
-    const occupiedRanges = plannedIntervals.map((interval) => [interval.startMinutes, interval.endMinutes]);
+    // Исключаем редактируемую смену из занятых диапазонов, чтобы можно было её изменять
+    const occupiedRanges = plannedIntervals
+      .filter(interval => !interval.isEditing)
+      .map((interval) => [interval.startMinutes, interval.endMinutes]);
 
-    const freeRanges = (config.freeIntervals?.length ? config.freeIntervals : [{ start: config.slotStart, end: config.slotEnd }])
+    // Сначала строим стандартные freeRanges (для не-редактируемого режима)
+    let freeRanges = (config.freeIntervals?.length ? config.freeIntervals : [{ start: config.slotStart, end: config.slotEnd }])
       .map((range) => {
         const start = timeStringToMinutes(range.start);
         const end = timeStringToMinutes(range.end);
@@ -427,18 +437,159 @@
       return parsed;
     };
 
-    let defaultStart = parseOrDefault(config.startValue, freeRanges[0].start);
-    let defaultEnd = parseOrDefault(config.endValue, freeRanges[0].end);
+    // В режиме редактирования используем время редактируемой смены
+    let defaultStart, defaultEnd;
+    let activeRange = null;
+    let editingTrack = null;
+    let editingTrackIndex = -1;
+    
+    if (isEditMode && editingShift) {
+      const editStart = timeStringToMinutes(editingShift.start_time);
+      const editEnd = timeStringToMinutes(editingShift.end_time);
+      
+      if (editStart !== null && editEnd !== null) {
+        // Находим трек, на котором находится редактируемая смена
+        const editingInterval = plannedIntervals.find(interval => interval.isEditing);
+        
+        if (editingInterval) {
+          // Ищем трек, на котором находится редактируемая смена
+          // Используем original.id для точного совпадения
+          const editingId = editingInterval.original?.id;
+          for (let i = 0; i < positionTracks.length; i++) {
+            const track = positionTracks[i];
+            const found = track.intervals.some(interval => {
+              if (editingId && interval.original?.id) {
+                return interval.original.id === editingId || String(interval.original.id) === String(editingId);
+              }
+              // Fallback: сравнение по времени и userId
+              return interval.startMinutes === editingInterval.startMinutes && 
+                     interval.endMinutes === editingInterval.endMinutes &&
+                     interval.userId === editingInterval.userId;
+            });
+            if (found) {
+              editingTrack = track;
+              editingTrackIndex = i;
+              break;
+            }
+          }
+        }
+        
+        // Вычисляем свободное время в треке редактируемой смены
+        // ВАЖНО: Редактируемая смена должна быть исключена из занятых интервалов,
+        // чтобы свободное время до и после неё было правильно вычислено
+        const trackIntervalsWithoutEditing = editingTrack 
+          ? editingTrack.intervals.filter(interval => !interval.isEditing)
+          : [];
+        
+        // Находим свободное время в треке, исключая редактируемую смену из занятых
+        // ВАЖНО: Редактируемая смена НЕ считается занятой, поэтому свободное время
+        // до и после неё должно быть доступно для планирования
+        const trackFreeIntervals = [];
+        let cursor = slotStartMinutes;
+        
+        // Сортируем занятые интервалы (БЕЗ редактируемой смены)
+        const sortedOccupied = trackIntervalsWithoutEditing
+          .sort((a, b) => a.startMinutes - b.startMinutes);
+        
+        sortedOccupied.forEach((interval) => {
+          // Свободное время до этого занятого интервала
+          if (interval.startMinutes > cursor) {
+            trackFreeIntervals.push({ start: cursor, end: interval.startMinutes });
+          }
+          cursor = Math.max(cursor, interval.endMinutes);
+        });
+        
+        // Свободное время после всех занятых интервалов
+        if (cursor < slotEndMinutes) {
+          trackFreeIntervals.push({ start: cursor, end: slotEndMinutes });
+        }
+        
+        // КРИТИЧНО: Нужно правильно определить freeBefore и freeAfter относительно редактируемой смены
+        // freeBefore: свободное время, которое заканчивается в начале редактируемой смены (editStart)
+        // freeAfter: свободное время, которое начинается в конце редактируемой смены (editEnd)
+        
+        // Ищем интервалы, которые примыкают к редактируемой смене
+        const freeBefore = trackFreeIntervals.find(range => range.end === editStart);
+        const freeAfter = trackFreeIntervals.find(range => range.start === editEnd);
+        
+        // Если не нашли точное совпадение, проверяем, может быть редактируемая смена находится внутри свободного интервала
+        let actualFreeBefore = freeBefore;
+        let actualFreeAfter = freeAfter;
+        
+        if (!actualFreeBefore) {
+          // Ищем интервал, который содержит начало редактируемой смены
+          const containingBefore = trackFreeIntervals.find(r => 
+            r.start <= editStart && r.end >= editStart
+          );
+          if (containingBefore) {
+            // Разбиваем интервал: до редактируемой смены и после
+            actualFreeBefore = { start: containingBefore.start, end: editStart };
+            // Если после редактируемой смены тоже есть место в этом интервале, добавляем его
+            if (containingBefore.end > editEnd) {
+              trackFreeIntervals.push({ start: editEnd, end: containingBefore.end });
+            }
+          } else {
+            // Ищем ближайший интервал, который заканчивается до редактируемой смены
+            actualFreeBefore = trackFreeIntervals
+              .filter(r => r.end <= editStart)
+              .sort((a, b) => b.end - a.end)[0];
+          }
+        }
+        
+        if (!actualFreeAfter) {
+          // Ищем интервал, который содержит конец редактируемой смены
+          const containingAfter = trackFreeIntervals.find(r => 
+            r.start <= editEnd && r.end >= editEnd
+          );
+          if (containingAfter) {
+            // Разбиваем интервал: до редактируемой смены и после
+            actualFreeAfter = { start: editEnd, end: containingAfter.end };
+            // Если до редактируемой смены тоже есть место в этом интервале, добавляем его
+            if (containingAfter.start < editStart) {
+              trackFreeIntervals.push({ start: containingAfter.start, end: editStart });
+            }
+          } else {
+            // Ищем ближайший интервал, который начинается после редактируемой смены
+            actualFreeAfter = trackFreeIntervals
+              .filter(r => r.start >= editEnd)
+              .sort((a, b) => a.start - b.start)[0];
+          }
+        }
+        
+        // Объединяем: свободное время слева + редактируемая смена + свободное время справа
+        const rangeStart = actualFreeBefore ? actualFreeBefore.start : editStart;
+        const rangeEnd = actualFreeAfter ? actualFreeAfter.end : editEnd;
+        
+        activeRange = { start: rangeStart, end: rangeEnd };
+        
+        // Пересчитываем freeRanges для режима редактирования: включаем редактируемую смену и примыкающее свободное время
+        // ВАЖНО: Объединяем все в один диапазон, чтобы бегунки могли двигаться по всей области
+        freeRanges = [{ start: rangeStart, end: rangeEnd }];
+        
+        // Устанавливаем бегунки на края запланированной смены
+        defaultStart = editStart;
+        defaultEnd = editEnd;
+      } else {
+        defaultStart = parseOrDefault(config.startValue, freeRanges[0].start);
+        defaultEnd = parseOrDefault(config.endValue, freeRanges[0].end);
+        activeRange = freeRanges[0];
+      }
+    } else {
+      defaultStart = parseOrDefault(config.startValue, freeRanges[0].start);
+      defaultEnd = parseOrDefault(config.endValue, freeRanges[0].end);
+      activeRange = freeRanges[0];
+    }
 
     const snapToGrid = (value) => Math.round(value / SNAP_INTERVAL_MINUTES) * SNAP_INTERVAL_MINUTES;
 
-    const findContainingRange = (startMinutes, endMinutes) =>
-      freeRanges.find((range) => startMinutes >= range.start && endMinutes <= range.end) || freeRanges[0];
+    if (!activeRange) {
+      activeRange = freeRanges[0] || { start: slotStartMinutes, end: slotEndMinutes };
+    }
 
-    let activeRange = findContainingRange(defaultStart, defaultEnd);
     defaultStart = snapToGrid(defaultStart);
     defaultEnd = snapToGrid(defaultEnd);
 
+    // Ограничиваем бегунки пределами activeRange
     if (defaultStart < activeRange.start) {
       defaultStart = activeRange.start;
     }
@@ -459,12 +610,17 @@
       freeRanges,
       activeRange,
       lastMoved: null,
-      activePositionIndex: 1,
+      activePositionIndex: isEditMode && editingTrackIndex >= 0 ? editingTrackIndex + 1 : 1,
       maxEmployees: maxSlots,
       positionTracks,
-      currentTrack: positionTracks[0] || { intervals: [], userNames: [] },
-      allPlannedIntervals: plannedIntervals
+      currentTrack: editingTrack || (positionTracks[0] || { intervals: [], userNames: [] }),
+      allPlannedIntervals: plannedIntervals,
+      isEditMode: isEditMode,
+      scheduleId: scheduleId,
+      editingShift: editingShift,
+      editingTrack: editingTrack
     };
+    
 
     const calculateTrackFreeIntervals = (track) => {
       const intervalsSource = track && Array.isArray(track.intervals) ? track.intervals : [];
@@ -607,11 +763,58 @@
       };
       state.currentTrack = currentTrack;
       const busyIntervals = currentTrack.intervals || [];
-      state.occupiedRanges = busyIntervals.map((interval) => [
-        interval.startMinutes,
-        interval.endMinutes
-      ]);
-      state.freeRanges = calculateTrackFreeIntervals(currentTrack);
+      // В режиме редактирования исключаем редактируемую смену из occupiedRanges
+      state.occupiedRanges = busyIntervals
+        .filter(interval => !interval.isEditing)
+        .map((interval) => [
+          interval.startMinutes,
+          interval.endMinutes
+        ]);
+      
+      // В режиме редактирования пересчитываем freeRanges с учетом редактируемой смены
+      if (state.isEditMode && state.editingShift) {
+        const editStart = timeStringToMinutes(state.editingShift.start_time);
+        const editEnd = timeStringToMinutes(state.editingShift.end_time);
+        
+        if (editStart !== null && editEnd !== null && state.editingTrack) {
+          // Вычисляем свободное время в треке редактируемой смены (исключая саму редактируемую смену)
+          const trackIntervalsWithoutEditing = state.editingTrack.intervals.filter(interval => !interval.isEditing);
+          
+          // Находим свободное время в треке
+          const trackFreeIntervals = [];
+          let cursor = state.slotStartMinutes;
+          trackIntervalsWithoutEditing
+            .sort((a, b) => a.startMinutes - b.startMinutes)
+            .forEach((interval) => {
+              if (interval.startMinutes > cursor) {
+                trackFreeIntervals.push({ start: cursor, end: interval.startMinutes });
+              }
+              cursor = Math.max(cursor, interval.endMinutes);
+            });
+          if (cursor < state.slotEndMinutes) {
+            trackFreeIntervals.push({ start: cursor, end: state.slotEndMinutes });
+          }
+          
+          // Находим свободное время, которое находится вплотную слева и справа от редактируемой смены
+          const freeBefore = trackFreeIntervals.find(range => range.end === editStart);
+          const freeAfter = trackFreeIntervals.find(range => range.start === editEnd);
+          
+          // Объединяем: свободное время слева + редактируемая смена + свободное время справа
+          if (freeBefore && freeAfter) {
+            state.freeRanges = [{ start: freeBefore.start, end: freeAfter.end }];
+          } else if (freeBefore) {
+            state.freeRanges = [{ start: freeBefore.start, end: editEnd }];
+          } else if (freeAfter) {
+            state.freeRanges = [{ start: editStart, end: freeAfter.end }];
+          } else {
+            state.freeRanges = [{ start: editStart, end: editEnd }];
+          }
+        } else {
+          state.freeRanges = calculateTrackFreeIntervals(currentTrack);
+        }
+      } else {
+        state.freeRanges = calculateTrackFreeIntervals(currentTrack);
+      }
       if (!state.freeRanges.length) {
         state.activeRange = null;
         state.startMinutes = state.slotStartMinutes;
@@ -642,6 +845,7 @@
     function renderTrack() {
       trackElement.innerHTML = '';
 
+      // Отображаем занятые диапазоны (красные)
       state.occupiedRanges.forEach(([start, end]) => {
         const segment = document.createElement('div');
         segment.className = 'scheduler-segment occupied';
@@ -650,6 +854,32 @@
         trackElement.appendChild(segment);
       });
 
+      // В режиме редактирования отображаем все доступные freeRanges как зеленые (доступные для планирования)
+      if (state.isEditMode && state.freeRanges.length > 0) {
+        state.freeRanges.forEach((range) => {
+          const availableSegment = document.createElement('div');
+          availableSegment.className = 'scheduler-segment selection';
+          availableSegment.style.opacity = '0.4'; // Полупрозрачный зеленый для всего доступного диапазона
+          availableSegment.style.left = `${calculatePositionPercent(range.start, state.slotStartMinutes, state.slotEndMinutes)}%`;
+          availableSegment.style.width = `${calculateWidthPercent(range.start, range.end, state.slotStartMinutes, state.slotEndMinutes)}%`;
+          trackElement.appendChild(availableSegment);
+        });
+      }
+
+      // В режиме редактирования показываем исходное время редактируемой смены более ярким зеленым
+      if (state.isEditMode && state.editingShift) {
+        const editStart = timeStringToMinutes(state.editingShift.start_time);
+        const editEnd = timeStringToMinutes(state.editingShift.end_time);
+        if (editStart !== null && editEnd !== null) {
+          const existingSegment = document.createElement('div');
+          existingSegment.className = 'scheduler-segment existing';
+          existingSegment.style.left = `${calculatePositionPercent(editStart, state.slotStartMinutes, state.slotEndMinutes)}%`;
+          existingSegment.style.width = `${calculateWidthPercent(editStart, editEnd, state.slotStartMinutes, state.slotEndMinutes)}%`;
+          trackElement.appendChild(existingSegment);
+        }
+      }
+
+      // Отображаем текущий выбор (яркий зеленый) - поверх доступных диапазонов
       if (state.freeRanges.length > 0 && state.endMinutes > state.startMinutes) {
         const selection = document.createElement('div');
         selection.className = 'scheduler-segment selection';
@@ -799,6 +1029,19 @@
     }
 
     function enforceSingleGap() {
+      // В режиме редактирования не перезаписываем activeRange, он уже правильно установлен при инициализации
+      if (state.isEditMode && state.activeRange) {
+        // Просто проверяем, что бегунки в пределах activeRange
+        if (state.startMinutes < state.activeRange.start) {
+          state.startMinutes = state.activeRange.start;
+        }
+        if (state.endMinutes > state.activeRange.end) {
+          state.endMinutes = state.activeRange.end;
+        }
+        return;
+      }
+      
+      // Для обычного режима используем стандартную логику
       const validRange = state.freeRanges.find((range) => state.startMinutes >= range.start && state.endMinutes <= range.end);
       if (validRange) {
         state.activeRange = validRange;
@@ -831,7 +1074,10 @@
     }
 
     function applyStateChanges() {
-      updateContextRanges();
+      // В режиме редактирования не вызываем updateContextRanges, чтобы не перезаписывать activeRange
+      if (!state.isEditMode) {
+        updateContextRanges();
+      }
 
       if (!state.freeRanges.length || !state.activeRange) {
         renderTrack();
@@ -846,11 +1092,16 @@
         return;
       }
 
+      // Ограничиваем общими границами тайм-слота
       state.startMinutes = Math.max(state.slotStartMinutes, Math.min(state.startMinutes, state.slotEndMinutes - SNAP_INTERVAL_MINUTES));
       state.endMinutes = Math.max(state.startMinutes + SNAP_INTERVAL_MINUTES, Math.min(state.endMinutes, state.slotEndMinutes));
 
-      resolveCollisions();
+      // В режиме редактирования не проверяем коллизии с занятыми диапазонами, так как мы уже исключили редактируемую смену
+      if (!state.isEditMode) {
+        resolveCollisions();
+      }
 
+      // Ограничиваем пределами activeRange (который включает свободное время слева и справа в режиме редактирования)
       state.startMinutes = clampToActiveRange(state.startMinutes);
       state.endMinutes = clampToActiveRange(state.endMinutes);
       if (state.endMinutes <= state.startMinutes) {
@@ -880,7 +1131,10 @@
       modalElement.dataset.activePositionIndex = String(positionIndex);
       state.lastMoved = null;
       updatePositionTabsUI();
-      updateContextRanges({ resetSelection });
+      // В режиме редактирования НЕ пересчитываем контекст, чтобы не потерять расширенный activeRange
+      if (!state.isEditMode) {
+        updateContextRanges({ resetSelection });
+      }
       startRange.removeAttribute('disabled');
       endRange.removeAttribute('disabled');
       applyStateChanges();
@@ -920,7 +1174,8 @@
       updatePositionTabsUI();
     }
 
-    setActivePosition(state.activePositionIndex, { resetSelection: true });
+    // В режиме редактирования не сбрасываем выбор, чтобы сохранить activeRange
+    setActivePosition(state.activePositionIndex, { resetSelection: !state.isEditMode });
     modalElement.addEventListener('planshift:employee-changed', updateConfirmButtonState);
     updateConfirmButtonState();
   }
@@ -938,6 +1193,7 @@
       const notify = activeConfig.notify || defaultConfig.notify;
       const timeslotElement = document.querySelector(`[data-timeslot-id="${timeslotId}"]`);
       const detailUrl = activeConfig.timeslotDetailEndpoint(timeslotId);
+      
       const timeslotData = await fetchJson(detailUrl);
 
       const slotInfo = timeslotData?.slot ?? {};
@@ -1002,9 +1258,29 @@
       const effectiveSlotEnd = slotEnd || fallbackSlotEnd || '';
 
       const freeIntervals = calculateFreeIntervals(effectiveSlotStart, effectiveSlotEnd, plannedShifts);
+      // Определяем, есть ли запланированная смена для редактирования
+      const scheduleId = activeConfig.scheduleId;
+      const isEditMode = scheduleId !== null && scheduleId !== undefined;
+      
+      // Находим редактируемую смену в списке запланированных
+      let editingShift = null;
+      if (isEditMode) {
+        editingShift = plannedShifts.find(s => s.id === scheduleId || String(s.id) === String(scheduleId));
+        
+      }
+
       const defaultInterval = selectDefaultInterval(effectiveSlotStart, effectiveSlotEnd, freeIntervals);
-      const startValue = defaultInterval.start || effectiveSlotStart || '';
-      const endValue = defaultInterval.end || effectiveSlotEnd || '';
+      let startValue = defaultInterval.start || effectiveSlotStart || '';
+      let endValue = defaultInterval.end || effectiveSlotEnd || '';
+
+      // В режиме редактирования всегда берем границы из редактируемой смены
+      if (isEditMode && editingShift && editingShift.start_time && editingShift.end_time) {
+        startValue = editingShift.start_time;
+        endValue = editingShift.end_time;
+      }
+
+      const normalizedStartValue = minutesToTimeString(timeStringToMinutes(startValue));
+      const normalizedEndValue = minutesToTimeString(timeStringToMinutes(endValue));
 
       const existingModal = document.getElementById('addEmployeeToTimeslotModal');
       if (existingModal) {
@@ -1038,6 +1314,9 @@
               </div>
               <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                ${isEditMode ? `<button type="button" class="btn btn-danger me-auto" id="deleteShiftBtn">
+                  <i class="bi bi-trash"></i> Удалить
+                </button>` : ''}
                 <button type="button" class="btn btn-success" id="confirmAddEmployeeBtn">
                   <i class="bi bi-check-lg"></i> Добавить
                 </button>
@@ -1057,16 +1336,12 @@
         return;
       }
       
-      // Определяем, есть ли запланированная смена для редактирования
-      const scheduleId = activeConfig.scheduleId;
-      const isEditMode = scheduleId !== null && scheduleId !== undefined;
-      
       // Изменяем заголовок и текст кнопки для режима редактирования
       const modalTitle = modalElement.querySelector('.modal-title');
       if (modalTitle) {
         modalTitle.innerHTML = isEditMode 
-          ? '<i class="bi bi-pencil"></i> Изменить запланированную смену'
-          : '<i class="bi bi-person-plus"></i> Добавить сотрудника в тайм-слот';
+          ? '<i class="bi bi-pencil"></i> Изменить смену'
+          : '<i class="bi bi-calendar-plus"></i> Запланировать смену';
       }
       
       // Изменяем текст кнопки
@@ -1076,12 +1351,13 @@
         confirmButton.innerHTML = '<i class="bi bi-check-lg"></i> Добавить';
       }
 
-      modalElement.dataset.selectedStart = startValue;
-      modalElement.dataset.selectedEnd = endValue;
+      modalElement.dataset.selectedStart = normalizedStartValue || startValue;
+      modalElement.dataset.selectedEnd = normalizedEndValue || endValue;
       const maxEmployees = Number(slotInfo.max_employees ?? timeslotElement?.dataset.timeslotMaxEmployees ?? 1) || 1;
 
-      modalElement.dataset.selectedStart = startValue;
-      modalElement.dataset.selectedEnd = endValue;
+      // Дублируем для совместимости со старой логикой
+      modalElement.dataset.selectedStart = normalizedStartValue || startValue;
+      modalElement.dataset.selectedEnd = normalizedEndValue || endValue;
       modalElement.dataset.activePositionIndex = '1';
       modalElement.dataset.maxEmployees = String(maxEmployees);
 
@@ -1097,7 +1373,9 @@
         freeIntervals,
         plannedShifts,
         slotDate: slotDate || '',
-        maxEmployees
+        maxEmployees,
+        scheduleId: scheduleId,
+        editingShift: editingShift
       });
 
       const employeesResponse = await fetchJson(activeConfig.employeesForObjectEndpoint(objectId));
@@ -1111,8 +1389,11 @@
           ? (activeConfig.lockedEmployeeId ?? preselectedId)
           : null;
         const lockedNameFromConfig = activeConfig.lockedEmployeeName;
+        
+        // В режиме редактирования используем сотрудника из редактируемой смены
+        const editModeEmployeeId = isEditMode && editingShift ? editingShift.user_id : null;
 
-        if (activeConfig.lockEmployeeSelection && lockedId !== null) {
+        if (activeConfig.lockEmployeeSelection && lockedId !== null && !isEditMode) {
           let displayName = lockedNameFromConfig;
           if (!displayName) {
             const match = normalizedEmployees.find((emp) => Number(emp.id) === Number(lockedId));
@@ -1144,10 +1425,16 @@
           }
 
           select.innerHTML = options.join('');
-          if (preselectedId !== null) {
-            select.value = String(preselectedId);
-            if (select.value !== String(preselectedId)) {
-              const fallbackEmployee = normalizedEmployees.find((emp) => Number(emp.id) === Number(preselectedId));
+          
+          // В режиме редактирования выбираем сотрудника из редактируемой смены
+          const employeeIdToSelect = isEditMode && editModeEmployeeId !== null 
+            ? editModeEmployeeId 
+            : preselectedId;
+          
+          if (employeeIdToSelect !== null) {
+            select.value = String(employeeIdToSelect);
+            if (select.value !== String(employeeIdToSelect)) {
+              const fallbackEmployee = normalizedEmployees.find((emp) => Number(emp.id) === Number(employeeIdToSelect));
               let fallbackName =
                 lockedNameFromConfig
                 || fallbackEmployee?.name
@@ -1155,8 +1442,8 @@
               if (!lockedNameFromConfig && fallbackEmployee?.isFormer && !fallbackName.toLowerCase().includes('бывш')) {
                 fallbackName = `${fallbackName} (бывший)`;
               }
-              select.innerHTML += `<option value="${preselectedId}">${escapeHtml(fallbackName)}</option>`;
-              select.value = String(preselectedId);
+              select.innerHTML += `<option value="${employeeIdToSelect}">${escapeHtml(fallbackName)}</option>`;
+              select.value = String(employeeIdToSelect);
             }
           }
         } else {
@@ -1187,6 +1474,85 @@
         modalElement.dispatchEvent(new CustomEvent('planshift:employee-changed'));
       }
 
+      // Обработчик кнопки удаления (только в режиме редактирования)
+      const deleteButton = document.getElementById('deleteShiftBtn');
+      if (deleteButton && isEditMode && scheduleId !== null) {
+        deleteButton.addEventListener('click', async () => {
+          if (!confirm('Вы уверены, что хотите удалить эту запланированную смену?')) {
+            return;
+          }
+
+          deleteButton.setAttribute('disabled', 'true');
+          deleteButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Удаление...';
+
+          try {
+            // Используем endpoint для удаления
+            const deleteEndpoint = activeConfig.planShiftEndpoint || '/owner/api/calendar/plan-shift';
+            const response = await fetch(`${deleteEndpoint}/${scheduleId}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' }
+            });
+
+            let result = null;
+            try {
+              result = await response.json();
+            } catch (parseError) {
+              result = null;
+            }
+
+            if (!response.ok || (result && result.success === false)) {
+              const message = result?.detail || result?.message || 'Ошибка удаления смены';
+              throw new Error(message);
+            }
+
+            const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+            modalInstance.hide();
+            notify(result?.message || 'Смена успешно удалена', 'success');
+
+            if (activeConfig.onSuccess) {
+              activeConfig.onSuccess({ 
+                message: result?.message, 
+                raw: result,
+                action: 'delete'
+              });
+            }
+            // Принудительно очищаем кэш и обновляем календарь
+            if (window.calendarData) {
+              window.calendarData = null;
+            }
+            if (window.universalCalendar) {
+              if (window.universalCalendar.calendarData) {
+                window.universalCalendar.calendarData = null;
+              }
+              // Принудительная перезагрузка данных
+              if (window.universalCalendar.isMobile && window.universalCalendar.currentDate) {
+                // Для мобильной версии перезагружаем текущий день
+                const currentDate = window.universalCalendar.currentDate;
+                if (window.universalCalendar.renderDayView) {
+                  window.universalCalendar.renderDayView(currentDate);
+                }
+              } else if (window.universalCalendar.loadCalendarData) {
+                // Для полного календаря перезагружаем данные
+                window.universalCalendar.loadCalendarData(window.universalCalendar.currentDate || new Date());
+              }
+            }
+            if (activeConfig.refreshCalendar) {
+              activeConfig.refreshCalendar();
+            } else if (window.universalCalendar && typeof window.universalCalendar.refresh === 'function') {
+              window.universalCalendar.refresh();
+            }
+          } catch (error) {
+            notify(error.message || 'Ошибка удаления смены', 'error');
+            if (activeConfig.onError) {
+              activeConfig.onError(error);
+            }
+          } finally {
+            deleteButton.removeAttribute('disabled');
+            deleteButton.innerHTML = '<i class="bi bi-trash"></i> Удалить';
+          }
+        });
+      }
+
       confirmButton.addEventListener('click', async () => {
         const selectEl = document.getElementById('employeeSelectModal');
         if (!selectEl) {
@@ -1212,15 +1578,22 @@
         confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Назначение...';
 
         try {
+          const requestBody = {
+            timeslot_id: Number(timeslotId),
+            employee_id: Number(employeeId),
+            start_time: selectedStart,
+            end_time: selectedEnd
+          };
+          
+          // В режиме редактирования добавляем schedule_id
+          if (isEditMode && scheduleId !== null) {
+            requestBody.schedule_id = Number(scheduleId);
+          }
+          
           const response = await fetch(activeConfig.planShiftEndpoint, {
-            method: 'POST',
+            method: isEditMode ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              timeslot_id: Number(timeslotId),
-              employee_id: Number(employeeId),
-              start_time: selectedStart,
-              end_time: selectedEnd
-            })
+            body: JSON.stringify(requestBody)
           });
 
           let result = null;
@@ -1237,7 +1610,7 @@
 
           const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
           modalInstance.hide();
-          notify(result?.message || 'Смена успешно запланирована', 'success');
+          notify(result?.message || (isEditMode ? 'Смена успешно обновлена' : 'Смена успешно запланирована'), 'success');
 
           // Извлекаем дату планирования из ответа или из формы
           let plannedDate = null;
@@ -1258,11 +1631,33 @@
             }
           }
           
+          // Принудительно очищаем кэш и обновляем календарь после обновления/создания смены
+          if (window.calendarData) {
+            window.calendarData = null;
+          }
+          if (window.universalCalendar) {
+            if (window.universalCalendar.calendarData) {
+              window.universalCalendar.calendarData = null;
+            }
+            // Принудительная перезагрузка данных
+            if (window.universalCalendar.isMobile && window.universalCalendar.currentDate) {
+              // Для мобильной версии перезагружаем текущий день
+              const currentDate = window.universalCalendar.currentDate;
+              if (window.universalCalendar.renderDayView) {
+                window.universalCalendar.renderDayView(currentDate);
+              }
+            } else if (window.universalCalendar.loadCalendarData) {
+              // Для полного календаря перезагружаем данные
+              window.universalCalendar.loadCalendarData(window.universalCalendar.currentDate || new Date());
+            }
+          }
+          
           if (activeConfig.onSuccess) {
             activeConfig.onSuccess({ 
               message: result?.message, 
               raw: result,
-              plannedDate: plannedDate
+              plannedDate: plannedDate,
+              action: isEditMode ? 'update' : 'create'
             });
           }
           if (activeConfig.refreshCalendar) {
