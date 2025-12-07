@@ -66,6 +66,10 @@ class CalendarTimeslot:
     can_plan: bool = False
     can_view: bool = True
     
+    # Флаги для фильтрации
+    fully_occupied: bool = False  # Тайм-слот полностью покрыт запланированными сменами
+    has_free_track: bool = True  # Есть хотя бы один свободный трек (для активных смен)
+    
     def __post_init__(self):
         """Вычисляем доступные слоты после инициализации."""
         self.available_slots = max(0, self.max_employees - self.current_employees)

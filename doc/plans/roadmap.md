@@ -2132,6 +2132,32 @@ async def get_inherited_payment_schedule_id(
   - ✅ Исправлена инициализация бегунков: в режиме редактирования используются границы редактируемой смены
   - ✅ Исправлена обработка кликов по запланированным сменам: открывается модалка редактирования вместо страницы массового планирования
 
+#### Дополнительные задачи (08.12.2025) ✅
+- **Задача 1.7: Скрытие тайм-слотов с полным покрытием сменами (0.5 дня)** ✅
+  - **Type:** bugfix | **Files:** `apps/web/static/js/shared/universal_calendar.js`, `apps/web/templates/shared/calendar/grid.html`, `shared/services/calendar_filter_service.py`, `shared/models/calendar_data.py`, `apps/web/routes/owner.py`
+  - **Acceptance:**
+    - ✅ Если запланированная смена покрывает весь тайм-слот (от start_time до end_time), тайм-слот не отображается
+    - ✅ Если есть активная смена, открытая по запланированной, проверяем треки: тайм-слот отображается только если хотя бы один трек свободен (нет planned/active-by-plan смен на этом треке)
+    - ✅ Логика применяется в day view (mobile) и month view (desktop)
+    - ✅ На API стороне вычисляется флаг `fully_occupied` и `has_free_track` для каждого тайм-слота
+
+- **Задача 1.8: Исправление фильтра по подразделениям в mobile day view (0.5 дня)** ✅
+  - **Type:** bugfix | **Files:** `apps/web/static/js/shared/universal_calendar.js`, `apps/web/routes/owner.py`
+  - **Acceptance:**
+    - ✅ Фильтр по подразделениям в мобильной версии применяется к данным day view
+    - ✅ При выборе подразделения передается `org_unit_ids` (массив) в запрос `/calendar/api/data`
+    - ✅ На бэке получаются все потомки выбранного подразделения через `_get_all_descendants`
+    - ✅ Обновлена функция `applyMobileFilters()` для формирования правильных URL параметров
+
+- **Задача 1.9: Иерархия подразделений в дропдауне (desktop month view) (0.5 дня)** ✅
+  - **Type:** feature | **Files:** `apps/web/templates/shared/calendar/grid_unified.html`, `apps/web/routes/owner.py`, `apps/web/static/js/shared/universal_calendar.js`
+  - **Acceptance:**
+    - ✅ Дропдаун подразделений в month view (desktop) показывает иерархию с отступами и символами вложенности (├─)
+    - ✅ При выборе узла добавляются все `org_unit_id` потомков в параметр `org_unit_ids` (массив) для API через `_get_all_descendants`
+    - ✅ Используется метод `_get_all_descendants` из `OrgStructureService` для получения всех потомков
+    - ✅ Чипсы выбранных фильтров показывают название выбранного узла
+    - ✅ Обновлена функция `filterByOrgUnit()` для использования `org_unit_ids`
+
 ### Технические детали
 
 **Архитектура:**

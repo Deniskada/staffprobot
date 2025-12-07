@@ -70,8 +70,8 @@
                     <select class="form-select form-select-sm" id="orgUnitFilter" onchange="filterByOrgUnit()">
                         <option value="">Все подразделения</option>
                         {% for unit in org_units %}
-                        <option value="{{ unit.id }}" {% if unit.id == selected_org_unit_id %}selected{% endif %} style="padding-left: {{ unit.level * 12 }}px;">
-                            {{ unit.name }}
+                        <option value="{{ unit.id }}" {% if unit.id == selected_org_unit_id %}selected{% endif %} data-level="{{ unit.level }}" style="padding-left: {{ (unit.level * 12) + 4 }}px;">
+                            {% if unit.level > 0 %}{% for i in range(unit.level) %}├─{% endfor %} {% endif %}{{ unit.name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -156,8 +156,8 @@
                     <select class="form-select" id="mobileOrgUnitFilter">
                         <option value="">Все подразделения</option>
                         {% for unit in org_units %}
-                        <option value="{{ unit.id }}" {% if unit.id == selected_org_unit_id %}selected{% endif %} style="padding-left: {{ unit.level * 12 }}px;">
-                            {{ unit.name }}
+                        <option value="{{ unit.id }}" {% if unit.id == selected_org_unit_id %}selected{% endif %} data-level="{{ unit.level }}" style="padding-left: {{ (unit.level * 12) + 4 }}px;">
+                            {% if unit.level > 0 %}{% for i in range(unit.level) %}├─{% endfor %} {% endif %}{{ unit.name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -236,8 +236,12 @@ function filterByOrgUnit() {
     const url = new URL(window.location);
     
     if (orgUnitId) {
-        url.searchParams.set('org_unit_id', orgUnitId);
+        // Используем новый формат org_unit_ids (потомки будут добавлены на бэке)
+        url.searchParams.set('org_unit_ids', orgUnitId);
+        // Удаляем старый формат для совместимости
+        url.searchParams.delete('org_unit_id');
     } else {
+        url.searchParams.delete('org_unit_ids');
         url.searchParams.delete('org_unit_id');
     }
     

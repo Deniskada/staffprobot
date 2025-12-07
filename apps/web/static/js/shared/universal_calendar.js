@@ -535,8 +535,11 @@ class UniversalCalendarManager {
                 params.append('object_ids', objectIdFromUrl);
             }
             
-            // Добавляем фильтр по подразделению если есть
-            if (orgUnitIdFromUrl) {
+            // Добавляем фильтр по подразделениям если есть (новый формат org_unit_ids или старый org_unit_id)
+            const orgUnitIdsFromUrl = urlParams.get('org_unit_ids');
+            if (orgUnitIdsFromUrl) {
+                params.append('org_unit_ids', orgUnitIdsFromUrl);
+            } else if (orgUnitIdFromUrl) {
                 params.append('org_unit_id', orgUnitIdFromUrl);
             }
             
@@ -705,6 +708,15 @@ class UniversalCalendarManager {
             
             if (objectIdFromUrl) {
                 params.append('object_ids', objectIdFromUrl);
+            }
+            
+            // Добавляем фильтр по подразделениям если есть
+            const orgUnitIdFromUrl = urlParams.get('org_unit_id');
+            const orgUnitIdsFromUrl = urlParams.get('org_unit_ids');
+            if (orgUnitIdsFromUrl) {
+                params.append('org_unit_ids', orgUnitIdsFromUrl);
+            } else if (orgUnitIdFromUrl) {
+                params.append('org_unit_id', orgUnitIdFromUrl);
             }
             
             const response = await fetch(`${this.apiEndpoint}?${params}`);
@@ -1000,9 +1012,18 @@ class UniversalCalendarManager {
                         const hasFreeTime = timeslot.free_minutes && timeslot.free_minutes > 0;
                         const isFullyOccupied = actualEmployees >= maxEmployees && !hasFreeTime;
                         
+                        // Проверяем флаги из API
+                        const fullyOccupiedByPlanned = timeslot.fully_occupied || false;
+                        const hasFreeTrack = timeslot.has_free_track !== undefined ? timeslot.has_free_track : true;
+                        
+                        // Скрываем тайм-слот если:
+                        // 1. Он полностью покрыт запланированной сменой (fully_occupied)
+                        // 2. Или если есть активные смены по плану и нет свободных треков (!has_free_track)
+                        const shouldHide = fullyOccupiedByPlanned || (!hasFreeTrack && actualEmployees > 0);
+                        
                         // Показываем все тайм-слоты, кроме полностью занятых (и по сотрудникам, и по времени)
                         // Частично занятые тайм-слоты (свободное время) показываем с указанием свободного времени
-                        if (!isFullyOccupied) {
+                        if (!isFullyOccupied && !shouldHide) {
                             visibleTimeslots.push({ timeslot, timeslotShifts, status, actualEmployees, maxEmployees });
                         }
                     });
@@ -1679,8 +1700,12 @@ class UniversalCalendarManager {
         if (mobileOrgUnitFilter) {
             const orgUnitId = mobileOrgUnitFilter.value;
             if (orgUnitId) {
-                url.searchParams.set('org_unit_id', orgUnitId);
+                // Используем новый формат org_unit_ids (потомки будут добавлены на бэке)
+                url.searchParams.set('org_unit_ids', orgUnitId);
+                // Удаляем старый формат для совместимости
+                url.searchParams.delete('org_unit_id');
             } else {
+                url.searchParams.delete('org_unit_ids');
                 url.searchParams.delete('org_unit_id');
             }
         }
@@ -1754,34 +1779,39 @@ class UniversalCalendarManager {
         if (!chipsContainer) return;
         
         const urlParams = new URLSearchParams(window.location.search);
-        const orgUnitId = urlParams.get('org_unit_id');
+        const orgUnitIds = urlParams.get('org_unit_ids');
+        const orgUnitId = urlParams.get('org_unit_id'); // Старый формат для совместимости
         const objectId = urlParams.get('object_id');
         
         chipsContainer.innerHTML = '';
         
-        if (!orgUnitId && !objectId) {
+        if (!orgUnitIds && !orgUnitId && !objectId) {
             chipsContainer.style.display = 'none';
             return;
         }
         
         chipsContainer.style.display = 'flex';
         
-        // Чипс подразделения
-        if (orgUnitId) {
+        // Чипс подразделения (новый формат org_unit_ids или старый org_unit_id)
+        const selectedOrgUnitId = orgUnitIds || orgUnitId;
+        if (selectedOrgUnitId) {
             const orgUnitSelect = document.getElementById('mobileOrgUnitFilter') || document.getElementById('orgUnitFilter');
             if (orgUnitSelect) {
-                const selectedOption = orgUnitSelect.querySelector(`option[value="${orgUnitId}"]`);
+                // Если org_unit_ids содержит несколько ID, берем первый (основной)
+                const mainOrgUnitId = selectedOrgUnitId.split(',')[0];
+                const selectedOption = orgUnitSelect.querySelector(`option[value="${mainOrgUnitId}"]`);
                 if (selectedOption) {
                     const chip = document.createElement('span');
                     chip.className = 'filter-chip';
                     chip.innerHTML = `
-                        <span>Подразделение: ${selectedOption.textContent}</span>
-                        <span class="chip-remove" data-filter="org_unit_id">×</span>
+                        <span>Подразделение: ${selectedOption.textContent.trim()}</span>
+                        <span class="chip-remove" data-filter="org_unit_ids">×</span>
                     `;
                     chipsContainer.appendChild(chip);
                     
                     chip.querySelector('.chip-remove').addEventListener('click', () => {
                         const url = new URL(window.location);
+                        url.searchParams.delete('org_unit_ids');
                         url.searchParams.delete('org_unit_id');
                         window.location.href = url.toString();
                     });

@@ -2440,7 +2440,8 @@ async def owner_calendar_api_data(
     start_date: str = Query(..., description="Начальная дата в формате YYYY-MM-DD"),
     end_date: str = Query(..., description="Конечная дата в формате YYYY-MM-DD"),
     object_ids: Optional[str] = Query(None, description="ID объектов через запятую"),
-    org_unit_id: Optional[int] = Query(None, description="ID подразделения для фильтрации"),
+    org_unit_id: Optional[int] = Query(None, description="ID подразделения для фильтрации (устаревший, используйте org_unit_ids)"),
+    org_unit_ids: Optional[str] = Query(None, description="ID подразделений через запятую (включая потомков)"),
     current_user: dict = Depends(get_current_user_dependency()),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -2462,17 +2463,17 @@ async def owner_calendar_api_data(
 
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
-        cache_key_data = f"calendar_api_owner:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}:{org_unit_id or 'all'}"
+        cache_key_data = f"calendar_api_owner:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}:{org_unit_ids or org_unit_id or 'all'}"
         cache_key = hashlib.md5(cache_key_data.encode()).hexdigest()
         
         # Проверяем кэш
         from core.cache.redis_cache import cache
         cached_response = await cache.get(f"api_response:{cache_key}", serialize="json")
         if cached_response:
-            logger.info(f"Owner calendar API: cache HIT for {start_date} to {end_date}, org_unit={org_unit_id}")
+            logger.info(f"Owner calendar API: cache HIT for {start_date} to {end_date}, org_unit_ids={org_unit_ids or org_unit_id}")
             return cached_response
         
-        logger.info(f"Owner calendar API: cache MISS for {start_date} to {end_date}, org_unit={org_unit_id}")
+        logger.info(f"Owner calendar API: cache MISS for {start_date} to {end_date}, org_unit_ids={org_unit_ids or org_unit_id}")
         
         # Парсим даты
         try:
@@ -2484,18 +2485,38 @@ async def owner_calendar_api_data(
         # Парсим фильтр объектов
         object_filter = None
         
-        # Если указано подразделение - получаем объекты этого подразделения
-        if org_unit_id and not object_ids:
+        # Если указаны подразделения (новый формат org_unit_ids или старый org_unit_id) - получаем объекты этих подразделений
+        org_unit_ids_list = []
+        if org_unit_ids:
+            try:
+                org_unit_ids_list = [int(unit_id.strip()) for unit_id in org_unit_ids.split(",") if unit_id.strip()]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат ID подразделений")
+        elif org_unit_id:
+            # Старый формат - один ID
+            org_unit_ids_list = [org_unit_id]
+        
+        if org_unit_ids_list and not object_ids:
+            from apps.web.services.org_structure_service import OrgStructureService
             object_service = ObjectService(db)
+            org_service = OrgStructureService(db)
             owner_telegram_id = user_id
             all_objects = await object_service.get_objects_by_owner(owner_telegram_id)
-            filtered_by_org = [obj.id for obj in all_objects if obj.org_unit_id == org_unit_id]
+            
+            # Получаем все потомки выбранных подразделений
+            all_org_unit_ids = set(org_unit_ids_list)
+            for unit_id in org_unit_ids_list:
+                descendants = await org_service._get_all_descendants(unit_id)
+                all_org_unit_ids.update([d.id for d in descendants])
+            
+            # Фильтруем объекты по подразделениям (включая потомков)
+            filtered_by_org = [obj.id for obj in all_objects if obj.org_unit_id in all_org_unit_ids]
             if filtered_by_org:
                 object_filter = filtered_by_org
-                logger.info(f"Filtering by org_unit_id={org_unit_id}: {len(filtered_by_org)} objects - {filtered_by_org}")
+                logger.info(f"Filtering by org_unit_ids={org_unit_ids_list} (including descendants): {len(filtered_by_org)} objects - {filtered_by_org}")
             else:
-                logger.info(f"No objects found for org_unit_id={org_unit_id}")
-                # Если нет объектов в подразделении - вернем пустой результат
+                logger.info(f"No objects found for org_unit_ids={org_unit_ids_list}")
+                # Если нет объектов в подразделениях - вернем пустой результат
                 object_filter = [-1]  # Несуществующий ID чтобы вернуть пустой результат
         elif object_ids:
             try:
@@ -2572,7 +2593,9 @@ async def owner_calendar_api_data(
                 "coordinates": ts.coordinates,
                 "can_edit": ts.can_edit,
                 "can_plan": ts.can_plan,
-                "can_view": ts.can_view
+                "can_view": ts.can_view,
+                "fully_occupied": getattr(ts, 'fully_occupied', False),
+                "has_free_track": getattr(ts, 'has_free_track', True)
             })
         
         logger.info(f"Owner calendar API: processed {len(timeslots_data)} timeslots (hidden: {hidden_count}, skipped: {skipped_count})")

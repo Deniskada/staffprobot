@@ -696,6 +696,38 @@ class CalendarFilterService:
                         if shift.shift_type in (ShiftType.ACTIVE, ShiftType.COMPLETED):
                             shift.status_label = delay_label
 
+                # Проверка полного покрытия тайм-слота запланированными сменами
+                # Если есть запланированная смена, которая покрывает весь тайм-слот (от start_time до end_time)
+                fully_covered_by_planned = False
+                for detail in shift_details:
+                    shift = detail["shift"]
+                    if shift.shift_type == ShiftType.PLANNED:
+                        start_local = detail["start_local"]
+                        end_local = detail["end_local"]
+                        # Проверяем, покрывает ли смена весь тайм-слот
+                        if start_local <= slot_start_local and end_local >= slot_end_local:
+                            fully_covered_by_planned = True
+                            break
+                
+                timeslot.fully_occupied = fully_covered_by_planned
+                
+                # Проверка треков для активных смен
+                # Если есть активная смена, открытая по запланированной, проверяем треки
+                # Треки определяются на фронте, но здесь можем проверить базовую логику
+                # Если все треки заняты (current_employees >= max_employees и нет free_minutes), то has_free_track = False
+                has_free_track = True
+                if timeslot.current_employees >= timeslot.max_employees and timeslot.free_minutes <= 0:
+                    # Проверяем, есть ли активные смены, открытые по запланированным
+                    has_active_from_planned = any(
+                        shift.shift_type == ShiftType.ACTIVE and shift.schedule_id is not None
+                        for shift in direct_shifts
+                    )
+                    if has_active_from_planned:
+                        # Если все треки заняты активными сменами по плану, то нет свободных треков
+                        has_free_track = False
+                
+                timeslot.has_free_track = has_free_track
+
             return timeslots
             
         except Exception as e:

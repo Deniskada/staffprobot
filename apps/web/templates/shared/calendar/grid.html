@@ -615,9 +615,19 @@ function createTimeslotElement(timeslot) {
     const currentEmployees = timeslot.current_employees || 0;
     const maxEmployees = timeslot.max_employees || 1;
     
-    // Не отображаем полностью занятые тайм-слоты
-    if (currentEmployees >= maxEmployees) {
-        console.log(`Skipping fully occupied timeslot ${timeslot.id} (${currentEmployees}/${maxEmployees})`);
+    // Проверяем флаги из API
+    const fullyOccupiedByPlanned = timeslot.fully_occupied || false;
+    const hasFreeTime = timeslot.free_minutes && timeslot.free_minutes > 0;
+    const hasFreeTrack = timeslot.has_free_track !== undefined ? timeslot.has_free_track : true;
+    
+    // Скрываем тайм-слот если:
+    // 1. Он полностью покрыт запланированной сменой (fully_occupied)
+    // 2. Или если есть активные смены по плану и нет свободных треков (!has_free_track)
+    // 3. Или если полностью занят по сотрудникам и нет свободного времени
+    const shouldHide = fullyOccupiedByPlanned || (!hasFreeTrack && currentEmployees > 0) || (currentEmployees >= maxEmployees && !hasFreeTime);
+    
+    if (shouldHide) {
+        console.log(`Skipping fully occupied timeslot ${timeslot.id} (${currentEmployees}/${maxEmployees}, fully_occupied=${fullyOccupiedByPlanned}, has_free_track=${hasFreeTrack})`);
         return null;
     }
     
