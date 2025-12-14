@@ -9,8 +9,6 @@ RUN apt-get update && \
     libffi-dev \
     libssl-dev \
     curl \
-    certbot \
-    python3-certbot \
     && rm -rf /var/lib/apt/lists/*
 
 # Установка рабочей директории
