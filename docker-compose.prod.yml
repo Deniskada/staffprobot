@@ -186,8 +186,6 @@ services:
     command: python scripts/start_celery_worker.py
     volumes:
       - .:/app
-      - /usr/bin/certbot:/usr/bin/certbot:ro
-      - /usr/lib/python3/dist-packages/certbot:/usr/lib/python3/dist-packages/certbot:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/lib/letsencrypt:/var/lib/letsencrypt:rw
       - /var/log/letsencrypt:/var/log/letsencrypt:rw

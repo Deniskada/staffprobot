@@ -9,7 +9,10 @@ RUN apt-get update && \
     libffi-dev \
     libssl-dev \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    python3-pip \
+    python3-setuptools \
+    && rm -rf /var/lib/apt/lists/* && \
+    pip3 install --no-cache-dir certbot==2.1.0
 
 # Установка рабочей директории
 WORKDIR /app
