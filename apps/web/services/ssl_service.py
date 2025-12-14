@@ -723,9 +723,8 @@ class SSLService:
                 # Пытаемся создать директорию, если её нет
                 try:
                     os.makedirs(webroot_challenge_path, exist_ok=True)
-                    # Проверяем доступность через команду (более надежно в контейнере)
-                    test_cmd = await self._run_command(["test", "-d", webroot_challenge_path])
-                    if test_cmd["success"] or os.path.exists(webroot_challenge_path):
+                    # Проверяем доступность через os.path.exists
+                    if os.path.exists(webroot_challenge_path) and os.path.isdir(webroot_challenge_path):
                         use_webroot = True
                         logger.info(f"Webroot директория доступна: {webroot_challenge_path}")
                     else:
