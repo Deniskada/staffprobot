@@ -809,9 +809,20 @@ class SSLService:
                             cert_info["not_before"] = datetime.strptime(date_str, "%b %d %H:%M:%S %Y")
                     except Exception as e:
                         logger.warning(f"Ошибка парсинга даты Not Before: {date_str}, ошибка: {e}")
-                elif line.startswith("Not After:"):
-                    date_str = line.replace("Not After:", "").strip()
-                    cert_info["not_after"] = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
+                elif "Not After" in line:
+                    # Может быть "Not After :" или "Not After:"
+                    if ":" in line:
+                        date_str = line.split(":", 1)[1].strip()
+                    else:
+                        date_str = line.replace("Not After", "").strip()
+                    
+                    try:
+                        try:
+                            cert_info["not_after"] = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
+                        except ValueError:
+                            cert_info["not_after"] = datetime.strptime(date_str, "%b %d %H:%M:%S %Y")
+                    except Exception as e:
+                        logger.warning(f"Ошибка парсинга даты Not After: {date_str}, ошибка: {e}")
                 elif line.startswith("Serial Number:"):
                     cert_info["serial_number"] = line.replace("Serial Number:", "").strip()
                 elif line.startswith("Version:"):
