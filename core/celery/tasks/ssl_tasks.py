@@ -305,20 +305,52 @@ def validate_ssl_configuration() -> Dict[str, Any]:
 async def _send_ssl_notification(notification_type: str, message: str, data: Dict[str, Any]) -> None:
     """Отправка уведомления о SSL"""
     try:
+        from domain.entities.user import User, UserRole
+        from domain.entities.notification import NotificationType, NotificationChannel, NotificationPriority
+        from sqlalchemy import select, or_
+        
         async with get_async_session() as session:
-            notification_service = NotificationService(session)
+            notification_service = NotificationService()
             
-            # Создаем уведомление для суперадминов
-            await notification_service.create_notification(
-                user_id=None,  # Системное уведомление
-                notification_type="ssl_alert",
-                title=f"SSL Alert: {notification_type.upper()}",
-                message=message,
-                data=data,
-                priority="high" if notification_type == "error" else "normal"
+            # Находим всех суперадминов
+            roles_filter = User.roles.contains([UserRole.SUPERADMIN.value])
+            query = select(User.id).where(
+                or_(User.role == UserRole.SUPERADMIN.value, roles_filter)
             )
+            result = await session.execute(query)
+            superadmin_ids = [row[0] for row in result.fetchall()]
             
-            logger.info(f"SSL notification sent: {notification_type}")
+            if not superadmin_ids:
+                logger.warning("No superadmins found for SSL notification")
+                return
+            
+            # Определяем приоритет и тип уведомления
+            priority = NotificationPriority.URGENT if notification_type == "error" else NotificationPriority.HIGH
+            notif_type = NotificationType.SYSTEM_MAINTENANCE
+            
+            # Отправляем уведомления всем суперадминам
+            for user_id in superadmin_ids:
+                await notification_service.create_notification(
+                    user_id=user_id,
+                    type=notif_type,
+                    channel=NotificationChannel.IN_APP,
+                    title=f"SSL Alert: {notification_type.upper()}",
+                    message=message,
+                    data=data,
+                    priority=priority
+                )
+                # Также отправляем в Telegram
+                await notification_service.create_notification(
+                    user_id=user_id,
+                    type=notif_type,
+                    channel=NotificationChannel.TELEGRAM,
+                    title=f"SSL Alert: {notification_type.upper()}",
+                    message=message,
+                    data=data,
+                    priority=priority
+                )
+            
+            logger.info(f"SSL notification sent to {len(superadmin_ids)} superadmins: {notification_type}")
             
     except Exception as e:
         logger.error(f"Error sending SSL notification: {e}")
