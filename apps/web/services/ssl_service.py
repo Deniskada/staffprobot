@@ -394,27 +394,41 @@ class SSLService:
     async def _check_renewal_needed(self) -> Dict[str, Any]:
         """Проверка необходимости обновления сертификатов"""
         try:
-            # Запускаем dry-run обновления
-            cmd = [self.certbot_path, "renew", "--dry-run"]
-            result = await self._run_command(cmd)
+            # Получаем домен из настроек
+            domain = await self.settings_service.get_domain()
+            if not domain or domain == "localhost:8001":
+                return {
+                    "needed": False,
+                    "message": "Домен не настроен"
+                }
             
-            if result["success"]:
-                # Проверяем, есть ли сертификаты для обновления
-                if "No renewals were attempted" in result["stdout"]:
-                    return {
-                        "needed": False,
-                        "message": "Обновление не требуется"
-                    }
-                else:
-                    return {
-                        "needed": True,
-                        "message": "Требуется обновление сертификатов"
-                    }
+            # Проверяем статус сертификата напрямую
+            status = await self.check_certificate_status(domain)
+            
+            if not status.get("valid") or not status.get("exists"):
+                return {
+                    "needed": True,
+                    "message": "Сертификат не найден или невалиден",
+                    "next_renewal": datetime.now()
+                }
+            
+            # Проверяем срок действия
+            days_until_expiry = status.get("days_until_expiry", 0)
+            
+            # Обновляем, если до истечения осталось 30 дней или меньше
+            if days_until_expiry <= 30:
+                return {
+                    "needed": True,
+                    "message": f"Сертификат истекает через {days_until_expiry} дней",
+                    "days_until_expiry": days_until_expiry,
+                    "next_renewal": datetime.now()
+                }
             else:
                 return {
                     "needed": False,
-                    "error": "Ошибка проверки обновления",
-                    "details": result["stderr"]
+                    "message": f"Сертификат действителен еще {days_until_expiry} дней",
+                    "days_until_expiry": days_until_expiry,
+                    "next_renewal": datetime.now() + timedelta(days=days_until_expiry - 30)
                 }
                 
         except Exception as e:

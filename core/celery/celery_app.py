@@ -23,6 +23,7 @@ celery_app = Celery(
         "core.celery.tasks.task_bonuses",  # Tasks v2: бонусы/штрафы
         "core.celery.tasks.billing_tasks",  # Iteration 39: биллинг и автопродление подписок
         "core.celery.tasks.bot_monitoring_tasks",
+        "core.celery.tasks.ssl_tasks",  # SSL сертификаты: проверка и обновление
     ]
 )
 
@@ -137,6 +138,21 @@ celery_app.conf.update(
             'task': 'monitor_bot_heartbeat',
             'schedule': 60,  # каждую минуту
         },
+        # SSL сертификаты: проверка срока действия каждый день в 09:00 (MSK)
+        'check-certificate-expiry': {
+            'task': 'check_certificate_expiry',
+            'schedule': crontab(hour=9, minute=0),  # каждый день в 09:00 MSK
+        },
+        # SSL сертификаты: обновление каждый день в 12:00 (MSK)
+        'renew-ssl-certificates': {
+            'task': 'renew_ssl_certificates',
+            'schedule': crontab(hour=12, minute=0),  # каждый день в 12:00 MSK
+        },
+        # SSL сертификаты: валидация конфигурации каждые 6 часов
+        'validate-ssl-configuration': {
+            'task': 'validate_ssl_configuration',
+            'schedule': 6 * 60 * 60,  # каждые 6 часов
+        },
     },
     
     # Маршрутизация задач
@@ -163,6 +179,10 @@ celery_app.conf.update(
         'check-expired-subscriptions': {'queue': 'celery'},  # Iteration 39: проверка истёкших подписок
         'activate-scheduled-subscriptions': {'queue': 'celery'},  # Iteration 39: активация отложенных подписок
         'monitor_bot_heartbeat': {'queue': 'celery'},
+        'core.celery.tasks.ssl_tasks.*': {'queue': 'celery'},  # SSL задачи
+        'check-certificate-expiry': {'queue': 'celery'},  # SSL: проверка срока действия
+        'renew-ssl-certificates': {'queue': 'celery'},  # SSL: обновление сертификатов
+        'validate-ssl-configuration': {'queue': 'celery'},  # SSL: валидация конфигурации
     },
 )
 

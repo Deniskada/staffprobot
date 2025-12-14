@@ -15,9 +15,8 @@ from shared.services.notification_service import NotificationService
 from core.celery.celery_app import celery_app
 
 
-@celery_app.task
-async def renew_ssl_certificates() -> Dict[str, Any]:
-    """Периодическая проверка и обновление SSL сертификатов"""
+async def _renew_ssl_certificates_async() -> Dict[str, Any]:
+    """Асинхронная функция обновления SSL сертификатов"""
     try:
         logger.info("Starting SSL certificate renewal task")
         
@@ -87,9 +86,15 @@ async def renew_ssl_certificates() -> Dict[str, Any]:
         }
 
 
-@celery_app.task
-async def check_certificate_expiry() -> Dict[str, Any]:
-    """Проверка срока действия сертификатов"""
+@celery_app.task(name="renew_ssl_certificates")
+def renew_ssl_certificates() -> Dict[str, Any]:
+    """Периодическая проверка и обновление SSL сертификатов"""
+    import asyncio
+    return asyncio.run(_renew_ssl_certificates_async())
+
+
+async def _check_certificate_expiry_async() -> Dict[str, Any]:
+    """Асинхронная функция проверки срока действия сертификатов"""
     try:
         logger.info("Starting SSL certificate expiry check task")
         
@@ -170,6 +175,13 @@ async def check_certificate_expiry() -> Dict[str, Any]:
         }
 
 
+@celery_app.task(name="check_certificate_expiry")
+def check_certificate_expiry() -> Dict[str, Any]:
+    """Проверка срока действия сертификатов"""
+    import asyncio
+    return asyncio.run(_check_certificate_expiry_async())
+
+
 @celery_app.task
 async def setup_ssl_for_domain(domain: str, email: str) -> Dict[str, Any]:
     """Настройка SSL для нового домена"""
@@ -220,9 +232,8 @@ async def setup_ssl_for_domain(domain: str, email: str) -> Dict[str, Any]:
         }
 
 
-@celery_app.task
-async def validate_ssl_configuration() -> Dict[str, Any]:
-    """Валидация SSL конфигурации"""
+async def _validate_ssl_configuration_async() -> Dict[str, Any]:
+    """Асинхронная функция валидации SSL конфигурации"""
     try:
         logger.info("Starting SSL configuration validation task")
         
@@ -248,8 +259,8 @@ async def validate_ssl_configuration() -> Dict[str, Any]:
             # Проверяем доступность сайта
             import aiohttp
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://{domain}", timeout=10) as response:
+                async with aiohttp.ClientSession() as http_session:
+                    async with http_session.get(f"https://{domain}", timeout=10) as response:
                         site_accessible = response.status == 200
             except Exception:
                 site_accessible = False
@@ -284,6 +295,13 @@ async def validate_ssl_configuration() -> Dict[str, Any]:
         }
 
 
+@celery_app.task(name="validate_ssl_configuration")
+def validate_ssl_configuration() -> Dict[str, Any]:
+    """Валидация SSL конфигурации"""
+    import asyncio
+    return asyncio.run(_validate_ssl_configuration_async())
+
+
 async def _send_ssl_notification(notification_type: str, message: str, data: Dict[str, Any]) -> None:
     """Отправка уведомления о SSL"""
     try:
@@ -306,21 +324,6 @@ async def _send_ssl_notification(notification_type: str, message: str, data: Dic
         logger.error(f"Error sending SSL notification: {e}")
 
 
-# Периодические задачи
-@celery_app.task
-def schedule_ssl_tasks():
-    """Планирование SSL задач"""
-    try:
-        # Запускаем проверку срока действия каждый день в 9:00
-        check_certificate_expiry.apply_async(eta=datetime.now().replace(hour=9, minute=0, second=0, microsecond=0))
-        
-        # Запускаем обновление сертификатов каждый день в 12:00
-        renew_ssl_certificates.apply_async(eta=datetime.now().replace(hour=12, minute=0, second=0, microsecond=0))
-        
-        # Запускаем валидацию конфигурации каждые 6 часов
-        validate_ssl_configuration.apply_async(eta=datetime.now() + timedelta(hours=6))
-        
-        logger.info("SSL tasks scheduled successfully")
-        
-    except Exception as e:
-        logger.error(f"Error scheduling SSL tasks: {e}")
+# Периодические задачи регистрируются в celery_app.py в beat_schedule
+# Функция schedule_ssl_tasks() больше не используется, так как задачи
+# автоматически планируются через beat_schedule
