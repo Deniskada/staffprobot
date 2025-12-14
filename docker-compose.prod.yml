@@ -189,6 +189,7 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:rw
       - /var/lib/letsencrypt:/var/lib/letsencrypt:rw
       - /var/log/letsencrypt:/var/log/letsencrypt:rw
+      - /var/www/html:/var/www/html:rw
     working_dir: /app
     environment:
       - ENVIRONMENT=production
