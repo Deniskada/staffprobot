@@ -666,9 +666,25 @@ class SSLService:
                     "error": "Email для SSL не настроен, невозможно получить сертификат"
                 }
             
-            # Останавливаем nginx для standalone режима
+            # Для standalone режима нужно остановить nginx, но мы в контейнере
+            # Попробуем использовать nginx плагин, если он доступен
+            # Если нет - используем standalone (nginx должен быть остановлен вручную на хосте)
+            use_nginx_plugin = False
             if authenticator == "standalone":
-                await self._stop_nginx()
+                # Проверяем, можем ли мы использовать nginx плагин
+                # Если nginx запущен, лучше использовать nginx плагин
+                nginx_check = await self._run_command(["nginx", "-t"])
+                if nginx_check["success"]:
+                    # Nginx доступен, пробуем использовать nginx плагин
+                    logger.info("Nginx доступен, используем nginx плагин вместо standalone")
+                    authenticator = "nginx"
+                    use_nginx_plugin = True
+                else:
+                    # Nginx недоступен, используем standalone
+                    # Но нужно остановить nginx на хосте вручную
+                    logger.warning("Nginx недоступен или не настроен, используем standalone режим")
+                    logger.warning("ВНИМАНИЕ: Для standalone режима nginx должен быть остановлен на хосте!")
+                    await self._stop_nginx()  # Попытка остановить (может не сработать в контейнере)
             
             try:
                 # Формируем команду certonly
@@ -683,7 +699,13 @@ class SSLService:
                     "--non-interactive"
                 ]
                 
-                logger.info(f"Выполняем certbot certonly для доменов: {', '.join(domains)}")
+                # Для nginx плагина не нужно останавливать nginx
+                if use_nginx_plugin:
+                    logger.info(f"Выполняем certbot certonly с nginx плагином для доменов: {', '.join(domains)}")
+                else:
+                    logger.info(f"Выполняем certbot certonly в standalone режиме для доменов: {', '.join(domains)}")
+                    logger.warning("Убедитесь, что nginx остановлен на хосте для standalone режима!")
+                
                 result = await self._run_command(cmd)
                 
                 if result["success"]:
@@ -693,9 +715,37 @@ class SSLService:
                         "renewed": True,
                         "output": result["stdout"],
                         "method": "certonly",
+                        "authenticator": authenticator,
                         "domains": domains
                     }
                 else:
+                    # Если standalone не сработал, пробуем nginx плагин
+                    if authenticator == "standalone" and not use_nginx_plugin:
+                        logger.info("Standalone режим не сработал, пробуем nginx плагин")
+                        cmd_nginx = [
+                            self.certbot_path,
+                            "certonly",
+                            "--nginx",
+                            "--email", email,
+                            "--agree-tos",
+                            "--no-eff-email",
+                            "--domains", ",".join(domains),
+                            "--non-interactive"
+                        ]
+                        logger.info(f"Выполняем certbot certonly с nginx плагином для доменов: {', '.join(domains)}")
+                        result_nginx = await self._run_command(cmd_nginx)
+                        
+                        if result_nginx["success"]:
+                            logger.info(f"Сертификат успешно получен через nginx плагин для {domain}")
+                            return {
+                                "success": True,
+                                "renewed": True,
+                                "output": result_nginx["stdout"],
+                                "method": "certonly",
+                                "authenticator": "nginx",
+                                "domains": domains
+                            }
+                    
                     return {
                         "success": False,
                         "error": "Ошибка получения нового сертификата",
@@ -703,8 +753,8 @@ class SSLService:
                         "stdout": result["stdout"]
                     }
             finally:
-                # Запускаем nginx обратно
-                if authenticator == "standalone":
+                # Запускаем nginx обратно только если мы его останавливали
+                if authenticator == "standalone" and not use_nginx_plugin:
                     await self._start_nginx()
                     
         except Exception as e:
