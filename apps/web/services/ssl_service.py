@@ -963,6 +963,87 @@ class SSLService:
             logger.error(f"Error parsing certificate info: {e}")
             raise
     
+    async def _find_certificate_path(self, domain: str) -> Optional[str]:
+        """Поиск пути к сертификату (включая варианты с суффиксами)"""
+        try:
+            # Проверяем основной путь
+            cert_path = f"{self.letsencrypt_dir}/live/{domain}/fullchain.pem"
+            if os.path.exists(cert_path):
+                return cert_path
+            
+            # Ищем сертификаты с суффиксами (-0001, -0002 и т.д.)
+            live_dir = f"{self.letsencrypt_dir}/live"
+            if os.path.exists(live_dir):
+                # Сортируем по имени в обратном порядке, чтобы получить самый новый
+                items = sorted([item for item in os.listdir(live_dir) if item.startswith(f"{domain}-")], reverse=True)
+                for item in items:
+                    alt_cert_path = f"{live_dir}/{item}/fullchain.pem"
+                    if os.path.exists(alt_cert_path):
+                        logger.info(f"Найден сертификат в директории: {item}")
+                        return alt_cert_path
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error finding certificate path for {domain}: {e}")
+            return None
+    
+    async def _update_nginx_certificate_path(self, domain: str, cert_path: str) -> bool:
+        """Обновление пути к сертификату в конфигурации nginx"""
+        try:
+            # Извлекаем директорию из пути сертификата
+            # Например: /etc/letsencrypt/live/staffprobot.ru-0001/fullchain.pem -> /etc/letsencrypt/live/staffprobot.ru-0001
+            cert_dir = os.path.dirname(cert_path)
+            
+            # Находим конфигурационные файлы nginx
+            nginx_config_paths = [
+                "/etc/nginx/sites-enabled/staffprobot.conf",
+                f"/etc/nginx/sites-enabled/{domain}.conf",
+                "/etc/nginx/nginx.conf"
+            ]
+            
+            updated = False
+            for config_path in nginx_config_paths:
+                if not os.path.exists(config_path):
+                    continue
+                
+                # Читаем конфигурацию
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Заменяем старый путь на новый
+                old_patterns = [
+                    f"/etc/letsencrypt/live/{domain}/",
+                    f"/etc/letsencrypt/live/{domain}-0001/",
+                    f"/etc/letsencrypt/live/{domain}-0002/",
+                ]
+                
+                new_content = content
+                for old_pattern in old_patterns:
+                    if old_pattern in content and old_pattern != cert_dir + "/":
+                        new_content = new_content.replace(old_pattern, cert_dir + "/")
+                        updated = True
+                        logger.info(f"Обновлен путь к сертификату в {config_path}: {old_pattern} -> {cert_dir}/")
+                
+                # Сохраняем обновленную конфигурацию
+                if updated:
+                    with open(config_path, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    logger.info(f"Конфигурация nginx обновлена: {config_path}")
+            
+            # Перезагружаем nginx, если конфигурация была обновлена
+            if updated:
+                reload_result = await self._reload_nginx()
+                if reload_result.get("success"):
+                    logger.info("Nginx успешно перезагружен с новым путем к сертификату")
+                else:
+                    logger.warning(f"Nginx не был перезагружен автоматически: {reload_result.get('error', 'unknown error')}")
+            
+            return updated
+            
+        except Exception as e:
+            logger.error(f"Error updating nginx certificate path for {domain}: {e}")
+            return False
+    
     async def _run_command(self, cmd: List[str]) -> Dict[str, Any]:
         """Выполнение системной команды"""
         try:
