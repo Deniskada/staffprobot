@@ -602,12 +602,21 @@ class SSLService:
             else:
                 # Анализируем ошибку
                 error_output = result["stderr"].lower()
+                stdout_output = result["stdout"].lower()
                 
                 # Если сертификат не найден и есть домен, пытаемся получить новый
                 if ("no certs found" in error_output or 
                     "certificate not found" in error_output or
                     "no such file" in error_output) and domain:
                     logger.info(f"Сертификат не найден для {domain}, пытаемся получить новый")
+                    return await self._fallback_to_certonly(domain)
+                
+                # Если certbot renew не смог обновить из-за challenge failed, пробуем certonly
+                if ("challenges have failed" in error_output or 
+                    "some challenges have failed" in error_output or
+                    "renewal failure" in error_output or
+                    "failed to renew" in error_output) and domain:
+                    logger.warning(f"certbot renew не смог обновить сертификат для {domain} из-за ошибки challenge, пробуем certonly")
                     return await self._fallback_to_certonly(domain)
                 
                 return {
@@ -786,9 +795,20 @@ class SSLService:
                     cert_info["issuer"] = line.replace("Issuer:", "").strip()
                 elif line.startswith("Subject:"):
                     cert_info["subject"] = line.replace("Subject:", "").strip()
-                elif line.startswith("Not Before:"):
-                    date_str = line.replace("Not Before:", "").strip()
-                    cert_info["not_before"] = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
+                elif "Not Before" in line:
+                    # Может быть "Not Before :" или "Not Before:"
+                    if ":" in line:
+                        date_str = line.split(":", 1)[1].strip()
+                    else:
+                        date_str = line.replace("Not Before", "").strip()
+                    
+                    try:
+                        try:
+                            cert_info["not_before"] = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
+                        except ValueError:
+                            cert_info["not_before"] = datetime.strptime(date_str, "%b %d %H:%M:%S %Y")
+                    except Exception as e:
+                        logger.warning(f"Ошибка парсинга даты Not Before: {date_str}, ошибка: {e}")
                 elif line.startswith("Not After:"):
                     date_str = line.replace("Not After:", "").strip()
                     cert_info["not_after"] = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
