@@ -121,6 +121,11 @@ class SSLService:
             if not result["success"]:
                 return result
             
+            # Проверяем и обновляем путь к сертификату в nginx, если он изменился
+            cert_path = await self._find_certificate_path(domain)
+            if cert_path:
+                await self._update_nginx_certificate_path(domain, cert_path)
+            
             # Перезагружаем nginx
             reload_result = await self._reload_nginx()
             if not reload_result["success"]:
