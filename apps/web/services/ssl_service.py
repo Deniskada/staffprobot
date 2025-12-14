@@ -160,6 +160,15 @@ class SSLService:
             # Получаем информацию о сертификате
             cert_info = await self._parse_certificate_info(cert_path)
             
+            # Проверяем, что парсинг прошел успешно
+            if "not_after" not in cert_info:
+                logger.error(f"Не удалось распарсить дату истечения сертификата для {domain}")
+                return {
+                    "valid": False,
+                    "exists": True,
+                    "error": "Ошибка парсинга сертификата: не найдена дата истечения"
+                }
+            
             # Проверяем срок действия
             now = datetime.now()
             days_until_expiry = (cert_info["not_after"] - now).days
