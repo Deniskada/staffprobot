@@ -148,14 +148,28 @@ class SSLService:
     async def check_certificate_status(self, domain: str) -> Dict[str, Any]:
         """Проверка статуса SSL сертификатов"""
         try:
+            # Проверяем основной путь
             cert_path = f"{self.letsencrypt_dir}/live/{domain}/fullchain.pem"
             
+            # Если сертификат не найден, проверяем варианты с суффиксами (-0001, -0002 и т.д.)
             if not os.path.exists(cert_path):
-                return {
-                    "valid": False,
-                    "exists": False,
-                    "error": "Сертификат не найден"
-                }
+                # Ищем сертификаты с суффиксами
+                live_dir = f"{self.letsencrypt_dir}/live"
+                if os.path.exists(live_dir):
+                    for item in os.listdir(live_dir):
+                        if item.startswith(f"{domain}-"):
+                            alt_cert_path = f"{live_dir}/{item}/fullchain.pem"
+                            if os.path.exists(alt_cert_path):
+                                logger.info(f"Найден сертификат в альтернативной директории: {item}")
+                                cert_path = alt_cert_path
+                                break
+                
+                if not os.path.exists(cert_path):
+                    return {
+                        "valid": False,
+                        "exists": False,
+                        "error": "Сертификат не найден"
+                    }
             
             # Получаем информацию о сертификате
             cert_info = await self._parse_certificate_info(cert_path)
@@ -560,6 +574,18 @@ class SSLService:
                 
                 if "authenticator" in config["renewalparams"]:
                     params["authenticator"] = config["renewalparams"]["authenticator"]
+                
+                # Читаем webroot_path, если указан
+                if "webroot_path" in config["renewalparams"]:
+                    params["webroot_path"] = config["renewalparams"]["webroot_path"].rstrip(",")
+            
+            # Также проверяем секцию [[webroot_map]] для получения webroot_path
+            for section_name in config.sections():
+                if section_name.startswith("webroot_map"):
+                    for key, value in config[section_name].items():
+                        if key == domain or key == f"www.{domain}":
+                            params["webroot_path"] = value
+                            break
             
             return params
             
@@ -675,19 +701,41 @@ class SSLService:
                     "error": "Email для SSL не настроен, невозможно получить сертификат"
                 }
             
-            # Пробуем использовать webroot плагин (не требует остановки nginx)
-            # Если не сработает - пробуем nginx плагин, затем standalone
-            use_webroot = True
+            # Определяем приоритетный метод аутентификации
+            # 1. Если в конфигурации renewal указан webroot - используем его
+            # 2. Если webroot_path доступен - используем webroot
+            # 3. Иначе используем nginx плагин или standalone
+            use_webroot = False
             webroot_path = "/var/www/html"
             
-            # Проверяем доступность webroot директории
-            webroot_challenge_path = f"{webroot_path}/.well-known/acme-challenge"
-            if not os.path.exists(webroot_challenge_path):
-                logger.warning(f"Webroot директория {webroot_challenge_path} не существует, пробуем другие методы")
-                use_webroot = False
+            # Проверяем, указан ли webroot в конфигурации renewal
+            if config_exists and config_params.get("success"):
+                if config_params.get("authenticator") == "webroot":
+                    use_webroot = True
+                    # Пытаемся получить webroot_path из конфигурации
+                    if "webroot_path" in config_params:
+                        webroot_path = config_params["webroot_path"]
+                    logger.info(f"Используем webroot из конфигурации renewal: {webroot_path}")
+            
+            # Если webroot не указан в конфигурации, проверяем доступность директории
+            if not use_webroot:
+                webroot_challenge_path = f"{webroot_path}/.well-known/acme-challenge"
+                # Пытаемся создать директорию, если её нет
+                try:
+                    os.makedirs(webroot_challenge_path, exist_ok=True)
+                    # Проверяем доступность через команду (более надежно в контейнере)
+                    test_cmd = await self._run_command(["test", "-d", webroot_challenge_path])
+                    if test_cmd["success"] or os.path.exists(webroot_challenge_path):
+                        use_webroot = True
+                        logger.info(f"Webroot директория доступна: {webroot_challenge_path}")
+                    else:
+                        logger.warning(f"Webroot директория недоступна: {webroot_challenge_path}")
+                except Exception as e:
+                    logger.warning(f"Не удалось проверить/создать webroot директорию: {e}")
             
             use_nginx_plugin = False
-            if authenticator == "standalone" and not use_webroot:
+            # Если webroot не используется и authenticator из конфигурации - standalone, пробуем nginx плагин
+            if not use_webroot and authenticator == "standalone":
                 # Проверяем, можем ли мы использовать nginx плагин
                 # Если nginx запущен, лучше использовать nginx плагин
                 nginx_check = await self._run_command(["nginx", "-t"])
@@ -742,13 +790,22 @@ class SSLService:
                 
                 if result["success"]:
                     logger.info(f"Сертификат успешно получен для {domain}")
+                    
+                    # Проверяем, создан ли сертификат в новой директории (с суффиксом)
+                    cert_path = await self._find_certificate_path(domain)
+                    
+                    # Обновляем конфигурацию nginx, если путь изменился
+                    if cert_path:
+                        await self._update_nginx_certificate_path(domain, cert_path)
+                    
                     return {
                         "success": True,
                         "renewed": True,
                         "output": result["stdout"],
                         "method": "certonly",
-                        "authenticator": authenticator,
-                        "domains": domains
+                        "authenticator": "webroot" if use_webroot else authenticator,
+                        "domains": domains,
+                        "cert_path": cert_path
                     }
                 else:
                     # Если webroot не сработал, пробуем nginx плагин, затем standalone
@@ -771,13 +828,20 @@ class SSLService:
                             
                             if result_nginx["success"]:
                                 logger.info(f"Сертификат успешно получен через nginx плагин для {domain}")
+                                
+                                # Проверяем путь сертификата и обновляем nginx
+                                cert_path = await self._find_certificate_path(domain)
+                                if cert_path:
+                                    await self._update_nginx_certificate_path(domain, cert_path)
+                                
                                 return {
                                     "success": True,
                                     "renewed": True,
                                     "output": result_nginx["stdout"],
                                     "method": "certonly",
                                     "authenticator": "nginx",
-                                    "domains": domains
+                                    "domains": domains,
+                                    "cert_path": cert_path
                                 }
                     
                     # Если nginx плагин не сработал или недоступен, пробуем standalone
@@ -802,13 +866,20 @@ class SSLService:
                         if result_standalone["success"]:
                             logger.info(f"Сертификат успешно получен через standalone режим для {domain}")
                             await self._start_nginx()
+                            
+                            # Проверяем путь сертификата и обновляем nginx
+                            cert_path = await self._find_certificate_path(domain)
+                            if cert_path:
+                                await self._update_nginx_certificate_path(domain, cert_path)
+                            
                             return {
                                 "success": True,
                                 "renewed": True,
                                 "output": result_standalone["stdout"],
                                 "method": "certonly",
                                 "authenticator": "standalone",
-                                "domains": domains
+                                "domains": domains,
+                                "cert_path": cert_path
                             }
                         else:
                             await self._start_nginx()
