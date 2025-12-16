@@ -1465,13 +1465,65 @@
   - `/owner/shifts/<shift_id>?shift_type=shift`
 
 ### Фаза 4: единый сервис загрузки медиа
-- [ ] Разработать единый сервис загрузки медиа: на prod Selectel Object Storage, на dev MinIO (Docker); скрыть текущий Telegram-провайдер за абстракцией и подключить shared-страницу подтверждений отмен.
-  - [ ] Технический анализ (1 день): требования по retention/доступу/типам файлов; аудит текущего использования `MediaOrchestrator` (tasks/incidents) и подготовка к Selectel/MinIO.
-  - [ ] Настройка хранилища (1-2 дня): развернуть MinIO в docker-compose.dev; создать бакет в Selectel Object Storage, настроить IAM/ACL и секреты; вынести параметры в `.env` и CI/CD.
-  - [ ] Реализация сервиса (2-3 дня): интерфейс `MediaStorageClient` (upload/list/delete/generate_url); провайдеры `TelegramMediaStorageClient` (текущий), `S3MediaStorageClient` (Selectel/MinIO); обновление `MediaOrchestrator` для переключения по конфигу.
-  - [ ] Миграция и интеграция (2 дня): добавить `media_meta` в `ShiftCancellation` (миграция); создать shared-страницу отмены с загрузкой подтверждений; адаптировать формы owner/manager/employee.
-  - [ ] Документация и Project Brain (0.5 дня): обновить `doc/vision_v1/shared/media_storage.md`, `DOCUMENTATION_RULES.md`; занести информацию в Project Brain.
-  - [ ] Тестирование и деплой (1 день): юнит-тесты с моками провайдеров; функциональные сценарии на dev (MinIO) и prod (Selectel); проверка политик доступа и presigned URL.
+
+**Статус:** В планировании  
+**Дата начала планирования:** 14.12.2025  
+**Подробный план:** `doc/plans/iteration44/PHASE_4_MEDIA_STORAGE_PLAN.md`
+
+**Цель:** Разработать единый сервис загрузки медиа: на prod Selectel Object Storage, на dev MinIO (Docker); скрыть текущий Telegram-провайдер за абстракцией и подключить shared-страницу подтверждений отмен.
+
+**Текущее состояние:**
+- ✅ MediaOrchestrator реализован и используется для управления потоками медиа
+- ✅ Текущее хранение: Telegram file_id для бота, JSON поля в БД
+- ✅ Используется в: Tasks v2 (completion_media), частично в отменах смен
+- ❌ Нет абстракции для разных провайдеров хранения
+- ❌ Нет поля media_meta в ShiftCancellation
+- ❌ Нет shared-страницы отмены с загрузкой подтверждений
+
+**План работ:**
+- [ ] **Этап 1: Технический анализ (1 день)**
+  - Аудит текущего использования MediaOrchestrator
+  - Определение требований к хранилищу (retention, доступ, типы файлов)
+  - Изучение Selectel Object Storage и MinIO API
+
+- [ ] **Этап 2: Настройка хранилища (1-2 дня)**
+  - Развернуть MinIO в docker-compose.dev.yml
+  - Создать бакет в Selectel Object Storage
+  - Настроить IAM/ACL и секреты
+  - Вынести параметры в `.env` и CI/CD
+
+- [ ] **Этап 3: Реализация сервиса (2-3 дня)**
+  - Интерфейс `MediaStorageClient` (upload/list/delete/generate_url)
+  - Провайдеры: `TelegramMediaStorageClient` (текущий), `S3MediaStorageClient` (Selectel/MinIO)
+  - Фабрика провайдеров с переключением по конфигу
+  - Обновление `MediaOrchestrator` для использования нового сервиса
+
+- [ ] **Этап 4: Миграция и интеграция (2 дня)**
+  - Добавить `media_meta` в `ShiftCancellation` (миграция БД)
+  - Создать shared-страницу отмены с загрузкой подтверждений
+  - Адаптировать формы owner/manager/employee
+  - Обновить обработчики в боте
+
+- [ ] **Этап 5: Документация и Project Brain (0.5 дня)**
+  - Создать `doc/vision_v1/shared/media_storage.md`
+  - Обновить `DOCUMENTATION_RULES.md`
+  - Занести информацию в Project Brain
+
+- [ ] **Этап 6: Тестирование и деплой (1 день)**
+  - Юнит-тесты с моками провайдеров
+  - Функциональные сценарии на dev (MinIO) и prod (Selectel)
+  - Проверка политик доступа и presigned URLs
+  - Миграция существующих данных из Telegram
+
+**Уточняющие вопросы:**
+См. раздел "❓ Уточняющие вопросы" в `doc/plans/iteration44/PHASE_4_MEDIA_STORAGE_PLAN.md`:
+- Требования к retention (срок хранения)
+- Политики доступа (кто может просматривать)
+- Типы файлов и лимиты размера
+- Миграция существующих данных из Telegram
+- Конфигурация Selectel Object Storage
+- Presigned URLs (срок действия, обновление)
+- Shared-страница отмены (функциональность, интеграция)
 ---
 
 ## Итерация 45: Bot Instance Isolation & Monitoring (новая)
