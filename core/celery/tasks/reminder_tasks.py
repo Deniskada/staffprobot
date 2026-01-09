@@ -223,9 +223,6 @@ async def _check_shifts_did_not_start_async() -> Dict[str, Any]:
                         continue
                     
                     # Проверяем, не создано ли уже уведомление для этой смены
-                    from shared.services.notification_service import NotificationService
-                    notif_service = NotificationService()
-                    
                     # Проверяем существование уведомления
                     notification_exists = await _check_notification_exists(
                         session,
@@ -366,11 +363,15 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                     logger.info(f"Object {current_obj.id} ({current_obj.name}): {len(shifts_today)} shifts found, opening_time={current_obj.opening_time}, closing_time={current_obj.closing_time}")
                     
                     # Проверка 1: НЕТ СМЕН НА ОБЪЕКТЕ
-                    # Уведомление "нет активных смен" должно приходить каждый раз, когда задача отрабатывает
-                    if not shifts_today and current_obj.opening_time:
-                        # Проверяем после времени открытия
+                    # Уведомление "нет активных смен" должно приходить только в рабочее время
+                    if not shifts_today and current_obj.opening_time and current_obj.closing_time:
+                        # Проверяем, что текущее время находится в рабочем времени объекта
                         expected_open_time = datetime.combine(today_local, current_obj.opening_time).replace(tzinfo=timezone_helper.local_tz)
-                        if now >= expected_open_time.astimezone(timezone.utc):
+                        expected_close_time = datetime.combine(today_local, current_obj.closing_time).replace(tzinfo=timezone_helper.local_tz)
+                        now_local = timezone_helper.utc_to_local(now)
+                        
+                        # Проверяем, что время открытия прошло и мы еще в рабочем времени
+                        if now_local >= expected_open_time and now_local <= expected_close_time:
                             # НЕ проверяем существование - уведомление должно приходить каждый раз
                             await _create_object_notification(
                                 session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
