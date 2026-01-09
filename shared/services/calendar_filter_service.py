@@ -549,6 +549,17 @@ class CalendarFilterService:
 
                 direct_shifts = shifts_by_timeslot.get(timeslot.id, [])
                 fallback_candidates = fallback_shifts_by_object.get(timeslot.object_id, [])
+                
+                # Логирование для отладки тайм-слота 4468
+                if timeslot.id == 4468:
+                    logger.info(
+                        f"Timeslot 4468 debug: direct_shifts={len(direct_shifts)}, fallback_candidates={len(fallback_candidates)}",
+                        extra={
+                            "timeslot_id": 4468,
+                            "direct_shifts": [{"id": s.id, "type": s.shift_type, "status": s.status, "time_slot_id": s.time_slot_id} for s in direct_shifts],
+                            "fallback_candidates": [{"id": s.id, "type": s.shift_type, "status": s.status, "time_slot_id": s.time_slot_id} for s in fallback_candidates[:5]]  # Первые 5
+                        }
+                    )
 
                 overlap_intervals: List[tuple[datetime, datetime]] = []
                 concurrency_events: List[tuple[datetime, int]] = []
@@ -594,7 +605,9 @@ class CalendarFilterService:
                             actual_intervals.append((overlap_start, overlap_end))
 
                 for shift in direct_shifts:
-                    if shift.status not in allowed_shift_statuses:
+                    # Регистрируем все смены для вычисления current_employees (включая активные)
+                    # Но для других целей используем allowed_shift_statuses
+                    if shift.status not in allowed_shift_statuses and shift.status != ShiftStatus.ACTIVE:
                         continue
                     if shift.shift_type == ShiftType.PLANNED:
                         start_dt = shift.planned_start or shift.start_time
@@ -605,7 +618,8 @@ class CalendarFilterService:
                     register_interval(shift, start_dt, end_dt, include_in_details=True)
 
                 for shift in fallback_candidates:
-                    if shift.status not in allowed_shift_statuses:
+                    # Регистрируем все смены для вычисления current_employees (включая активные)
+                    if shift.status not in allowed_shift_statuses and shift.status != ShiftStatus.ACTIVE:
                         continue
                     if shift.shift_type == ShiftType.PLANNED:
                         start_dt = shift.planned_start or shift.start_time
@@ -716,7 +730,49 @@ class CalendarFilterService:
                 # Треки определяются на фронте, но здесь можем проверить базовую логику
                 # Если все треки заняты (current_employees >= max_employees и нет free_minutes), то has_free_track = False
                 has_free_track = True
-                if timeslot.current_employees >= timeslot.max_employees and timeslot.free_minutes <= 0:
+                
+                # Проверяем наличие активных смен (независимо от того, по плану или спонтанные)
+                # Проверяем как прямые смены (с time_slot_id), так и смены по объекту и дате
+                active_direct_shifts = [s for s in direct_shifts if s.shift_type == ShiftType.ACTIVE]
+                has_active_shifts = len(active_direct_shifts) > 0
+                
+                # Также проверяем fallback_candidates (смены без time_slot_id, но по объекту и дате)
+                # Для активных смен проверяем статус ACTIVE, не используя allowed_shift_statuses
+                active_fallback_shifts = []
+                if not has_active_shifts:
+                    active_fallback_shifts = [
+                        s for s in fallback_candidates 
+                        if s.shift_type == ShiftType.ACTIVE and s.status == ShiftStatus.ACTIVE
+                    ]
+                    has_active_shifts = len(active_fallback_shifts) > 0
+                
+                # Для текущего дня: если тайм-слот уже начался и есть активные смены, то все треки заняты
+                slot_started = slot_start_local <= now_local
+                slot_not_ended = slot_end_local > now_local
+                is_current_day_slot = slot_started and slot_not_ended
+                
+                if is_current_day_slot and has_active_shifts:
+                    # Если тайм-слот уже начался и есть активные смены, то нельзя добавить новую смену
+                    # Все треки уже заняты (даже если current_employees < max_employees)
+                    has_free_track = False
+                    logger.info(
+                        f"Timeslot {timeslot.id}: has_free_track=False (current day slot with active shifts)",
+                        extra={
+                            "timeslot_id": timeslot.id,
+                            "slot_started": slot_started,
+                            "slot_not_ended": slot_not_ended,
+                            "is_current_day_slot": is_current_day_slot,
+                            "has_active_shifts": has_active_shifts,
+                            "direct_shifts_count": len(direct_shifts),
+                            "active_direct_shifts_count": len(active_direct_shifts),
+                            "fallback_candidates_count": len(fallback_candidates),
+                            "active_fallback_shifts_count": len(active_fallback_shifts) if not has_active_shifts else 0,
+                            "slot_start": slot_start_local.isoformat(),
+                            "slot_end": slot_end_local.isoformat(),
+                            "now": now_local.isoformat()
+                        }
+                    )
+                elif timeslot.current_employees >= timeslot.max_employees and timeslot.free_minutes <= 0:
                     # Проверяем, есть ли активные смены, открытые по запланированным
                     has_active_from_planned = any(
                         shift.shift_type == ShiftType.ACTIVE and shift.schedule_id is not None

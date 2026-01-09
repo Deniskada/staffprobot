@@ -426,9 +426,14 @@ window.unifiedCalendar = {
             
             // Добавляем тайм-слоты
             timeslots.forEach(timeslot => {
+                // Логируем данные тайм-слота для отладки (для всех тайм-слотов)
+                console.log(`[Unified] Timeslot ${timeslot.id}: current_employees=${timeslot.current_employees || 0}, has_free_track=${timeslot.has_free_track}, fully_occupied=${timeslot.fully_occupied}, status=${timeslot.status}, date=${dateStr}`, timeslot);
                 const timeslotElement = this.createTimeslotElement(timeslot);
                 if (timeslotElement) {
                     dayContent.appendChild(timeslotElement);
+                    console.log(`[Unified] Added timeslot ${timeslot.id} to ${dateStr}`);
+                } else {
+                    console.log(`[Unified] Skipped timeslot ${timeslot.id} for ${dateStr}`);
                 }
             });
             
@@ -452,9 +457,15 @@ window.unifiedCalendar = {
     // Функция для создания элемента тайм-слота
     createTimeslotElement: function(timeslot) {
         const maxEmployees = timeslot.max_employees || 1;
+        const currentEmployees = timeslot.current_employees || 0;
         const freeMinutes = typeof timeslot.free_minutes === 'number' ? timeslot.free_minutes : 0;
         const statusLabel = timeslot.status_label || 'Свободно';
         const occupancyRatio = typeof timeslot.occupancy_ratio === 'number' ? timeslot.occupancy_ratio : 0;
+        
+        // Проверяем флаги из API
+        const fullyOccupiedByPlanned = timeslot.fully_occupied || false;
+        const hasFreeTime = freeMinutes > 0;
+        const hasFreeTrack = timeslot.has_free_track !== undefined ? timeslot.has_free_track : true;
 
         if (timeslot.status === 'hidden') {
             return null;
@@ -464,6 +475,37 @@ window.unifiedCalendar = {
             return null;
         }
         if (statusLabel === 'Не состоялась') {
+            return null;
+        }
+        
+        // Скрываем тайм-слот если:
+        // 1. Он полностью покрыт запланированной сменой (fully_occupied)
+        // 2. Или если нет свободных треков (!has_free_track) - для текущего дня это означает, что тайм-слот уже начался и занят
+        // 3. Или если полностью занят по сотрудникам и нет свободного времени
+        // Для текущего дня: если has_free_track=false, значит тайм-слот уже начался и занят активными сменами
+        const isToday = new Date(timeslot.date).toDateString() === new Date().toDateString();
+        const shouldHide = fullyOccupiedByPlanned || (!hasFreeTrack && (isToday || currentEmployees > 0)) || (currentEmployees >= maxEmployees && !hasFreeTime);
+        
+        // Детальное логирование для отладки
+        if (currentEmployees > 0 || !hasFreeTrack) {
+            console.log(`[Unified createTimeslotElement] Timeslot ${timeslot.id}:`, {
+                currentEmployees,
+                maxEmployees,
+                hasFreeTrack,
+                fullyOccupiedByPlanned,
+                hasFreeTime,
+                freeMinutes,
+                status: timeslot.status,
+                statusLabel,
+                shouldHide,
+                condition1: fullyOccupiedByPlanned,
+                condition2: !hasFreeTrack && currentEmployees > 0,
+                condition3: currentEmployees >= maxEmployees && !hasFreeTime
+            });
+        }
+        
+        if (shouldHide) {
+            console.log(`[Unified] Skipping fully occupied timeslot ${timeslot.id} (${currentEmployees}/${maxEmployees}, fully_occupied=${fullyOccupiedByPlanned}, has_free_track=${hasFreeTrack})`);
             return null;
         }
  

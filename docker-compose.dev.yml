@@ -4,6 +4,7 @@ services:
   postgres:
     image: postgis/postgis:15-3.3
     container_name: staffprobot_postgres_dev
+    restart: unless-stopped
     environment:
       POSTGRES_DB: staffprobot_dev
       POSTGRES_USER: postgres
@@ -24,6 +25,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: staffprobot_redis_dev
+    restart: unless-stopped
     command: >
       redis-server
       --maxmemory 512mb
@@ -46,6 +48,7 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: staffprobot_rabbitmq_dev
+    restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: password
@@ -68,6 +71,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: staffprobot_bot_dev
+    restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot_dev
       - REDIS_URL=redis://redis:6379
@@ -105,6 +109,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: staffprobot_celery_worker_dev
+    restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot_dev
       - REDIS_URL=redis://redis:6379
@@ -135,6 +140,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: staffprobot_celery_beat_dev
+    restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot_dev
       - REDIS_URL=redis://redis:6379
@@ -166,6 +172,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: staffprobot_web_dev
+    restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/staffprobot_dev
       - REDIS_URL=redis://redis:6379
