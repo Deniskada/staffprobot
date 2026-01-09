@@ -437,40 +437,6 @@ async def owner_features(request: Request, session: AsyncSession = Depends(get_d
     })
 
 
-@router.get("/notifications", response_class=HTMLResponse, name="owner_notifications")
-async def owner_notifications(request: Request, session: AsyncSession = Depends(get_db_session)):
-    """Страница настроек уведомлений владельца"""
-    current_user = await get_current_user(request)
-    if not current_user:
-        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
-    
-    user_role = current_user.get("role", "employee")
-    if user_role != "owner":
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-    
-    telegram_id = current_user.get("id")
-    
-    # Получить User.id
-    from sqlalchemy import select
-    from domain.entities.user import User
-    user_result = await session.execute(
-        select(User.id).where(User.telegram_id == telegram_id)
-    )
-    user_id = user_result.scalar_one_or_none()
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    # Получить типы уведомлений из мета-таблицы
-    from shared.services.notification_service import NotificationService
-    from shared.services.notification_type_meta_service import NotificationTypeMetaService
-    
-    notification_service = NotificationService()
-    meta_service = NotificationTypeMetaService()
-    
-    # Получить настройки пользователя
-    user_settings = await notification_service.get_user_notification_settings
-
-
 @router.get("/notifications/center", response_class=HTMLResponse, name="owner_notifications_center")
 async def owner_notifications_center(request: Request, session: AsyncSession = Depends(get_db_session)):
     """Центр уведомлений владельца"""
@@ -535,7 +501,16 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
     meta_service = NotificationTypeMetaService()
     
     # Получить настройки пользователя
-    user_settings = await notification_service.get_user_notification_settings(user_id)
+    # Получить User для доступа к JSON-полю notification_preferences
+    user_result = await session.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = user_result.scalar_one_or_none()
+    if not user:
+        user_settings = {}
+    else:
+        # notification_preferences - это JSON поле: {type_code: {"telegram": bool, "inapp": bool}}
+        user_settings = user.notification_preferences or {}
     
     # Получить типы, сгруппированные по категориям (только для настройки владельцем)
     types_grouped = await meta_service.get_types_grouped_by_category(
