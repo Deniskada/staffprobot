@@ -593,64 +593,44 @@ async def _create_object_notification(
     )
     
     from shared.templates.notifications.base_templates import NotificationTemplateManager
+    from domain.entities.notification import Notification
     
-    # Используем SQL INSERT с приведением типа для enum в БД
-    from sqlalchemy import text
-    import json
-    
-    # В БД хранятся имена enum (HIGH, NORMAL, OBJECT_NO_SHIFTS_TODAY), а не значения
+    # Приоритет
     priority_enum = NotificationPriority.HIGH if "late" in type_code or "early" in type_code or "no_shifts" in type_code else NotificationPriority.NORMAL
-    priority_str = priority_enum.name  # HIGH или NORMAL
-    type_name = notif_type.name  # Используем имя enum (OBJECT_NO_SHIFTS_TODAY), а не значение (object_no_shifts_today)
     
     # Создать TG уведомление
     if telegram_enabled:
         rendered_tg = NotificationTemplateManager.render(notif_type, NotificationChannel.TELEGRAM, template_vars)
-        data_json = json.dumps({**template_vars, "object_id": obj_id})
-        await session.execute(
-            text("""
-                INSERT INTO notifications (user_id, type, channel, status, priority, title, message, data, scheduled_at)
-                VALUES (:user_id, CAST(:type AS notificationtype), CAST(:channel AS notificationchannel), 
-                        CAST(:status AS notificationstatus), CAST(:priority AS notificationpriority),
-                        :title, :message, CAST(:data AS jsonb), :scheduled_at)
-            """),
-            {
-                "user_id": current_owner.id,
-                "type": type_name,
-                "channel": NotificationChannel.TELEGRAM.name,  # В БД хранится имя enum (TELEGRAM), а не значение
-                "status": NotificationStatus.PENDING.name,  # В БД хранится имя enum (PENDING)
-                "priority": priority_str,
-                "title": rendered_tg["title"],
-                "message": rendered_tg["message"],
-                "data": data_json,
-                "scheduled_at": scheduled_at
-            }
+        # Используем ORM, как в notification_service.py
+        notification_tg = Notification(
+            user_id=current_owner.id,
+            type=notif_type.value,  # Значение enum (object_no_shifts_today) - модель Notification использует String
+            channel=NotificationChannel.TELEGRAM.value,  # Значение enum (telegram)
+            status=NotificationStatus.PENDING.value,  # Значение enum (pending)
+            priority=priority_enum.value,  # Значение enum (high или normal)
+            title=rendered_tg["title"],
+            message=rendered_tg["message"],
+            data={**template_vars, "object_id": obj_id},
+            scheduled_at=scheduled_at
         )
+        session.add(notification_tg)
     
     # Создать In-App уведомление
     if inapp_enabled:
         rendered_inapp = NotificationTemplateManager.render(notif_type, NotificationChannel.IN_APP, template_vars)
-        # Включаем object_id и date в data для проверки дубликатов
-        data_json = json.dumps({**template_vars})
-        await session.execute(
-            text("""
-                INSERT INTO notifications (user_id, type, channel, status, priority, title, message, data, scheduled_at)
-                VALUES (:user_id, CAST(:type AS notificationtype), CAST(:channel AS notificationchannel), 
-                        CAST(:status AS notificationstatus), CAST(:priority AS notificationpriority),
-                        :title, :message, CAST(:data AS jsonb), :scheduled_at)
-            """),
-            {
-                "user_id": current_owner.id,
-                "type": type_name,
-                "channel": NotificationChannel.IN_APP.name,  # В БД хранится имя enum (IN_APP), а не значение
-                "status": NotificationStatus.PENDING.name,  # В БД хранится имя enum (PENDING)
-                "priority": priority_str,
-                "title": rendered_inapp["title"],
-                "message": rendered_inapp["message"],
-                "data": data_json,
-                "scheduled_at": scheduled_at
-            }
+        # Используем ORM, как в notification_service.py
+        notification_inapp = Notification(
+            user_id=current_owner.id,
+            type=notif_type.value,  # Значение enum (object_no_shifts_today)
+            channel=NotificationChannel.IN_APP.value,  # Значение enum (in_app)
+            status=NotificationStatus.PENDING.value,  # Значение enum (pending)
+            priority=priority_enum.value,  # Значение enum (high или normal)
+            title=rendered_inapp["title"],
+            message=rendered_inapp["message"],
+            data={**template_vars},  # Включаем object_id и date в data для проверки дубликатов
+            scheduled_at=scheduled_at
         )
+        session.add(notification_inapp)
     
     await session.commit()
     
