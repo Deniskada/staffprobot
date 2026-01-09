@@ -598,10 +598,10 @@ async def _create_object_notification(
     from sqlalchemy import text
     import json
     
-    # В БД хранятся имена enum (HIGH, NORMAL), а не значения
+    # В БД хранятся имена enum (HIGH, NORMAL, OBJECT_NO_SHIFTS_TODAY), а не значения
     priority_enum = NotificationPriority.HIGH if "late" in type_code or "early" in type_code or "no_shifts" in type_code else NotificationPriority.NORMAL
     priority_str = priority_enum.name  # HIGH или NORMAL
-    type_name = notif_type.value  # Используем значение enum (строку)
+    type_name = notif_type.name  # Используем имя enum (OBJECT_NO_SHIFTS_TODAY), а не значение (object_no_shifts_today)
     
     # Создать TG уведомление
     if telegram_enabled:
