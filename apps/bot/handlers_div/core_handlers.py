@@ -24,20 +24,44 @@ object_service = ObjectService()
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
-    user = update.effective_user
-    chat_id = update.effective_chat.id
-    
-    # Проверяем и регистрируем пользователя
-    if not user_manager.is_user_registered(user.id):
-        user_data = user_manager.register_user(
-            user_id=user.id,
-            first_name=user.first_name,
-            username=user.username,
-            last_name=user.last_name,
-            language_code=user.language_code
+    try:
+        user = update.effective_user
+        if not user:
+            logger.error("start_command: update.effective_user is None")
+            return
+        
+        chat_id = update.effective_chat.id if update.effective_chat else None
+        if not chat_id:
+            logger.error(f"start_command: chat_id is None for user_id={user.id}")
+            return
+        
+        user_first_name = user.first_name or "Пользователь"
+        
+        logger.info(
+            f"start_command called: user_id={user.id}, username={user.username}, "
+            f"chat_id={chat_id}, first_name={user.first_name}"
         )
-        welcome_message = f"""
-👋 Привет, {user.first_name}!
+        
+        # Проверяем и регистрируем пользователя
+        try:
+            is_registered = user_manager.is_user_registered(user.id)
+            logger.info(f"start_command: user {user.id} is_registered={is_registered}")
+        except Exception as e:
+            logger.error(f"start_command: error checking user registration {user.id}: {e}")
+            # Продолжаем работу, даже если проверка не удалась
+            is_registered = False
+        
+        if not is_registered:
+            try:
+                user_data = user_manager.register_user(
+                    user_id=user.id,
+                    first_name=user.first_name or "",
+                    username=user.username,
+                    last_name=user.last_name,
+                    language_code=user.language_code
+                )
+                welcome_message = f"""
+👋 Привет, {user_first_name}!
 
 🎉 <b>Добро пожаловать в StaffProBot!</b>
 
@@ -60,14 +84,42 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 Используйте кнопки для быстрого доступа к функциям!
 """
-        logger.info(
-            f"New user registered: user_id={user.id}, username={user.username}, chat_id={chat_id}"
-        )
-    else:
-        # Обновляем активность существующего пользователя
-        user_manager.update_user_activity(user.id)
-        welcome_message = f"""
-👋 Привет, {user.first_name}!
+                logger.info(
+                    f"New user registered: user_id={user.id}, username={user.username}, chat_id={chat_id}"
+                )
+            except Exception as e:
+                logger.error(f"start_command: error registering user {user.id}: {e}")
+                # Отправляем сообщение даже при ошибке регистрации
+                welcome_message = f"""
+👋 Привет, {user_first_name}!
+
+🎉 <b>Добро пожаловать в StaffProBot!</b>
+
+Выберите действие кнопкой ниже:
+
+💡 Что я умею:
+• Открывать и закрывать смены с геолокацией
+• Планировать смены заранее с уведомлениями
+• Создавать объекты
+• Вести учет времени
+• Формировать отчеты
+
+📍 <b>Геолокация:</b>
+• Проверка присутствия на объектах
+• Автоматический учет времени
+• Безопасность и контроль
+
+Используйте кнопки для быстрого доступа к функциям!
+"""
+        else:
+            # Обновляем активность существующего пользователя
+            try:
+                user_manager.update_user_activity(user.id)
+            except Exception as e:
+                logger.warning(f"start_command: error updating user activity {user.id}: {e}")
+            
+            welcome_message = f"""
+👋 Привет, {user_first_name}!
 
 🔄 <b>С возвращением в StaffProBot!</b>
 
@@ -89,43 +141,57 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 Используйте кнопки для быстрого доступа к функциям!
 """
-        logger.info(
-            f"Existing user returned: user_id={user.id}, username={user.username}, chat_id={chat_id}"
-        )
-    
-    # Всегда показываем кнопку "Мои задачи" (без проверки наличия задач)
-    
-    # Создаем кнопки для основных действий
-    keyboard = [
-        [
-            InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object"),
-            InlineKeyboardButton("🔒 Закрыть объект", callback_data="close_object")
-        ],
-        [
-            InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"),
-            InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")
-        ],
-        [
-            InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
-            InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
-        ],
-        [
-            InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
-            InlineKeyboardButton("📝 Мои задачи", callback_data="my_tasks")
-        ],
-        [
-            InlineKeyboardButton("📈 Статус", callback_data="status"),
-            InlineKeyboardButton("🆔 Мой Telegram ID", callback_data="get_telegram_id")
+            logger.info(
+                f"Existing user returned: user_id={user.id}, username={user.username}, chat_id={chat_id}"
+            )
+        
+        # Создаем кнопки для основных действий
+        keyboard = [
+            [
+                InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object"),
+                InlineKeyboardButton("🔒 Закрыть объект", callback_data="close_object")
+            ],
+            [
+                InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"),
+                InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")
+            ],
+            [
+                InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
+                InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
+            ],
+            [
+                InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
+                InlineKeyboardButton("📝 Мои задачи", callback_data="my_tasks")
+            ],
+            [
+                InlineKeyboardButton("📈 Статус", callback_data="status"),
+                InlineKeyboardButton("🆔 Мой Telegram ID", callback_data="get_telegram_id")
+            ]
         ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=welcome_message,
-        parse_mode='HTML',
-        reply_markup=reply_markup
-    )
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=welcome_message,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+        
+        logger.info(f"start_command: message sent successfully to user_id={user.id}, chat_id={chat_id}")
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"start_command: unexpected error: {e}\n{traceback.format_exc()}")
+        # Пытаемся отправить сообщение об ошибке пользователю
+        try:
+            error_chat_id = update.effective_chat.id if update.effective_chat else None
+            if error_chat_id:
+                await context.bot.send_message(
+                    chat_id=error_chat_id,
+                    text="❌ Произошла ошибка при обработке команды /start. Попробуйте позже или обратитесь к администратору."
+                )
+        except:
+            pass
 
 
 # Импортируем утилиты
