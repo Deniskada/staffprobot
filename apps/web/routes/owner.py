@@ -2951,12 +2951,12 @@ async def api_employees_for_object(object_id: int, request: Request):
             
             employees_with_access = []
             
-            # Получаем сотрудников с активными договорами у ЭТОГО владельца, имеющих доступ к объекту
+            # Получаем сотрудников с договорами у ЭТОГО владельца, имеющих доступ к объекту (включая уволенных)
             employees_query = select(User).distinct().join(
                 Contract, User.id == Contract.employee_id
             ).where(
                 Contract.owner_id == user_id,  # Только сотрудники этого владельца
-                Contract.status == "active",
+                # Включаем активные и уволенные договоры
                 Contract.is_active == True,
                 # Проверяем, что object_id есть в allowed_objects (JSONB массив)
                 cast(Contract.allowed_objects, JSONB).op('@>')(cast([object_id], JSONB))
@@ -2964,14 +2964,30 @@ async def api_employees_for_object(object_id: int, request: Request):
             employees_result = await session.execute(employees_query)
             all_employees = employees_result.scalars().all()
             
-            # Формируем список сотрудников
+            # Формируем список сотрудников (включая уволенных)
+            # Получаем договоры для определения статуса
+            contracts_query = select(Contract).where(
+                Contract.employee_id.in_([emp.id for emp in all_employees]),
+                Contract.owner_id == user_id,
+                cast(Contract.allowed_objects, JSONB).op('@>')(cast([object_id], JSONB))
+            )
+            contracts_result = await session.execute(contracts_query)
+            contracts_list = contracts_result.scalars().all()
+            contracts_by_employee = {c.employee_id: c for c in contracts_list}
+            
             for employee in all_employees:
+                contract = contracts_by_employee.get(employee.id)
+                # Определяем is_active на основе статуса договора
+                is_active_contract = contract and contract.status == "active" if contract else False
+                is_former = not is_active_contract
+                
                 employee_data = {
                     "id": int(employee.id),
                     "name": str(f"{employee.first_name or ''} {employee.last_name or ''}".strip() or employee.username or f"ID {employee.id}"),
                     "username": str(employee.username or ""),
                     "role": str(employee.role),
-                    "is_active": bool(employee.is_active),
+                    "is_active": is_active_contract,  # На основе статуса договора
+                    "isFormer": is_former,  # Для совместимости с plan_shift.js
                     "telegram_id": int(employee.telegram_id) if employee.telegram_id else None
                 }
                 employees_with_access.append(employee_data)

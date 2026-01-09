@@ -29,16 +29,25 @@
                                     <tr>
                                         <th scope="col">ID</th>
                                         <th scope="col">Период</th>
+                                        <th scope="col">Дата выплаты</th>
                                         <th scope="col">Сумма</th>
                                         <th scope="col">Статус</th>
                                         <th scope="col" class="text-end">Действия</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for e in employee_entries %}
+                                    {% for item in employee_entries %}
+                                        {% set e = item.entry %}
                                         <tr {% if e.id == active_entry_id %}class="table-active"{% endif %}>
                                             <td>#{{ e.id }}</td>
                                             <td class="text-nowrap">{{ e.period_start.strftime('%d.%m.%Y') }} — {{ e.period_end.strftime('%d.%m.%Y') }}</td>
+                                            <td class="text-nowrap">
+                                                {% if item.payment_date %}
+                                                    {{ item.payment_date.strftime('%d.%m.%Y') }}
+                                                {% else %}
+                                                    <span class="text-muted">—</span>
+                                                {% endif %}
+                                            </td>
                                             <td><strong class="text-success">{{ "%.2f"|format(e.net_amount) }} ₽</strong></td>
                                             <td>
                                                 {% if e.status == 'draft' %}
@@ -609,6 +618,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="post" id="confirmPaymentForm">
+                <input type="hidden" id="confirm_payment_return_url" name="return_url">
                 <div class="modal-header bg-success text-white">
                     <h5 class="modal-title">Подтвердить выплату</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -666,8 +676,22 @@
 function openConfirmPaymentModal(paymentId) {
     const form = document.getElementById('confirmPaymentForm');
     form.action = `/owner/payroll/{{ entry.id }}/payments/${paymentId}/complete`;
-    const modal = new bootstrap.Modal(document.getElementById('confirmPaymentModal'));
+    
+    // Добавить return_url в форму, если он сохранен
+    const returnUrl = sessionStorage.getItem('payrollListReturnUrl');
+    const returnUrlInput = document.getElementById('confirm_payment_return_url');
+    if (returnUrl && returnUrlInput) {
+        returnUrlInput.value = returnUrl;
+    }
+    
+    const modalElement = document.getElementById('confirmPaymentModal');
+    const modal = new bootstrap.Modal(modalElement);
     modal.show();
+    
+    // Обработчик закрытия модального окна - возврат на список
+    modalElement.addEventListener('hidden.bs.modal', function() {
+        returnToPayrollList();
+    }, { once: true }); // once: true чтобы обработчик сработал только один раз
 }
 
 // Редактирование корректировки
@@ -760,6 +784,95 @@ document.querySelectorAll('.btn-delete-adjustment').forEach(btn => {
         }
     });
 });
+
+// Автоматическое открытие модального окна при наличии параметра action
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+    const paymentId = urlParams.get('payment_id');
+    
+    if (action) {
+        // Ждем загрузки страницы и открываем соответствующее модальное окно
+        setTimeout(function() {
+            let modalId = null;
+            if (action === 'addDeduction') {
+                modalId = 'addDeductionModal';
+            } else if (action === 'addBonus') {
+                modalId = 'addBonusModal';
+            } else if (action === 'createPayment') {
+                modalId = 'createPaymentModal';
+            } else if (action === 'confirmPayment' && paymentId) {
+                // Открыть модальное окно подтверждения выплаты
+                openConfirmPaymentModal(parseInt(paymentId));
+                return; // Не добавляем обработчик закрытия здесь, он уже есть в openConfirmPaymentModal
+            }
+            
+            if (modalId) {
+                const modalElement = document.getElementById(modalId);
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                    
+                    // Обработчик закрытия модального окна - возврат на список
+                    modalElement.addEventListener('hidden.bs.modal', function() {
+                        returnToPayrollList();
+                    });
+                }
+            }
+        }, 300);
+    }
+    
+    // Обработчики закрытия для всех модальных окон
+    const modals = ['addDeductionModal', 'addBonusModal', 'createPaymentModal'];
+    modals.forEach(function(modalId) {
+        const modalElement = document.getElementById(modalId);
+        if (modalElement) {
+            modalElement.addEventListener('hidden.bs.modal', function() {
+                // Проверяем, был ли модал открыт через action (есть сохраненный URL)
+                const returnUrl = sessionStorage.getItem('payrollListReturnUrl');
+                if (returnUrl) {
+                    returnToPayrollList();
+                }
+            });
+        }
+    });
+    
+    // Перехват отправки форм для возврата на список после успешного сохранения
+    const forms = [
+        { id: 'addDeductionModal', form: document.querySelector('#addDeductionModal form') },
+        { id: 'addBonusModal', form: document.querySelector('#addBonusModal form') },
+        { id: 'createPaymentModal', form: document.querySelector('#createPaymentModal form') }
+    ];
+    
+    forms.forEach(function(item) {
+        if (item.form) {
+            item.form.addEventListener('submit', function(e) {
+                // Проверяем, есть ли сохраненный URL возврата
+                const returnUrl = sessionStorage.getItem('payrollListReturnUrl');
+                if (returnUrl) {
+                    // Добавляем скрытое поле с URL возврата
+                    let returnInput = this.querySelector('input[name="return_url"]');
+                    if (!returnInput) {
+                        returnInput = document.createElement('input');
+                        returnInput.type = 'hidden';
+                        returnInput.name = 'return_url';
+                        this.appendChild(returnInput);
+                    }
+                    returnInput.value = returnUrl;
+                }
+            });
+        }
+    });
+});
+
+// Функция возврата на страницу списка начислений
+function returnToPayrollList() {
+    const returnUrl = sessionStorage.getItem('payrollListReturnUrl');
+    if (returnUrl) {
+        sessionStorage.removeItem('payrollListReturnUrl');
+        window.location.href = returnUrl;
+    }
+}
 </script>
 
 {% endblock %}

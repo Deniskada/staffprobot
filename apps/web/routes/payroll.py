@@ -35,6 +35,7 @@ from shared.services.payroll_adjustment_service import PayrollAdjustmentService
 from shared.services.payment_schedule_service import get_payment_period_for_date
 from shared.services.payroll_generation_service import PayrollGenerationService
 from shared.services.payroll_statement_service import PayrollStatementService
+from shared.services.contract_helper import get_inherited_payment_schedule_id
 
 router = APIRouter()
 
@@ -51,6 +52,175 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
     elif isinstance(current_user, User):
         return current_user.id
     else:
+        return None
+
+
+async def _get_payment_schedule_id_for_object(obj: Object, session: AsyncSession) -> Optional[int]:
+    """
+    Получить ID графика выплат для объекта с учетом наследования от подразделения.
+    
+    Args:
+        obj: Объект
+        session: Сессия БД
+        
+    Returns:
+        ID графика выплат или None
+    """
+    # ПРИОРИТЕТ 1: Если у объекта есть прямая привязка к графику - вернуть её
+    if obj.payment_schedule_id:
+        return obj.payment_schedule_id
+    
+    # ПРИОРИТЕТ 2+: Если нет графика у объекта - идем к подразделению
+    if not obj.org_unit_id:
+        return None
+    
+    # ПРИОРИТЕТ 2+: Получить график от подразделения (с учетом наследования по цепочке)
+    # Реализуем логику вручную, чтобы избежать lazy loading
+    current_unit_id = obj.org_unit_id
+    
+    while current_unit_id:
+        result = await session.execute(
+            select(OrgStructureUnit).where(OrgStructureUnit.id == current_unit_id)
+        )
+        unit = result.scalar_one_or_none()
+        
+        if not unit:
+            break
+        
+        # Если у подразделения есть явный график - вернуть его
+        if unit.payment_schedule_id:
+            return unit.payment_schedule_id
+        
+        # Иначе идем к родителю
+        current_unit_id = unit.parent_id
+    
+    return None
+
+
+async def calculate_payment_date_for_entry(entry: PayrollEntry, session: AsyncSession) -> Optional[date]:
+    """
+    Вычисляет дату выплаты для начисления на основе графика выплат.
+    
+    Args:
+        entry: Начисление
+        session: Сессия БД
+        
+    Returns:
+        Дата выплаты или None, если график не найден
+    """
+    try:
+        # Загрузить объект и договор
+        if not entry.object_id:
+            return None
+        
+        obj_query = select(Object).where(Object.id == entry.object_id)
+        obj_result = await session.execute(obj_query)
+        obj = obj_result.scalar_one_or_none()
+        
+        if not obj:
+            return None
+        
+        # Найти график выплат
+        schedule_id = None
+        
+        # Проверить договор
+        if entry.contract_id:
+            contract_query = select(Contract).where(Contract.id == entry.contract_id)
+            contract_result = await session.execute(contract_query)
+            contract = contract_result.scalar_one_or_none()
+            
+            if contract:
+                if not contract.inherit_payment_schedule and contract.payment_schedule_id:
+                    schedule_id = contract.payment_schedule_id
+                else:
+                    # Наследуем от объекта
+                    schedule_id = await _get_payment_schedule_id_for_object(obj, session)
+        else:
+            # Нет договора - используем график объекта
+            schedule_id = await _get_payment_schedule_id_for_object(obj, session)
+        
+        if not schedule_id:
+            return None
+        
+        # Загрузить график
+        schedule_query = select(PaymentSchedule).where(PaymentSchedule.id == schedule_id)
+        schedule_result = await session.execute(schedule_query)
+        schedule = schedule_result.scalar_one_or_none()
+        
+        if not schedule or not schedule.payment_period:
+            return None
+        
+        # Вычислить дату выплаты обратно из периода
+        period_config = schedule.payment_period
+        
+        if schedule.frequency == "weekly":
+            end_offset = period_config.get("end_offset", -16)
+            payment_date = entry.period_end - timedelta(days=end_offset)
+            return payment_date
+        
+        elif schedule.frequency == "biweekly":
+            end_offset = period_config.get("end_offset", -14)
+            payment_date = entry.period_end - timedelta(days=end_offset)
+            return payment_date
+        
+        elif schedule.frequency == "monthly":
+            payments = period_config.get("payments", [])
+            if payments:
+                # Для месячных графиков сложнее - нужно найти payment, который соответствует периоду
+                # Используем period_end для определения
+                for payment in payments:
+                    start_offset = payment.get("start_offset", 0)
+                    end_offset = payment.get("end_offset", 0)
+                    is_end_of_month = payment.get("is_end_of_month", False)
+                    
+                    if is_end_of_month:
+                        # Для второй выплаты period_end - это последний день предыдущего месяца
+                        # payment_date должен быть днём месяца из next_payment_date или payment_day
+                        if payment.get("is_start_of_month", False):
+                            payment_day = schedule.payment_day
+                        else:
+                            next_payment_str = payment.get("next_payment_date")
+                            if next_payment_str:
+                                try:
+                                    next_payment = date.fromisoformat(next_payment_str)
+                                    payment_day = next_payment.day
+                                except (ValueError, TypeError):
+                                    continue
+                            else:
+                                continue
+                        
+                        # Проверяем, соответствует ли период
+                        # Для is_end_of_month period_end - это последний день предыдущего месяца
+                        # period_start - это день после окончания первой выплаты
+                        # Проверяем по period_end
+                        if entry.period_end.month == (entry.period_start.month - 1 if entry.period_start.month > 1 else 12):
+                            # Это вторая выплата
+                            # payment_date - это день месяца payment_day в месяце period_end
+                            payment_date = date(entry.period_end.year, entry.period_end.month, payment_day)
+                            return payment_date
+                    else:
+                        # Обычная выплата
+                        calculated_payment_date = entry.period_end - timedelta(days=end_offset)
+                        if calculated_payment_date.month == entry.period_end.month:
+                            return calculated_payment_date
+                
+                # Fallback: используем period_end
+                return entry.period_end
+            else:
+                # Старый формат
+                end_offset = period_config.get("end_offset", -30)
+                payment_date = entry.period_end - timedelta(days=end_offset)
+                return payment_date
+        
+        elif schedule.frequency == "daily":
+            end_offset = period_config.get("end_offset", -1)
+            payment_date = entry.period_end - timedelta(days=end_offset)
+            return payment_date
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Error calculating payment date for entry {entry.id}: {e}")
         return None
 
 
@@ -214,15 +384,15 @@ async def owner_payroll_list(
     current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
     object_id: Optional[str] = Query(None),
-    period_start: Optional[str] = Query(None),
-    period_end: Optional[str] = Query(None),
+    payment_date: Optional[str] = Query(None),
+    employee_id: Optional[str] = Query(None),
     q_employee: Optional[str] = Query(None),
     sort: Optional[str] = Query(None),
     order: Optional[str] = Query("asc"),
     page: int = Query(1, ge=1),
     per_page: int = Query(25, ge=1, le=100),
     view: str = Query("summary"),
-    show_inactive: bool = Query(False)
+    show_inactive: bool = Query(True)  # Всегда включено по умолчанию
 ):
     """Список всех начислений."""
     try:
@@ -233,18 +403,13 @@ async def owner_payroll_list(
         if not owner_id:
             raise HTTPException(status_code=403, detail="Пользователь не найден")
         
-        # Фильтры по дате
-        if not period_start:
-            period_start = (date.today() - timedelta(days=30)).isoformat()
-        if not period_end:
-            period_end = date.today().isoformat()
-
-        # Парсинг дат (валидация формата)
-        try:
-            period_start_date = date.fromisoformat(period_start)
-            period_end_date = date.fromisoformat(period_end)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Неверный формат дат. Используйте YYYY-MM-DD")
+        # Фильтр по дате выплаты
+        payment_date_obj = None
+        if payment_date:
+            try:
+                payment_date_obj = date.fromisoformat(payment_date)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Неверный формат даты выплаты. Используйте YYYY-MM-DD")
 
         # Получить объекты владельца
         objects_query = select(Object).where(Object.owner_id == owner_id, Object.is_active == True).order_by(Object.name)
@@ -258,6 +423,14 @@ async def owner_payroll_list(
                 object_id_int = int(object_id)
             except ValueError:
                 raise HTTPException(status_code=400, detail="object_id должен быть числом")
+        
+        # Нормализация employee_id: пустое значение → None
+        employee_id_int = None
+        if employee_id is not None and str(employee_id).strip() != "":
+            try:
+                employee_id_int = int(employee_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="employee_id должен быть числом")
 
         # Получить ВСЕХ сотрудников владельца (включая уволенных)
         # для возможности просмотра и создания начислений задним числом
@@ -266,38 +439,53 @@ async def owner_payroll_list(
         ).distinct()
         all_emps_result = await db.execute(all_emps_query)
         employees_all = all_emps_result.scalars().all()
-
-        # Сотрудники для фильтра: договор пересекается с выбранным периодом
-        # Пересечение по интервалу [start_date, effective_end], где effective_end = COALESCE(date(end_date), termination_date, +inf)
-        # Если end_date и termination_date NULL, считаем договор бессрочным
-        employees_filter_query = select(User).join(Contract, Contract.employee_id == User.id).where(
-            Contract.owner_id == owner_id,
-            func.date(Contract.start_date) <= period_end_date,
-            (
-                (
-                    (Contract.end_date.is_(None)) & (Contract.termination_date.is_(None))
-                ) |
-                (func.coalesce(func.date(Contract.end_date), Contract.termination_date) >= period_start_date)
-            )
-        ).distinct().order_by(User.last_name, User.first_name)
-        employees_result = await db.execute(employees_filter_query)
-        employees = employees_result.scalars().all()
+        
+        # Получить все начисления владельца за последние 2 года (широкий период для фильтрации по дате выплаты)
+        # Если payment_date указана, будем фильтровать по ней после вычисления дат выплат
+        wide_period_start = date.today() - timedelta(days=730)  # 2 года назад
+        wide_period_end = date.today() + timedelta(days=365)  # 1 год вперед
         
         # Получить начисления для всех сотрудников (включая неактивных)
-        entries = []
-        for emp in employees_all:
-            emp_entries = await payroll_service.get_payroll_entries_by_employee(
-                employee_id=emp.id,
-                period_start=period_start_date,
-                period_end=period_end_date,
-                limit=None,  # Без лимита
-                owner_id=owner_id
-            )
-            entries.extend(emp_entries)
+        # Используем прямой запрос с selectinload для загрузки contract и employee
+        from sqlalchemy.orm import selectinload
+        entries_query = select(PayrollEntry).options(
+            selectinload(PayrollEntry.contract),
+            selectinload(PayrollEntry.employee),
+            selectinload(PayrollEntry.object_)
+        ).join(
+            Contract, PayrollEntry.contract_id == Contract.id
+        ).where(
+            Contract.owner_id == owner_id,
+            PayrollEntry.period_start >= wide_period_start,
+            PayrollEntry.period_end <= wide_period_end
+        )
+        entries_result = await db.execute(entries_query)
+        entries = list(entries_result.scalars().all())
+        
+        # Вычислить даты выплат для всех начислений и отфильтровать по payment_date
+        entries_filtered = []
+        entries_payment_dates_map = {}  # Кэш для дат выплат
+        for e in entries:
+            entry_payment_date = await calculate_payment_date_for_entry(e, db)
+            entries_payment_dates_map[e.id] = entry_payment_date
+            # Если payment_date указана, фильтруем только начисления с этой датой выплаты
+            if payment_date_obj:
+                if entry_payment_date and entry_payment_date == payment_date_obj:
+                    entries_filtered.append(e)
+            else:
+                # Если payment_date не указана, включаем все начисления
+                entries_filtered.append(e)
+        
+        # Использовать отфильтрованные начисления
+        entries = entries_filtered
         
         # Фильтрация по объекту (если указан)
         if object_id_int:
             entries = [e for e in entries if e.object_id == object_id_int]
+        
+        # Фильтрация по сотруднику (если указан)
+        if employee_id_int:
+            entries = [e for e in entries if e.employee_id == employee_id_int]
         
         # Фильтрация по текстовому поиску сотрудника (клиентский фильтр, но применяем и на сервере для пагинации)
         if q_employee and q_employee.strip():
@@ -336,11 +524,58 @@ async def owner_payroll_list(
         end_idx = start_idx + per_page
         paginated_entries = entries[start_idx:end_idx]
         
+        # Загрузить выплаты для всех начислений
+        from domain.entities.employee_payment import EmployeePayment
+        entry_ids = [e.id for e in paginated_entries]
+        payments_map = {}
+        if entry_ids:
+            payments_query = select(EmployeePayment).where(
+                EmployeePayment.payroll_entry_id.in_(entry_ids)
+            )
+            payments_result = await db.execute(payments_query)
+            payments_list = payments_result.scalars().all()
+            for payment in payments_list:
+                if payment.payroll_entry_id not in payments_map:
+                    payments_map[payment.payroll_entry_id] = []
+                payments_map[payment.payroll_entry_id].append(payment)
+        
+        # Вычислить даты выплат для каждого начисления (для пагинированных)
+        entries_with_payment_dates = []
+        for e in paginated_entries:
+            # Использовать кэшированную дату выплаты
+            entry_payment_date = entries_payment_dates_map.get(e.id)
+            if entry_payment_date is None:
+                entry_payment_date = await calculate_payment_date_for_entry(e, db)
+                entries_payment_dates_map[e.id] = entry_payment_date
+            
+            has_payments = e.id in payments_map and len(payments_map[e.id]) > 0
+            # Найти выплату со статусом pending (если есть)
+            pending_payment = None
+            payments_added = 0.0  # Сумма всех добавленных выплат
+            payments_completed = 0.0  # Сумма подтвержденных выплат
+            if e.id in payments_map:
+                for payment in payments_map[e.id]:
+                    if payment.status == 'pending':
+                        pending_payment = payment
+                    # Суммируем все выплаты (добавленные)
+                    payments_added += float(payment.amount or 0)
+                    # Суммируем только подтвержденные выплаты
+                    if payment.status == 'completed':
+                        payments_completed += float(payment.amount or 0)
+            entries_with_payment_dates.append({
+                "entry": e,
+                "payment_date": entry_payment_date,
+                "has_payments": has_payments,
+                "pending_payment": pending_payment,  # Выплата со статусом pending (если есть)
+                "payments_added": payments_added,  # Сумма всех добавленных выплат
+                "payments_completed": payments_completed  # Сумма подтвержденных выплат
+            })
+        
         # Подготовка фильтров для шаблона
         filters = {
             "object_id": object_id_int,
-            "period_start": period_start,
-            "period_end": period_end,
+            "payment_date": payment_date or "",
+            "employee_id": employee_id_int,
             "q_employee": q_employee or ""
         }
         
@@ -402,10 +637,17 @@ async def owner_payroll_list(
                     "latest_entry": None,
                     "latest_entry_id": None,
                     "is_active": False,
+                    "hourly_rate": None,
+                    "contract_name": None,
                 }
             row = summary_map[emp_id]
             row["entries_count"] += 1
             row["total_amount"] += float(entry_obj.net_amount or 0)
+            # Получаем ставку и название договора из начисления
+            if entry_obj.contract:
+                row["contract_name"] = entry_obj.contract.contract_number or f"Договор #{entry_obj.contract.id}"
+            if entry_obj.hourly_rate:
+                row["hourly_rate"] = float(entry_obj.hourly_rate)
             if row["latest_entry"] is None or (entry_obj.id and entry_obj.id > (row["latest_entry_id"] or 0)):
                 row["latest_entry"] = entry_obj
                 row["latest_entry_id"] = entry_obj.id
@@ -429,7 +671,7 @@ async def owner_payroll_list(
             summary_rows = [row for row in summary_rows if row["is_active"]]
 
         # Сортировка сводки
-        allowed_summary_fields = {"latest_period", "employee", "entries_count", "total_amount"}
+        allowed_summary_fields = {"latest_period", "employee", "entries_count", "total_amount", "rate"}
         summary_sort_field = (sort or "latest_period").lower() if view == "summary" else "latest_period"
         if summary_sort_field not in allowed_summary_fields:
             summary_sort_field = "latest_period"
@@ -447,6 +689,8 @@ async def owner_payroll_list(
                 return (row["entries_count"], row["employee_id"])
             if summary_sort_field == "total_amount":
                 return (row["total_amount"], row["employee_id"])
+            if summary_sort_field == "rate":
+                return (row.get("hourly_rate") or 0.0, row["employee_id"])
             latest_entry = row.get("latest_entry")
             if latest_entry:
                 return (latest_entry.period_end or date.min, latest_entry.id or 0)
@@ -467,8 +711,8 @@ async def owner_payroll_list(
 
         summary_filters = {
             "object_id": object_id_int,
-            "period_start": period_start,
-            "period_end": period_end,
+            "payment_date": payment_date or "",
+            "employee_id": employee_id_int,
             "show_inactive": show_inactive,
         }
         summary_sort_info = {"field": summary_sort_field, "order": summary_sort_order}
@@ -482,10 +726,10 @@ async def owner_payroll_list(
         base_nav_params = {}
         if object_id_int is not None:
             base_nav_params["object_id"] = object_id_int
-        if period_start:
-            base_nav_params["period_start"] = period_start
-        if period_end:
-            base_nav_params["period_end"] = period_end
+        if payment_date:
+            base_nav_params["payment_date"] = payment_date
+        if employee_id_int is not None:
+            base_nav_params["employee_id"] = employee_id_int
 
         summary_nav_params = dict(base_nav_params)
         summary_nav_params["view"] = "summary"
@@ -501,6 +745,8 @@ async def owner_payroll_list(
         entries_nav_params["view"] = "entries"
         entries_nav_params["per_page"] = per_page
         entries_nav_params["page"] = page
+        if show_inactive:
+            entries_nav_params["show_inactive"] = "1"
         if q_employee:
             entries_nav_params["q_employee"] = q_employee
         if view == "entries" and sort:
@@ -514,8 +760,8 @@ async def owner_payroll_list(
                 "request": request,
                 "current_user": current_user,
                 "view": view,
-                "entries": paginated_entries,
-                "employees": employees,
+                "entries": entries_with_payment_dates,
+                "employees_all": employees_all,  # Все сотрудники для фильтра
                 "objects": objects,
                 "filters": filters,
                 "sort": sort_info,
@@ -525,8 +771,8 @@ async def owner_payroll_list(
                     "total": total,
                     "pages": pages
                 },
-                "period_start": period_start,
-                "period_end": period_end,
+                "payment_date": payment_date or "",
+                "employee_id": employee_id_int,
                 "summary_rows": summary_paginated_rows,
                 "summary_filters": summary_filters,
                 "summary_sort": summary_sort_info,
@@ -865,10 +1111,20 @@ async def owner_payroll_detail(
             owner_id=owner_id
         )
         employee_entries.sort(key=lambda e: (e.period_end, e.id), reverse=True)
+        
+        # Вычислить даты выплат для каждого начисления
+        employee_entries_with_payment_dates = []
+        for e in employee_entries:
+            payment_date = await calculate_payment_date_for_entry(e, db)
+            employee_entries_with_payment_dates.append({
+                "entry": e,
+                "payment_date": payment_date
+            })
 
         # Определить активную запись (подсветка)
         origin = request.query_params.get("origin")
         selected_entry_id = request.query_params.get("selected_entry_id")
+        action = request.query_params.get("action")  # Параметр для открытия модального окна
         try:
             selected_entry_id_int = int(selected_entry_id) if selected_entry_id else None
         except ValueError:
@@ -890,10 +1146,11 @@ async def owner_payroll_detail(
                 "deductions": deductions,
                 "bonuses": bonuses,
                 "payments": payments,
-                "employee_entries": employee_entries,
+                "employee_entries": employee_entries_with_payment_dates,
                 "active_entry_id": active_entry_id,
                 "has_payments": has_payments,
                 "origin": origin,
+                "action": action,  # Передаем action в шаблон
                 "today": date.today()
             }
         )
@@ -914,7 +1171,8 @@ async def owner_payroll_add_deduction(
     deduction_type: str = Form(...),
     amount: float = Form(...),
     description: str = Form(...),
-    adjustment_date: Optional[str] = Form(None)
+    adjustment_date: Optional[str] = Form(None),
+    return_url: Optional[str] = Form(None)
 ):
     """Добавить удержание к начислению."""
     try:
@@ -978,8 +1236,10 @@ async def owner_payroll_add_deduction(
             type=deduction_type
         )
         
+        # Редирект на сохраненный URL или на страницу деталей
+        redirect_url = return_url if return_url else f"/owner/payroll/{entry_id}"
         return RedirectResponse(
-            url=f"/owner/payroll/{entry_id}",
+            url=redirect_url,
             status_code=status.HTTP_302_FOUND
         )
         
@@ -999,7 +1259,8 @@ async def owner_payroll_add_bonus(
     bonus_type: str = Form(...),
     amount: float = Form(...),
     description: str = Form(...),
-    adjustment_date: Optional[str] = Form(None)
+    adjustment_date: Optional[str] = Form(None),
+    return_url: Optional[str] = Form(None)
 ):
     """Добавить доплату к начислению."""
     try:
@@ -1064,8 +1325,10 @@ async def owner_payroll_add_bonus(
             type=bonus_type
         )
         
+        # Редирект на сохраненный URL или на страницу деталей
+        redirect_url = return_url if return_url else f"/owner/payroll/{entry_id}"
         return RedirectResponse(
-            url=f"/owner/payroll/{entry_id}",
+            url=redirect_url,
             status_code=status.HTTP_302_FOUND
         )
         
@@ -1083,7 +1346,8 @@ async def complete_payment(
     payment_id: int,
     current_user: dict = Depends(require_role(["owner", "superadmin"])),
     db: AsyncSession = Depends(get_db_session),
-    confirmation_code: Optional[str] = Form(None)
+    confirmation_code: Optional[str] = Form(None),
+    return_url: Optional[str] = Form(None)
 ):
     """Подтвердить выплату."""
     try:
@@ -1122,8 +1386,10 @@ async def complete_payment(
             confirmation_code=confirmation_code
         )
         
+        # Редирект на сохраненный URL или на страницу деталей
+        redirect_url = return_url if return_url else f"/owner/payroll/{entry_id}"
         return RedirectResponse(
-            url=f"/owner/payroll/{entry_id}",
+            url=redirect_url,
             status_code=status.HTTP_302_FOUND
         )
         
@@ -1143,7 +1409,8 @@ async def owner_payroll_create_payment(
     amount: float = Form(...),
     payment_date: str = Form(...),
     payment_method: str = Form(...),
-    notes: Optional[str] = Form(None)
+    notes: Optional[str] = Form(None),
+    return_url: Optional[str] = Form(None)
 ):
     """Создать выплату для начисления."""
     try:
@@ -1186,8 +1453,10 @@ async def owner_payroll_create_payment(
             method=payment_method
         )
         
+        # Редирект на сохраненный URL или на страницу деталей
+        redirect_url = return_url if return_url else f"/owner/payroll/{entry_id}"
         return RedirectResponse(
-            url=f"/owner/payroll/{entry_id}",
+            url=redirect_url,
             status_code=status.HTTP_302_FOUND
         )
         
@@ -1375,6 +1644,40 @@ async def owner_payroll_manual_recalculate(
                         
                         for contract in contracts:
                             try:
+                                # Проверить график выплат контракта
+                                effective_payment_schedule_id = None
+                                
+                                if contract.inherit_payment_schedule:
+                                    # Наследуем от подразделения
+                                    effective_payment_schedule_id = await get_inherited_payment_schedule_id(contract, db)
+                                    logger.debug(
+                                        f"Contract {contract.id} inherits payment schedule from org unit",
+                                        inherited_schedule_id=effective_payment_schedule_id
+                                    )
+                                else:
+                                    # Используем явно указанный график (ПРИОРИТЕТ!)
+                                    effective_payment_schedule_id = contract.payment_schedule_id
+                                    logger.debug(
+                                        f"Contract {contract.id} has explicit payment schedule",
+                                        schedule_id=effective_payment_schedule_id
+                                    )
+                                
+                                # Проверяем, совпадает ли график контракта с текущим графиком
+                                if effective_payment_schedule_id and effective_payment_schedule_id != schedule.id:
+                                    logger.debug(
+                                        f"Skip contract {contract.id}: different payment schedule",
+                                        contract_schedule=effective_payment_schedule_id,
+                                        current_schedule=schedule.id
+                                    )
+                                    continue
+                                
+                                # Если у контракта нет графика (ни явного, ни наследуемого) - пропускаем
+                                if not effective_payment_schedule_id:
+                                    logger.debug(
+                                        f"Skip contract {contract.id}: no payment schedule"
+                                    )
+                                    continue
+                                
                                 result = await generation_service.process_contract_period(
                                     contract=contract,
                                     obj=obj,
@@ -1401,6 +1704,89 @@ async def owner_payroll_manual_recalculate(
             
             except Exception as e:
                 error_msg = f"Error processing schedule {schedule.id}: {e}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+                continue
+        
+        # ===== ОБРАБОТКА ИНДИВИДУАЛЬНЫХ ГРАФИКОВ СОТРУДНИКОВ =====
+        # Обрабатываем графики еще раз для индивидуальных договоров
+        for schedule in schedules:
+            try:
+                # Проверяем, является ли target_date днём выплаты
+                payment_period = await get_payment_period_for_date(schedule, target_date_obj)
+                
+                if not payment_period:
+                    continue
+                
+                period_start = payment_period['period_start']
+                period_end = payment_period['period_end']
+                
+                # Найти все contracts с payment_schedule_id=schedule.id и inherit_payment_schedule=false
+                # принадлежащие владельцу
+                individual_contracts_query = select(Contract).where(
+                    and_(
+                        Contract.owner_id == owner_id,
+                        Contract.payment_schedule_id == schedule.id,
+                        Contract.inherit_payment_schedule == False,
+                        or_(
+                            Contract.status == 'active',
+                            and_(
+                                Contract.status == 'terminated',
+                                Contract.settlement_policy == 'schedule'
+                            )
+                        )
+                    )
+                )
+                individual_contracts_result = await db.execute(individual_contracts_query)
+                individual_contracts = individual_contracts_result.scalars().all()
+                
+                logger.info(f"Found {len(individual_contracts)} contracts with individual schedule {schedule.id} (owner {owner_id})")
+                
+                for contract in individual_contracts:
+                    try:
+                        # Используем первый объект из allowed_objects
+                        if not contract.allowed_objects or len(contract.allowed_objects) == 0:
+                            logger.warning(f"Contract {contract.id} has no allowed_objects, skipping")
+                            continue
+                        
+                        first_object_id = contract.allowed_objects[0]
+                        
+                        # Загрузить объект
+                        obj_result = await db.execute(
+                            select(Object).where(Object.id == first_object_id)
+                        )
+                        obj = obj_result.scalar_one_or_none()
+                        
+                        if not obj:
+                            logger.warning(f"Object {first_object_id} not found for contract {contract.id}")
+                            continue
+                        
+                        # Проверить, что объект принадлежит владельцу
+                        if obj.owner_id != owner_id:
+                            logger.debug(f"Skip contract {contract.id}: object {obj.id} belongs to different owner")
+                            continue
+                        
+                        result = await generation_service.process_contract_period(
+                            contract=contract,
+                            obj=obj,
+                            period_start=period_start,
+                            period_end=period_end,
+                            calculation_date=target_date_obj,
+                            created_by_id=owner_id,
+                            source="manual_recalculate",
+                        )
+                        total_entries_created += result.created_entries
+                        total_entries_updated += result.updated_entries
+                        total_adjustments_applied += result.applied_adjustments
+                        
+                    except Exception as e:
+                        error_msg = f"Error processing individual contract {contract.id}: {e}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
+                        continue
+                        
+            except Exception as e:
+                error_msg = f"Error processing individual schedules for schedule {schedule.id}: {e}"
                 logger.error(error_msg)
                 errors.append(error_msg)
                 continue

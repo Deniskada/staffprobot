@@ -30,11 +30,12 @@
             {% if view == 'summary' %}
                 <div class="card mb-4">
                     <div class="card-body">
-                        <form method="get" class="row g-3 align-items-end mb-4">
+                        <form method="get" class="row g-3 align-items-end mb-4" id="summaryFiltersForm">
                             <input type="hidden" name="view" value="summary">
-                            <div class="col-md-4">
+                            <input type="hidden" name="show_inactive" value="1">  {# Всегда включено #}
+                            <div class="col-md-3">
                                 <label for="summaryObject" class="form-label">Объект</label>
-                                <select class="form-select" id="summaryObject" name="object_id">
+                                <select class="form-select" id="summaryObject" name="object_id" onchange="applyPayrollFilters('summary')">
                                     <option value="">Все объекты</option>
                                     {% for obj in objects %}
                                         <option value="{{ obj.id }}" {% if summary_filters.object_id == obj.id %}selected{% endif %}>{{ obj.name }}</option>
@@ -42,23 +43,21 @@
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label for="summaryPeriodStart" class="form-label">Период с</label>
-                                <input type="date" class="form-control" id="summaryPeriodStart" name="period_start" value="{{ summary_filters.period_start }}">
+                                <label for="summaryEmployee" class="form-label">Сотрудник</label>
+                                <select class="form-select" id="summaryEmployee" name="employee_id" onchange="applyPayrollFilters('summary')">
+                                    <option value="">Все сотрудники</option>
+                                    {# Опции будут загружены динамически через JavaScript #}
+                                </select>
                             </div>
                             <div class="col-md-3">
-                                <label for="summaryPeriodEnd" class="form-label">по</label>
-                                <input type="date" class="form-control" id="summaryPeriodEnd" name="period_end" value="{{ summary_filters.period_end }}">
+                                <label for="summaryPaymentDate" class="form-label">Дата выплаты</label>
+                                <input type="date" class="form-control" id="summaryPaymentDate" name="payment_date" value="{{ summary_filters.payment_date }}" onchange="applyPayrollFilters('summary')">
                             </div>
-                            <div class="col-md-2">
+                            <div class="col-md-3">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="summaryShowInactive" name="show_inactive" value="1" {% if summary_show_inactive %}checked{% endif %}>
+                                    <input class="form-check-input" type="checkbox" id="summaryShowInactive" name="show_inactive" value="1" {% if summary_show_inactive %}checked{% endif %} onchange="applyPayrollFilters('summary')">
                                     <label class="form-check-label" for="summaryShowInactive">Показать уволенных</label>
                                 </div>
-                            </div>
-                            <div class="col-12 d-flex justify-content-end">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-filter me-1"></i>Применить
-                                </button>
                             </div>
                         </form>
 
@@ -68,7 +67,7 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th scope="col">
-                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=employee&order={% if summary_sort.field == 'employee' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}&period_start={{ summary_filters.period_start }}&period_end={{ summary_filters.period_end }}{% if summary_show_inactive %}&show_inactive=1{% endif %}">
+                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=employee&order={% if summary_sort.field == 'employee' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}&show_inactive=1">
                                                     Сотрудник
                                                     {% if summary_sort.field == 'employee' %}
                                                         <i class="bi bi-arrow-{% if summary_sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
@@ -76,15 +75,23 @@
                                                 </a>
                                             </th>
                                             <th scope="col">
-                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=entries_count&order={% if summary_sort.field == 'entries_count' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}&period_start={{ summary_filters.period_start }}&period_end={{ summary_filters.period_end }}{% if summary_show_inactive %}&show_inactive=1{% endif %}">
+                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=entries_count&order={% if summary_sort.field == 'entries_count' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}&show_inactive=1">
                                                     Начислений
                                                     {% if summary_sort.field == 'entries_count' %}
                                                         <i class="bi bi-arrow-{% if summary_sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
                                                     {% endif %}
                                                 </a>
                                             </th>
+                                            <th scope="col">
+                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=rate&order={% if summary_sort.field == 'rate' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}&show_inactive=1">
+                                                    Ставка
+                                                    {% if summary_sort.field == 'rate' %}
+                                                        <i class="bi bi-arrow-{% if summary_sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                                                    {% endif %}
+                                                </a>
+                                            </th>
                                             <th scope="col" class="text-end">
-                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=total_amount&order={% if summary_sort.field == 'total_amount' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}&period_start={{ summary_filters.period_start }}&period_end={{ summary_filters.period_end }}{% if summary_show_inactive %}&show_inactive=1{% endif %}">
+                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=total_amount&order={% if summary_sort.field == 'total_amount' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}&show_inactive=1">
                                                     Сумма
                                                     {% if summary_sort.field == 'total_amount' %}
                                                         <i class="bi bi-arrow-{% if summary_sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
@@ -92,7 +99,7 @@
                                                 </a>
                                             </th>
                                             <th scope="col">
-                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=latest_period&order={% if summary_sort.field == 'latest_period' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}&period_start={{ summary_filters.period_start }}&period_end={{ summary_filters.period_end }}{% if summary_show_inactive %}&show_inactive=1{% endif %}">
+                                                <a class="text-decoration-none text-dark" href="?view=summary&sort=latest_period&order={% if summary_sort.field == 'latest_period' and summary_sort.order == 'asc' %}desc{% else %}asc{% endif %}&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}&show_inactive=1">
                                                     Последнее начисление
                                                     {% if summary_sort.field == 'latest_period' %}
                                                         <i class="bi bi-arrow-{% if summary_sort.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
@@ -118,6 +125,14 @@
                                                     {% endif %}
                                                 </td>
                                                 <td><span class="badge bg-info">{{ row.entries_count }}</span></td>
+                                                <td>
+                                                    {% if row.contract_name and row.hourly_rate %}
+                                                        <small class="text-muted">{{ row.contract_name }}</small><br>
+                                                        <strong>{{ "%.2f"|format(row.hourly_rate) }} ₽</strong>
+                                                    {% else %}
+                                                        <span class="text-muted">—</span>
+                                                    {% endif %}
+                                                </td>
                                                 <td class="text-end"><strong class="text-success">{{ "%.2f"|format(row.total_amount) }} ₽</strong></td>
                                                 <td>
                                                     {% if row.latest_entry %}
@@ -151,14 +166,16 @@
                             <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-3">
                                 <form method="get" class="d-flex align-items-center gap-2">
                                     <input type="hidden" name="view" value="summary">
-                                    <input type="hidden" name="period_start" value="{{ summary_filters.period_start }}">
-                                    <input type="hidden" name="period_end" value="{{ summary_filters.period_end }}">
+                                    {% if summary_filters.payment_date %}
+                                        <input type="hidden" name="payment_date" value="{{ summary_filters.payment_date }}">
+                                    {% endif %}
                                     {% if summary_filters.object_id %}
                                         <input type="hidden" name="object_id" value="{{ summary_filters.object_id }}">
                                     {% endif %}
-                                    {% if summary_show_inactive %}
-                                        <input type="hidden" name="show_inactive" value="1">
+                                    {% if summary_filters.employee_id %}
+                                        <input type="hidden" name="employee_id" value="{{ summary_filters.employee_id }}">
                                     {% endif %}
+                                    <input type="hidden" name="show_inactive" value="1">
                                     <label for="summaryPerPage" class="form-label mb-0">На странице:</label>
                                     <select class="form-select form-select-sm" id="summaryPerPage" name="per_page" onchange="this.form.submit()">
                                         <option value="25" {% if summary_pagination.per_page == 25 %}selected{% endif %}>25</option>
@@ -174,17 +191,17 @@
                                     <nav aria-label="Пагинация сводки">
                                         <ul class="pagination mb-0">
                                             <li class="page-item {% if summary_pagination.page == 1 %}disabled{% endif %}">
-                                                <a class="page-link" href="?view=summary&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}&period_start={{ summary_filters.period_start }}&period_end={{ summary_filters.period_end }}{% if summary_show_inactive %}&show_inactive=1{% endif %}&sort={{ summary_sort.field }}&order={{ summary_sort.order }}">Первая</a>
+                                                <a class="page-link" href="?view=summary&page=1&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}{% if summary_show_inactive %}&show_inactive=1{% endif %}&sort={{ summary_sort.field }}&order={{ summary_sort.order }}">Первая</a>
                                             </li>
                                             <li class="page-item {% if summary_pagination.page == 1 %}disabled{% endif %}">
-                                                <a class="page-link" href="?view=summary&page={{ summary_pagination.page - 1 }}&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}&period_start={{ summary_filters.period_start }}&period_end={{ summary_filters.period_end }}{% if summary_show_inactive %}&show_inactive=1{% endif %}&sort={{ summary_sort.field }}&order={{ summary_sort.order }}">Назад</a>
+                                                <a class="page-link" href="?view=summary&page={{ summary_pagination.page - 1 }}&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}{% if summary_show_inactive %}&show_inactive=1{% endif %}&sort={{ summary_sort.field }}&order={{ summary_sort.order }}">Назад</a>
                                             </li>
                                             <li class="page-item active"><span class="page-link">{{ summary_pagination.page }} / {{ summary_pagination.pages }}</span></li>
                                             <li class="page-item {% if summary_pagination.page == summary_pagination.pages %}disabled{% endif %}">
-                                                <a class="page-link" href="?view=summary&page={{ summary_pagination.page + 1 }}&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}&period_start={{ summary_filters.period_start }}&period_end={{ summary_filters.period_end }}{% if summary_show_inactive %}&show_inactive=1{% endif %}&sort={{ summary_sort.field }}&order={{ summary_sort.order }}">Вперед</a>
+                                                <a class="page-link" href="?view=summary&page={{ summary_pagination.page + 1 }}&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}{% if summary_show_inactive %}&show_inactive=1{% endif %}&sort={{ summary_sort.field }}&order={{ summary_sort.order }}">Вперед</a>
                                             </li>
                                             <li class="page-item {% if summary_pagination.page == summary_pagination.pages %}disabled{% endif %}">
-                                                <a class="page-link" href="?view=summary&page={{ summary_pagination.pages }}&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}&period_start={{ summary_filters.period_start }}&period_end={{ summary_filters.period_end }}{% if summary_show_inactive %}&show_inactive=1{% endif %}&sort={{ summary_sort.field }}&order={{ summary_sort.order }}">Последняя</a>
+                                                <a class="page-link" href="?view=summary&page={{ summary_pagination.pages }}&per_page={{ summary_pagination.per_page }}{% if summary_filters.object_id %}&object_id={{ summary_filters.object_id }}{% endif %}{% if summary_filters.payment_date %}&payment_date={{ summary_filters.payment_date }}{% endif %}{% if summary_filters.employee_id %}&employee_id={{ summary_filters.employee_id }}{% endif %}{% if summary_show_inactive %}&show_inactive=1{% endif %}&sort={{ summary_sort.field }}&order={{ summary_sort.order }}">Последняя</a>
                                             </li>
                                         </ul>
                                     </nav>
@@ -202,9 +219,10 @@
                 <div class="card-body">
                         <form method="get" action="/owner/payroll" class="row g-3" id="payrollFiltersForm">
                             <input type="hidden" name="view" value="entries">
-                        <div class="col-md-4">
+                            <input type="hidden" name="show_inactive" value="1">  {# Всегда включено #}
+                        <div class="col-md-3">
                                 <label for="objectFilter" class="form-label">Объект</label>
-                                <select class="form-select" id="objectFilter" name="object_id" onchange="applyPayrollFilters()">
+                                <select class="form-select" id="objectFilter" name="object_id" onchange="applyPayrollFilters('entries')">
                                     <option value="">Все объекты</option>
                                     {% for obj in objects %}
                                         <option value="{{ obj.id }}" {% if filters.object_id == obj.id %}selected{% endif %}>{{ obj.name }}</option>
@@ -212,17 +230,21 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label for="period_start" class="form-label">Начало периода</label>
-                                <input type="date" class="form-control" id="period_start" name="period_start" value="{{ filters.period_start }}" onchange="applyPayrollFilters()">
+                            <label for="employeeFilter" class="form-label">Сотрудник</label>
+                            <select class="form-select" id="employeeFilter" name="employee_id" onchange="applyPayrollFilters('entries')">
+                                <option value="">Все сотрудники</option>
+                                {# Опции будут загружены динамически через JavaScript #}
+                            </select>
                         </div>
                         <div class="col-md-3">
-                            <label for="period_end" class="form-label">Конец периода</label>
-                                <input type="date" class="form-control" id="period_end" name="period_end" value="{{ filters.period_end }}" onchange="applyPayrollFilters()">
+                            <label for="paymentDateFilter" class="form-label">Дата выплаты</label>
+                                <input type="date" class="form-control" id="paymentDateFilter" name="payment_date" value="{{ filters.payment_date }}" onchange="applyPayrollFilters('entries')">
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                                <button type="button" class="btn btn-primary w-100" onclick="applyPayrollFilters()">
-                                <i class="fas fa-filter"></i> Применить
-                            </button>
+                        <div class="col-md-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="entriesShowInactive" name="show_inactive" value="1" {% if summary_show_inactive %}checked{% endif %} onchange="applyPayrollFilters('entries')">
+                                <label class="form-check-label" for="entriesShowInactive">Показать уволенных</label>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -236,7 +258,7 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th>
-                                                <a href="?view=entries&sort=id&order={% if sort.field == 'id' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.period_start %}&period_start={{ filters.period_start }}{% endif %}{% if filters.period_end %}&period_end={{ filters.period_end }}{% endif %}{% if filters.q_employee %}&q_employee={{ filters.q_employee }}{% endif %}"
+                                                <a href="?view=entries&sort=id&order={% if sort.field == 'id' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.payment_date %}&payment_date={{ filters.payment_date }}{% endif %}{% if filters.employee_id %}&employee_id={{ filters.employee_id }}{% endif %}"
                                                    class="text-decoration-none text-dark">
                                                     ID
                                                     {% if sort.field == 'id' %}
@@ -249,7 +271,7 @@
                                                 </a>
                                             </th>
                                             <th>
-                                                <a href="?view=entries&sort=employee&order={% if sort.field == 'employee' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.period_start %}&period_start={{ filters.period_start }}{% endif %}{% if filters.period_end %}&period_end={{ filters.period_end }}{% endif %}{% if filters.q_employee %}&q_employee={{ filters.q_employee }}{% endif %}"
+                                                <a href="?view=entries&sort=employee&order={% if sort.field == 'employee' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}asc{% endif %}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.payment_date %}&payment_date={{ filters.payment_date }}{% endif %}{% if filters.employee_id %}&employee_id={{ filters.employee_id }}{% endif %}"
                                                    class="text-decoration-none text-dark">
                                                     Сотрудник
                                                     {% if sort.field == 'employee' %}
@@ -260,15 +282,9 @@
                                                         {% endif %}
                                                     {% endif %}
                                                 </a>
-                                                <div class="mt-1 d-flex gap-1">
-                                                    <input type="text" class="form-control form-control-sm flex-grow-1" id="filterPayrollEmployee" placeholder="Фильтр по сотруднику" value="{{ filters.q_employee or '' }}" onkeyup="filterPayrollTable()">
-                                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearPayrollFilter('filterPayrollEmployee')" title="Очистить">
-                                                        <i class="bi bi-x"></i>
-                                                    </button>
-                                                </div>
                                             </th>
                                             <th>
-                                                <a href="?view=entries&sort=period&order={% if sort.field == 'period' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.period_start %}&period_start={{ filters.period_start }}{% endif %}{% if filters.period_end %}&period_end={{ filters.period_end }}{% endif %}{% if filters.q_employee %}&q_employee={{ filters.q_employee }}{% endif %}"
+                                                <a href="?view=entries&sort=period&order={% if sort.field == 'period' %}{% if sort.order == 'desc' %}asc{% else %}desc{% endif %}{% else %}desc{% endif %}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.payment_date %}&payment_date={{ filters.payment_date }}{% endif %}{% if filters.employee_id %}&employee_id={{ filters.employee_id }}{% endif %}"
                                                    class="text-decoration-none text-dark">
                                                     Период
                                                     {% if sort.field == 'period' %}
@@ -280,17 +296,19 @@
                                                     {% endif %}
                                                 </a>
                                             </th>
-                                    <th>Часов</th>
-                                    <th>Ставка</th>
-                                    <th>Начислено</th>
+                                            <th>Дата выплаты</th>
+                                    <th>За смены</th>
                                     <th>Удержано</th>
                                     <th>Доплаты</th>
                                     <th>К выплате</th>
+                                    <th>Начислено</th>
+                                    <th>Выплачено</th>
                                     <th>Действия</th>
                                 </tr>
                             </thead>
                                     <tbody id="payrollTableBody">
-                                {% for entry in entries %}
+                                {% for item in entries %}
+                                        {% set entry = item.entry %}
                                             <tr data-employee-name="{{ ((entry.employee.last_name or '') + ' ' + (entry.employee.first_name or '') if entry.employee else '').strip().lower() }}">
                                     <td>{{ entry.id }}</td>
                                     <td>
@@ -301,8 +319,13 @@
                                         {% endif %}
                                     </td>
                                                 <td>{{ entry.period_start.strftime('%d.%m.%Y') }} - {{ entry.period_end.strftime('%d.%m.%Y') }}</td>
-                                    <td>{{ "%.2f"|format(entry.hours_worked) }}</td>
-                                    <td>{{ "%.2f"|format(entry.hourly_rate) }}₽</td>
+                                    <td class="text-nowrap">
+                                        {% if item.payment_date %}
+                                            {{ item.payment_date.strftime('%d.%m.%Y') }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
                                     <td><strong>{{ "%.2f"|format(entry.gross_amount) }}₽</strong></td>
                                     <td class="text-danger">
                                         {% if entry.total_deductions > 0 %}
@@ -320,9 +343,40 @@
                                     </td>
                                     <td><strong class="text-success">{{ "%.2f"|format(entry.net_amount) }}₽</strong></td>
                                     <td>
-                                                    <a href="/owner/payroll/{{ entry.id }}?origin=entries&selected_entry_id={{ entry.id }}" class="btn btn-sm btn-info">
-                                            <i class="fas fa-eye"></i> Детали
-                                        </a>
+                                        {% if item.payments_added %}
+                                            <strong class="text-info">{{ "%.2f"|format(item.payments_added) }}₽</strong>
+                                        {% else %}
+                                            <span class="text-muted">0₽</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.payments_completed %}
+                                            <strong class="text-success">{{ "%.2f"|format(item.payments_completed) }}₽</strong>
+                                        {% else %}
+                                            <span class="text-muted">0₽</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="/owner/payroll/{{ entry.id }}?origin=entries&selected_entry_id={{ entry.id }}" class="btn btn-sm btn-info" title="Детали">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="/owner/payroll/{{ entry.id }}?origin=entries&selected_entry_id={{ entry.id }}&action=addDeduction" class="btn btn-sm btn-danger action-btn" data-action="addDeduction" data-entry-id="{{ entry.id }}" title="Добавить удержание" onclick="saveReturnUrl(event)">
+                                                <i class="fas fa-minus-circle"></i>
+                                            </a>
+                                            <a href="/owner/payroll/{{ entry.id }}?origin=entries&selected_entry_id={{ entry.id }}&action=addBonus" class="btn btn-sm btn-success action-btn" data-action="addBonus" data-entry-id="{{ entry.id }}" title="Добавить доплату" onclick="saveReturnUrl(event)">
+                                                <i class="fas fa-plus-circle"></i>
+                                            </a>
+                                            {% if item.pending_payment %}
+                                                <a href="/owner/payroll/{{ entry.id }}?origin=entries&selected_entry_id={{ entry.id }}&action=confirmPayment&payment_id={{ item.pending_payment.id }}" class="btn btn-sm btn-primary action-btn" data-action="confirmPayment" data-entry-id="{{ entry.id }}" data-payment-id="{{ item.pending_payment.id }}" title="Подтвердить выплату" onclick="saveReturnUrl(event)">
+                                                    <i class="fas fa-check-circle"></i>
+                                                </a>
+                                            {% else %}
+                                                <a href="/owner/payroll/{{ entry.id }}?origin=entries&selected_entry_id={{ entry.id }}&action=createPayment" class="btn btn-sm btn-primary action-btn" data-action="createPayment" data-entry-id="{{ entry.id }}" title="Добавить выплату" onclick="saveReturnUrl(event)">
+                                                    <i class="fas fa-hand-holding-usd"></i>
+                                                </a>
+                                            {% endif %}
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -346,17 +400,17 @@
                             <nav aria-label="Пагинация начислений">
                                 <ul class="pagination mb-0">
                                     <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
-                                        <a class="page-link" href="?view=entries&page=1&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.period_start %}&period_start={{ filters.period_start }}{% endif %}{% if filters.period_end %}&period_end={{ filters.period_end }}{% endif %}{% if filters.q_employee %}&q_employee={{ filters.q_employee }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Первая</a>
+                                        <a class="page-link" href="?view=entries&page=1&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.payment_date %}&payment_date={{ filters.payment_date }}{% endif %}{% if filters.employee_id %}&employee_id={{ filters.employee_id }}{% endif %}{% if summary_show_inactive %}&show_inactive=1{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Первая</a>
                                     </li>
                                     <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
-                                        <a class="page-link" href="?view=entries&page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.period_start %}&period_start={{ filters.period_start }}{% endif %}{% if filters.period_end %}&period_end={{ filters.period_end }}{% endif %}{% if filters.q_employee %}&q_employee={{ filters.q_employee }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Назад</a>
+                                        <a class="page-link" href="?view=entries&page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.payment_date %}&payment_date={{ filters.payment_date }}{% endif %}{% if filters.employee_id %}&employee_id={{ filters.employee_id }}{% endif %}{% if summary_show_inactive %}&show_inactive=1{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Назад</a>
                                     </li>
                                     <li class="page-item active"><span class="page-link">{{ pagination.page }} / {{ pagination.pages }}</span></li>
                                     <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
-                                        <a class="page-link" href="?view=entries&page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.period_start %}&period_start={{ filters.period_start }}{% endif %}{% if filters.period_end %}&period_end={{ filters.period_end }}{% endif %}{% if filters.q_employee %}&q_employee={{ filters.q_employee }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Вперед</a>
+                                        <a class="page-link" href="?view=entries&page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.payment_date %}&payment_date={{ filters.payment_date }}{% endif %}{% if filters.employee_id %}&employee_id={{ filters.employee_id }}{% endif %}{% if summary_show_inactive %}&show_inactive=1{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Вперед</a>
                                     </li>
                                     <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
-                                        <a class="page-link" href="?view=entries&page={{ pagination.pages }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.period_start %}&period_start={{ filters.period_start }}{% endif %}{% if filters.period_end %}&period_end={{ filters.period_end }}{% endif %}{% if filters.q_employee %}&q_employee={{ filters.q_employee }}{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Последняя</a>
+                                        <a class="page-link" href="?view=entries&page={{ pagination.pages }}&per_page={{ pagination.per_page }}{% if filters.object_id %}&object_id={{ filters.object_id }}{% endif %}{% if filters.payment_date %}&payment_date={{ filters.payment_date }}{% endif %}{% if filters.employee_id %}&employee_id={{ filters.employee_id }}{% endif %}{% if summary_show_inactive %}&show_inactive=1{% endif %}{% if sort.field %}&sort={{ sort.field }}{% endif %}{% if sort.order %}&order={{ sort.order }}{% endif %}">Последняя</a>
                                     </li>
                                 </ul>
                             </nav>
@@ -493,10 +547,33 @@ function changePerPage(value) {
     url.searchParams.set('page', '1');
     url.searchParams.set('view', 'entries');
 
+    // Сохраняем все фильтры
     const objectFilter = document.getElementById('objectFilter');
-    const periodStart = document.getElementById('period_start');
-    const periodEnd = document.getElementById('period_end');
-    const employeeFilter = document.getElementById('filterPayrollEmployee');
+    const paymentDateFilter = document.getElementById('paymentDateFilter');
+    const employeeFilter = document.getElementById('employeeFilter');
+    const showInactive = document.getElementById('entriesShowInactive');
+    
+    if (objectFilter && objectFilter.value) {
+        url.searchParams.set('object_id', objectFilter.value);
+    }
+    if (paymentDateFilter && paymentDateFilter.value) {
+        url.searchParams.set('payment_date', paymentDateFilter.value);
+    }
+    if (employeeFilter && employeeFilter.value) {
+        url.searchParams.set('employee_id', employeeFilter.value);
+    }
+    if (showInactive && showInactive.checked) {
+        url.searchParams.set('show_inactive', '1');
+    }
+    
+    // Сохраняем сортировку
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('sort')) {
+        url.searchParams.set('sort', urlParams.get('sort'));
+    }
+    if (urlParams.get('order')) {
+        url.searchParams.set('order', urlParams.get('order'));
+    }
 
     if (objectFilter && objectFilter.value) url.searchParams.set('object_id', objectFilter.value);
     if (periodStart && periodStart.value) url.searchParams.set('period_start', periodStart.value);
@@ -588,6 +665,170 @@ document.addEventListener('DOMContentLoaded', function() {
             const url = `/owner/payroll/report?period_start=${reportPeriodStart}&period_end=${reportPeriodEnd}`;
             window.open(url, '_blank');
         });
+    
+    // Кнопки действий просто переходят по ссылке - модальное окно откроется на странице деталей
+    
+    // Восстановление позиции прокрутки при возврате со страницы деталей
+    const savedScrollPosition = sessionStorage.getItem('payrollListScrollPosition');
+    if (savedScrollPosition) {
+        window.scrollTo(0, parseInt(savedScrollPosition, 10));
+        sessionStorage.removeItem('payrollListScrollPosition');
+    }
+});
+
+// Сохранение URL возврата и позиции прокрутки перед переходом на страницу деталей
+function saveReturnUrl(event) {
+    // Сохраняем текущий URL (с параметрами фильтров, пагинации и т.д.)
+    const currentUrl = window.location.href;
+    sessionStorage.setItem('payrollListReturnUrl', currentUrl);
+    
+    // Сохраняем позицию прокрутки
+    const scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+    sessionStorage.setItem('payrollListScrollPosition', scrollPosition.toString());
+    
+    // Переход произойдет по ссылке (не preventDefault)
+}
+
+// Применение фильтров сразу после изменения
+function applyPayrollFilters(view) {
+    const formId = view === 'summary' ? 'summaryFiltersForm' : 'payrollFiltersForm';
+    const form = document.getElementById(formId);
+    if (form) {
+        form.submit();
+    }
+}
+
+// Загрузка сотрудников для объекта (включая уволенных)
+async function loadEmployeesForObject(objectId, selectElementId) {
+    const selectElement = document.getElementById(selectElementId);
+    if (!selectElement) return Promise.resolve();
+    
+    // Сохраняем текущее значение
+    const currentValue = selectElement.value;
+    
+    // Очищаем опции (кроме "Все сотрудники")
+    selectElement.innerHTML = '<option value="">Все сотрудники</option>';
+    
+    if (!objectId) {
+        // Если объект не выбран, загружаем всех сотрудников владельца
+        // Это можно сделать через отдельный эндпоинт или оставить пустым
+        return Promise.resolve();
+    }
+    
+    try {
+        const response = await fetch(`/owner/api/employees/for-object/${objectId}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const employees = await response.json();
+        
+        // Разделяем на активных и уволенных
+        const activeEmployees = employees.filter(emp => emp.is_active !== false && !emp.isFormer);
+        const formerEmployees = employees.filter(emp => emp.is_active === false || emp.isFormer);
+        
+        // Добавляем активных
+        activeEmployees.forEach(emp => {
+            const option = document.createElement('option');
+            option.value = emp.id;
+            option.textContent = emp.name;
+            selectElement.appendChild(option);
+        });
+        
+        // Добавляем уволенных
+        if (formerEmployees.length > 0) {
+            const separator = document.createElement('option');
+            separator.disabled = true;
+            separator.textContent = '— Бывшие —';
+            selectElement.appendChild(separator);
+            
+            formerEmployees.forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.id;
+                option.textContent = `${emp.name} (бывший)`;
+                selectElement.appendChild(option);
+            });
+        }
+        
+        // Восстанавливаем выбранное значение
+        if (currentValue) {
+            selectElement.value = currentValue;
+        }
+        
+        return Promise.resolve();
+    } catch (error) {
+        console.error('Error loading employees:', error);
+        return Promise.reject(error);
+    }
+}
+
+// Переключение вкладок с сохранением фильтров
+function switchTab(view) {
+    const currentView = '{{ view }}';
+    const formId = currentView === 'summary' ? 'summaryFiltersForm' : 'payrollFiltersForm';
+    const form = document.getElementById(formId);
+    
+    if (form) {
+        // Сохраняем текущие фильтры
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        
+        // Добавляем все параметры из формы
+        for (const [key, value] of formData.entries()) {
+            if (value) {
+                params.append(key, value);
+            }
+        }
+        
+        // Устанавливаем view
+        params.set('view', view);
+        
+        // Переходим на новую вкладку с сохраненными фильтрами
+        window.location.href = `/owner/payroll?${params.toString()}`;
+    } else {
+        // Если формы нет, просто переключаем вкладку
+        window.location.href = `/owner/payroll?view=${view}`;
+    }
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    // Загружаем сотрудников для выбранного объекта (если есть)
+    const summaryObject = document.getElementById('summaryObject');
+    const summaryEmployee = document.getElementById('summaryEmployee');
+    const entriesObject = document.getElementById('objectFilter');
+    const entriesEmployee = document.getElementById('employeeFilter');
+    
+    // Восстанавливаем выбранного сотрудника из URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const employeeId = urlParams.get('employee_id');
+    
+    if (summaryObject && summaryEmployee) {
+        const objectId = summaryObject.value;
+        if (objectId) {
+            loadEmployeesForObject(objectId, 'summaryEmployee').then(() => {
+                if (employeeId) {
+                    summaryEmployee.value = employeeId;
+                }
+            });
+        }
+        summaryObject.addEventListener('change', function() {
+            loadEmployeesForObject(this.value, 'summaryEmployee');
+        });
+    }
+    
+    if (entriesObject && entriesEmployee) {
+        const objectId = entriesObject.value;
+        if (objectId) {
+            loadEmployeesForObject(objectId, 'employeeFilter').then(() => {
+                if (employeeId) {
+                    entriesEmployee.value = employeeId;
+                }
+            });
+        }
+        entriesObject.addEventListener('change', function() {
+            loadEmployeesForObject(this.value, 'employeeFilter');
+        });
+    }
 });
 </script>
 

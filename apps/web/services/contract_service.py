@@ -1146,6 +1146,8 @@ class ContractService:
                 "manager_permissions": contract.manager_permissions,
                 "allowed_objects": contract.allowed_objects or [],
                 "allowed_objects_info": allowed_objects_info,
+                "inherit_payment_schedule": contract.inherit_payment_schedule,
+                "payment_schedule_id": contract.payment_schedule_id,
                 "created_at": contract.created_at,
                 "updated_at": contract.updated_at,
                 "signed_at": contract.signed_at,
@@ -1221,6 +1223,8 @@ class ContractService:
                 "start_date": contract.start_date,
                 "end_date": contract.end_date,
                 "allowed_objects": contract.allowed_objects or [],
+                "inherit_payment_schedule": contract.inherit_payment_schedule,
+                "payment_schedule_id": contract.payment_schedule_id,
                 "employee": {
                     "id": contract.employee.id,
                     "telegram_id": contract.employee.telegram_id,
@@ -1535,6 +1539,11 @@ class ContractService:
                                 object_id, 
                                 contract.manager_permissions
                             )
+            
+            if "inherit_payment_schedule" in contract_data:
+                contract.inherit_payment_schedule = contract_data["inherit_payment_schedule"]
+            if "payment_schedule_id" in contract_data:
+                contract.payment_schedule_id = contract_data["payment_schedule_id"]
             
             contract.updated_at = datetime.now()
             await session.commit()

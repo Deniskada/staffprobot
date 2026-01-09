@@ -119,7 +119,11 @@ class PayrollService:
             Список начислений
         """
         try:
-            query = select(PayrollEntry).where(
+            from sqlalchemy.orm import selectinload
+            query = select(PayrollEntry).options(
+                selectinload(PayrollEntry.contract),
+                selectinload(PayrollEntry.employee)
+            ).where(
                 PayrollEntry.employee_id == employee_id
             )
             
