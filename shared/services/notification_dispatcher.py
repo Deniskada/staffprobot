@@ -58,9 +58,9 @@ class NotificationDispatcher:
                     return False
                 
                 # Проверяем статус - отправляем только PENDING
-                if notification.status != NotificationStatus.PENDING:
+                if notification.status_enum != NotificationStatus.PENDING:
                     logger.warning(
-                        f"Notification {notification_id} has status {notification.status.value}, skipping"
+                        f"Notification {notification_id} has status {notification.status}, skipping"
                     )
                     return False
                 
@@ -132,7 +132,7 @@ class NotificationDispatcher:
             True если успешно отправлено
         """
         try:
-            if notification.channel == NotificationChannel.TELEGRAM:
+            if notification.channel_enum == NotificationChannel.TELEGRAM:
                 # Проверяем наличие telegram_id
                 if not user.telegram_id:
                     logger.warning(
@@ -147,7 +147,7 @@ class NotificationDispatcher:
                     variables=notification.data
                 )
                 
-            elif notification.channel == NotificationChannel.EMAIL:
+            elif notification.channel_enum == NotificationChannel.EMAIL:
                 # Проверяем наличие email
                 if not user.email:
                     logger.warning(
@@ -162,7 +162,7 @@ class NotificationDispatcher:
                     variables=notification.data
                 )
                 
-            elif notification.channel == NotificationChannel.SMS:
+            elif notification.channel_enum == NotificationChannel.SMS:
                 # Проверяем наличие телефона
                 if not user.phone:
                     logger.warning(
@@ -177,7 +177,7 @@ class NotificationDispatcher:
                     variables=notification.data
                 )
                 
-            elif notification.channel == NotificationChannel.IN_APP:
+            elif notification.channel_enum == NotificationChannel.IN_APP:
                 # In-app уведомления не требуют отправки, только сохранение в БД
                 logger.info(
                     f"In-app notification {notification.id} stored in DB"
@@ -186,13 +186,13 @@ class NotificationDispatcher:
                 
             else:
                 logger.warning(
-                    f"Unsupported notification channel: {notification.channel.value} (notification_id={notification.id})"
+                    f"Unsupported notification channel: {notification.channel} (notification_id={notification.id})"
                 )
                 return False
                 
         except Exception as e:
             logger.error(
-                f"Error sending via channel {notification.channel.value} (notification_id={notification.id}): {e}"
+                f"Error sending via channel {notification.channel} (notification_id={notification.id}): {e}"
             )
             return False
     
@@ -315,7 +315,7 @@ class NotificationDispatcher:
                 
                 for notification in failed_notifications:
                     # Сбрасываем статус на PENDING для повторной отправки
-                    notification.status = NotificationStatus.PENDING
+                    notification.status = NotificationStatus.PENDING.name
                     await session.commit()
                     
                     # Пытаемся отправить

@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 from celery import Task
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 
 from core.celery.celery_app import celery_app
@@ -17,6 +17,7 @@ from domain.entities.notification import (
     Notification,
     NotificationChannel,
     NotificationPriority,
+    NotificationStatus,
     NotificationType,
 )
 from shared.services.shift_notification_service import ShiftNotificationService
@@ -184,39 +185,57 @@ async def _check_object_openings_async() -> Dict[str, Any]:
         now = datetime.now(timezone.utc)
         today_local = timezone_helper.utc_to_local(now).date()
         
-        # Получить все активные объекты
+        # Получить ID всех активных объектов
         async with get_async_session() as session:
-            query = select(Object).options(
-                selectinload(Object.owner)
-            ).where(Object.is_active == True)
-            
+            query = select(Object.id).where(Object.is_active == True)
             result = await session.execute(query)
-            objects = list(result.scalars().all())
+            object_ids = [row[0] for row in result.all()]
         
         # Обрабатываем каждый объект в отдельной транзакции
-        for obj in objects:
-            # Пропустить если нет владельца
-            if not obj.owner_id:
-                continue
-            
+        for obj_id in object_ids:
+            current_obj_id = obj_id  # Сохраняем для обработки ошибок
             try:
                 async with get_async_session() as session:
                     # Загружаем объект заново с owner в текущей сессии
                     obj_query = select(Object).options(
                         selectinload(Object.owner)
-                    ).where(Object.id == current_obj.id)
+                    ).where(Object.id == obj_id)
                     obj_result = await session.execute(obj_query)
                     current_obj = obj_result.scalar_one_or_none()
                     
                     if not current_obj or not current_obj.owner:
                         continue
                     
-                    # Получить смены объекта на сегодня
+                    # Получить смены объекта на сегодня (учитываем как запланированные, так и спонтанные)
+                    start_of_day_utc = timezone_helper.start_of_day_utc(today_local)
+                    end_of_day_utc = timezone_helper.end_of_day_utc(today_local)
                     shifts_query = select(Shift).where(
                         and_(
                             Shift.object_id == current_obj.id,
-                            Shift.planned_start >= timezone_helper.start_of_day_utc(today_local),
-                            Shift.planned_start < timezone_helper.end_of_day_utc(today_local)
+                            or_(
+                                # Запланированные смены
+                                and_(
+                                    Shift.planned_start.isnot(None),
+                                    Shift.planned_start >= start_of_day_utc,
+                                    Shift.planned_start < end_of_day_utc
+                                ),
+                                # Спонтанные смены (без planned_start, но с start_time или actual_start)
+                                and_(
+                                    Shift.planned_start.is_(None),
+                                    or_(
+                                        and_(
+                                            Shift.start_time.isnot(None),
+                                            Shift.start_time >= start_of_day_utc,
+                                            Shift.start_time < end_of_day_utc
+                                        ),
+                                        and_(
+                                            Shift.actual_start.isnot(None),
+                                            Shift.actual_start >= start_of_day_utc,
+                                            Shift.actual_start < end_of_day_utc
+                                        )
+                                    )
+                                )
+                            )
                         )
                     ).options(selectinload(Shift.user))
                     
@@ -238,7 +257,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                             
                             if not notification_exists:
                                 await _create_object_notification(
-                                    session, obj, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
+                                    session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
                                     {
                                         "object_name": current_obj.name,
                                         "object_address": current_obj.address or "",
@@ -252,9 +271,9 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                     # Для объектов со сменами проверяем открытие/закрытие
                     if shifts_today and current_obj.opening_time and current_obj.closing_time:
                         logger.info(f"Checking object {current_obj.id} ({current_obj.name}): {len(shifts_today)} shifts today")
-                        # Найти первую и последнюю смену
-                        first_shift = min(shifts_today, key=lambda s: s.planned_start or s.start_time)
-                        last_shift = max(shifts_today, key=lambda s: s.end_time or s.start_time)
+                        # Найти первую и последнюю смену (учитываем actual_start, start_time, planned_start)
+                        first_shift = min(shifts_today, key=lambda s: s.actual_start or s.start_time or s.planned_start or datetime.max.replace(tzinfo=timezone.utc))
+                        last_shift = max(shifts_today, key=lambda s: s.end_time or s.start_time or datetime.min.replace(tzinfo=timezone.utc))
                         logger.info(f"Object {current_obj.id}: first_shift={first_shift.id}, last_shift={last_shift.id}, last_status={last_shift.status}, last_end_time={last_shift.end_time}")
                         
                         # Проверка 2: ОТКРЫТИЕ ОБЪЕКТА (вовремя или с опозданием)
@@ -275,7 +294,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                             if not notification_exists:
                                 if delay_minutes > 5:  # Опоздание больше 5 минут
                                     await _create_object_notification(
-                                        session, obj, current_obj.owner, NotificationType.OBJECT_LATE_OPENING,
+                                        session, current_obj.id, current_obj.owner, NotificationType.OBJECT_LATE_OPENING,
                                         {
                                             "object_name": current_obj.name,
                                             "employee_name": f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный",
@@ -288,7 +307,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                     stats["late_opening"] += 1
                                 else:  # Вовремя
                                     await _create_object_notification(
-                                        session, obj, current_obj.owner, NotificationType.OBJECT_OPENED,
+                                        session, current_obj.id, current_obj.owner, NotificationType.OBJECT_OPENED,
                                         {
                                             "object_name": current_obj.name,
                                             "employee_name": f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный",
@@ -316,7 +335,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                             if not notification_exists:
                                 if early_minutes > 5:  # Раннее закрытие больше 5 минут
                                     await _create_object_notification(
-                                        session, obj, current_obj.owner, NotificationType.OBJECT_EARLY_CLOSING,
+                                        session, current_obj.id, current_obj.owner, NotificationType.OBJECT_EARLY_CLOSING,
                                         {
                                             "object_name": current_obj.name,
                                             "employee_name": f"{last_shift.user.first_name} {last_shift.user.last_name}" if last_shift.user else "Неизвестный",
@@ -329,7 +348,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                     stats["early_closing"] += 1
                                 else:  # Вовремя
                                     await _create_object_notification(
-                                        session, obj, current_obj.owner, NotificationType.OBJECT_CLOSED,
+                                        session, current_obj.id, current_obj.owner, NotificationType.OBJECT_CLOSED,
                                         {
                                             "object_name": current_obj.name,
                                             "employee_name": f"{last_shift.user.first_name} {last_shift.user.last_name}" if last_shift.user else "Неизвестный",
@@ -338,9 +357,41 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                         now
                                     )
                                     stats["closed"] += 1
+                            
+                            # Проверка 4: После закрытия всех смен - объект без смен до конца дня
+                            # Если все смены завершены и объект закрылся, создаем уведомление "нет смен"
+                            all_shifts_completed = all(s.status in ('completed', 'closed') for s in shifts_today)
+                            
+                            if all_shifts_completed and last_shift.end_time:
+                                # Проверить не создано ли уже уведомление "нет смен" после закрытия
+                                notification_exists_no_shifts = await _check_notification_exists(
+                                    session, current_obj.owner_id, NotificationType.OBJECT_NO_SHIFTS_TODAY.value, 
+                                    {"object_id": current_obj.id, "date": str(today_local), "after_close": "true"}
+                                )
+                                
+                                if not notification_exists_no_shifts:
+                                    # Создаем уведомление через 10 минут после закрытия последней смены
+                                    close_time_utc = last_shift.end_time
+                                    delay_minutes = 10
+                                    notification_time = close_time_utc + timedelta(minutes=delay_minutes)
+                                    
+                                    if now >= notification_time:
+                                        await _create_object_notification(
+                                            session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
+                                            {
+                                                "object_name": current_obj.name,
+                                                "object_address": current_obj.address or "",
+                                                "date": today_local.strftime("%d.%m.%Y")
+                                            },
+                                            now
+                                        )
+                                        stats["no_shifts"] += 1
                     
             except Exception as e:
-                logger.error(f"Error checking object {current_obj.id}: {e}")
+                error_obj_id = current_obj_id if 'current_obj_id' in locals() else 'unknown'
+                logger.error(f"Error checking object {error_obj_id}: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 stats["errors"] += 1
                 continue
         
@@ -348,7 +399,8 @@ async def _check_object_openings_async() -> Dict[str, Any]:
         return stats
             
     except Exception as e:
-        logger.error(f"Fatal error in _check_object_openings_async: {e}")
+        import traceback
+        logger.error(f"Fatal error in _check_object_openings_async: {e}\n{traceback.format_exc()}")
         stats["errors"] = 1
         return stats
 
@@ -370,7 +422,7 @@ async def _check_notification_exists(session, user_id: int, notif_type_value: st
 
 async def _create_object_notification(
     session, 
-    obj: Object,
+    obj_id: int,
     owner: User,
     notif_type: NotificationType,
     template_vars: dict,
@@ -387,41 +439,68 @@ async def _create_object_notification(
     
     from shared.templates.notifications.base_templates import NotificationTemplateManager
     
+    # Используем SQL INSERT с приведением типа для enum в БД
+    from sqlalchemy import text
+    import json
+    
+    # В БД хранятся имена enum (HIGH, NORMAL), а не значения
+    priority_enum = NotificationPriority.HIGH if "late" in type_code or "early" in type_code or "no_shifts" in type_code else NotificationPriority.NORMAL
+    priority_str = priority_enum.name  # HIGH или NORMAL
+    type_name = notif_type.value  # Используем значение enum (строку)
+    
     # Создать TG уведомление
     if telegram_enabled:
         rendered_tg = NotificationTemplateManager.render(notif_type, NotificationChannel.TELEGRAM, template_vars)
-        notification_tg = Notification(
-            user_id=owner.id,
-            type=notif_type.value,  # Используем .value для совместимости с БД
-            channel=NotificationChannel.TELEGRAM.value,
-            priority=NotificationPriority.HIGH if "late" in type_code or "early" in type_code or "no_shifts" in type_code else NotificationPriority.NORMAL,
-            title=rendered_tg["title"],
-            message=rendered_tg["message"],
-            data={**template_vars, "object_id": obj.id},
-            scheduled_at=scheduled_at
+        data_json = json.dumps({**template_vars, "object_id": obj_id})
+        await session.execute(
+            text("""
+                INSERT INTO notifications (user_id, type, channel, status, priority, title, message, data, scheduled_at)
+                VALUES (:user_id, CAST(:type AS notificationtype), CAST(:channel AS notificationchannel), 
+                        CAST(:status AS notificationstatus), CAST(:priority AS notificationpriority),
+                        :title, :message, CAST(:data AS jsonb), :scheduled_at)
+            """),
+            {
+                "user_id": owner.id,
+                "type": type_name,
+                "channel": NotificationChannel.TELEGRAM.name,  # В БД хранится имя enum (TELEGRAM), а не значение
+                "status": NotificationStatus.PENDING.name,  # В БД хранится имя enum (PENDING)
+                "priority": priority_str,
+                "title": rendered_tg["title"],
+                "message": rendered_tg["message"],
+                "data": data_json,
+                "scheduled_at": scheduled_at
+            }
         )
-        session.add(notification_tg)
     
     # Создать In-App уведомление
     if inapp_enabled:
         rendered_inapp = NotificationTemplateManager.render(notif_type, NotificationChannel.IN_APP, template_vars)
-        notification_inapp = Notification(
-            user_id=owner.id,
-            type=notif_type.value,  # Используем .value для совместимости с БД
-            channel=NotificationChannel.IN_APP.value,
-            priority=NotificationPriority.HIGH if "late" in type_code or "early" in type_code or "no_shifts" in type_code else NotificationPriority.NORMAL,
-            title=rendered_inapp["title"],
-            message=rendered_inapp["message"],
-            data={**template_vars, "object_id": obj.id},
-            scheduled_at=scheduled_at
+        data_json = json.dumps({**template_vars, "object_id": obj_id})
+        await session.execute(
+            text("""
+                INSERT INTO notifications (user_id, type, channel, status, priority, title, message, data, scheduled_at)
+                VALUES (:user_id, CAST(:type AS notificationtype), CAST(:channel AS notificationchannel), 
+                        CAST(:status AS notificationstatus), CAST(:priority AS notificationpriority),
+                        :title, :message, CAST(:data AS jsonb), :scheduled_at)
+            """),
+            {
+                "user_id": owner.id,
+                "type": type_name,
+                "channel": NotificationChannel.IN_APP.name,  # В БД хранится имя enum (IN_APP), а не значение
+                "status": NotificationStatus.PENDING.name,  # В БД хранится имя enum (PENDING)
+                "priority": priority_str,
+                "title": rendered_inapp["title"],
+                "message": rendered_inapp["message"],
+                "data": data_json,
+                "scheduled_at": scheduled_at
+            }
         )
-        session.add(notification_inapp)
     
     await session.commit()
     
     logger.info(
         f"Created {notif_type.value} notification for owner {owner.id}",
-        object_id=obj.id,
+        object_id=obj_id,
         telegram=telegram_enabled,
         inapp=inapp_enabled
     )

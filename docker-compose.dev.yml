@@ -83,7 +83,7 @@ services:
       - PYTHONUNBUFFERED=1
       - TELEGRAM_BOT_TOKEN_DEV=${TELEGRAM_BOT_TOKEN_DEV}
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
-      - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
+      - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
     depends_on:
       postgres:
@@ -118,7 +118,7 @@ services:
       - DEBUG=true
       - TELEGRAM_BOT_TOKEN_DEV=${TELEGRAM_BOT_TOKEN_DEV}
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
-      - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
+      - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
     depends_on:
       postgres:
@@ -149,7 +149,7 @@ services:
       - DEBUG=true
       - TELEGRAM_BOT_TOKEN_DEV=${TELEGRAM_BOT_TOKEN_DEV}
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
-      - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
+      - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
     depends_on:
       postgres:
@@ -185,7 +185,7 @@ services:
       - SECRET_KEY=dev-secret-key-change-in-production
       - TELEGRAM_BOT_TOKEN_DEV=${TELEGRAM_BOT_TOKEN_DEV}
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
-      - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
+      - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
       - YANDEX_MAPS_API_KEY=${YANDEX_MAPS_API_KEY}
     depends_on:

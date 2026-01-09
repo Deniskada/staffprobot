@@ -137,7 +137,12 @@ class NotificationService:
                     query = query.where(Notification.channel == channel)
                 
                 if not include_read:
-                    query = query.where(Notification.status != NotificationStatus.READ)
+                    # Показываем все уведомления, кроме прочитанных (READ)
+                    # Используем cast для сравнения с enum значением
+                    from sqlalchemy import cast, String
+                    query = query.where(
+                        cast(Notification.status, String) != NotificationStatus.READ.value
+                    )
                 
                 # Сортировка
                 if sort_by == "priority":
@@ -355,9 +360,12 @@ class NotificationService:
                 before = datetime.now(timezone.utc)
             
             async with get_async_session() as session:
+                from sqlalchemy import cast, String
+                # В БД enum хранится как имя (PENDING), а не значение (pending)
+                # Используем cast для правильного сравнения enum с VARCHAR
                 query = select(Notification).where(
                     and_(
-                        Notification.status == NotificationStatus.PENDING,
+                        cast(Notification.status, String) == NotificationStatus.PENDING.name,
                         Notification.scheduled_at.isnot(None),
                         Notification.scheduled_at <= before
                     )
@@ -475,17 +483,30 @@ class NotificationService:
                     return False
                 
                 # Обновляем статус
-                if status == NotificationStatus.SENT:
-                    notification.mark_as_sent()
-                elif status == NotificationStatus.DELIVERED:
-                    notification.mark_as_delivered()
-                elif status == NotificationStatus.READ:
-                    notification.mark_as_read()
-                elif status == NotificationStatus.FAILED:
-                    notification.mark_as_failed(error_message)
-                else:
-                    notification.status = status
+                # Используем SQL UPDATE с приведением типа для enum в БД
+                from sqlalchemy import text
+                status_name = status.name if isinstance(status, NotificationStatus) else status
+                now = datetime.now(timezone.utc)
                 
+                # Формируем SQL с правильным синтаксисом для asyncpg
+                sql = text(f"UPDATE notifications SET status = CAST(:status AS notificationstatus) WHERE id = :id")
+                await session.execute(sql, {"status": status_name, "id": notification_id})
+                
+                if status == NotificationStatus.SENT:
+                    await session.execute(
+                        text("UPDATE notifications SET sent_at = :sent_at WHERE id = :id"),
+                        {"sent_at": now, "id": notification_id}
+                    )
+                elif status == NotificationStatus.READ:
+                    await session.execute(
+                        text("UPDATE notifications SET read_at = :read_at WHERE id = :id"),
+                        {"read_at": now, "id": notification_id}
+                    )
+                if error_message:
+                    await session.execute(
+                        text("UPDATE notifications SET error_message = :error_message, retry_count = retry_count + 1 WHERE id = :id"),
+                        {"error_message": error_message, "id": notification_id}
+                    )
                 await session.commit()
                 
                 # Инвалидируем кэш

@@ -101,8 +101,8 @@ class TelegramNotificationSender:
                 message_to_use = notification.message
             else:
                 rendered = NotificationTemplateManager.render(
-                    notification_type=notification.type,
-                    channel=notification.channel,
+                    notification_type=notification.type_enum,
+                    channel=notification.channel_enum,
                     variables=template_vars
                 )
                 title_to_use = rendered["title"]
@@ -115,7 +115,13 @@ class TelegramNotificationSender:
                 message=message_to_use
             )
             
-            # Определяем parse_mode (используем HTML для Telegram)
+            # Определяем parse_mode
+            # Шаблоны для Telegram используют Markdown синтаксис (*текст*), но мы используем HTML
+            # Конвертируем Markdown в HTML для правильного отображения
+            import re
+            # Заменяем Markdown на HTML
+            message = re.sub(r'\*([^*]+)\*', r'<b>\1</b>', message)  # *текст* -> <b>текст</b>
+            message = re.sub(r'_([^_]+)_', r'<i>\1</i>', message)  # _текст_ -> <i>текст</i>
             parse_mode = ParseMode.HTML
             
             # Отправляем с повторными попытками
@@ -129,12 +135,12 @@ class TelegramNotificationSender:
             if success:
                 logger.info(
                     f"Telegram notification sent successfully "
-                    f"(notification_id={notification.id}, telegram_id={telegram_id}, type={notification.type.value})"
+                    f"(notification_id={notification.id}, telegram_id={telegram_id}, type={notification.type})"
                 )
             else:
                 logger.error(
                     f"Failed to send Telegram notification "
-                    f"(notification_id={notification.id}, telegram_id={telegram_id}, type={notification.type.value})"
+                    f"(notification_id={notification.id}, telegram_id={telegram_id}, type={notification.type})"
                 )
             
             return success

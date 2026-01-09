@@ -102,12 +102,13 @@ class Notification(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Тип и канал
-    type = Column(Enum(NotificationType), nullable=False, index=True)
-    channel = Column(Enum(NotificationChannel), nullable=False)
+    # Используем String вместо Enum для совместимости с БД, где хранятся значения (строки)
+    type = Column(String(50), nullable=False, index=True)
+    channel = Column(String(20), nullable=False)
     
     # Статус и приоритет
-    status = Column(Enum(NotificationStatus), nullable=False, default=NotificationStatus.PENDING, index=True)
-    priority = Column(Enum(NotificationPriority), nullable=False, default=NotificationPriority.NORMAL)
+    status = Column(String(20), nullable=False, default=NotificationStatus.PENDING.name, index=True)
+    priority = Column(String(20), nullable=False, default=NotificationPriority.NORMAL.name)
     
     # Содержимое
     title = Column(String(200), nullable=False)
@@ -127,16 +128,70 @@ class Notification(Base):
     # Связанные объекты
     user = relationship("User", back_populates="notifications")
     
+    @property
+    def type_enum(self) -> NotificationType:
+        """Конвертация строки type в enum."""
+        if isinstance(self.type, NotificationType):
+            return self.type
+        try:
+            # Пробуем найти по значению (object_no_shifts_today)
+            for nt in NotificationType:
+                if nt.value == self.type:
+                    return nt
+            # Если не нашли по значению, пробуем по имени (OBJECT_NO_SHIFTS_TODAY)
+            return NotificationType[self.type.upper()]
+        except (KeyError, AttributeError):
+            raise ValueError(f"Unknown notification type: {self.type}")
+    
+    @property
+    def channel_enum(self) -> NotificationChannel:
+        """Конвертация строки channel в enum."""
+        if isinstance(self.channel, NotificationChannel):
+            return self.channel
+        try:
+            for nc in NotificationChannel:
+                if nc.value == self.channel or nc.name == self.channel:
+                    return nc
+            return NotificationChannel[self.channel.upper()]
+        except (KeyError, AttributeError):
+            raise ValueError(f"Unknown notification channel: {self.channel}")
+    
+    @property
+    def status_enum(self) -> NotificationStatus:
+        """Конвертация строки status в enum."""
+        if isinstance(self.status, NotificationStatus):
+            return self.status
+        try:
+            for ns in NotificationStatus:
+                if ns.value == self.status or ns.name == self.status:
+                    return ns
+            return NotificationStatus[self.status.upper()]
+        except (KeyError, AttributeError):
+            raise ValueError(f"Unknown notification status: {self.status}")
+    
+    @property
+    def priority_enum(self) -> NotificationPriority:
+        """Конвертация строки priority в enum."""
+        if isinstance(self.priority, NotificationPriority):
+            return self.priority
+        try:
+            for np in NotificationPriority:
+                if np.value == self.priority or np.name == self.priority:
+                    return np
+            return NotificationPriority[self.priority.upper()]
+        except (KeyError, AttributeError):
+            raise ValueError(f"Unknown notification priority: {self.priority}")
+    
     def __repr__(self) -> str:
         return (
             f"<Notification(id={self.id}, user_id={self.user_id}, "
-            f"type='{self.type.value}', channel='{self.channel.value}', "
-            f"status='{self.status.value}')>"
+            f"type='{self.type}', channel='{self.channel}', "
+            f"status='{self.status}')>"
         )
     
     def is_scheduled(self) -> bool:
         """Проверка, запланировано ли уведомление на будущее."""
-        if not self.scheduled_at or self.status != NotificationStatus.PENDING:
+        if not self.scheduled_at or self.status_enum != NotificationStatus.PENDING:
             return False
         now = datetime.now(timezone.utc)
         scheduled_at = self.scheduled_at
@@ -146,7 +201,7 @@ class Notification(Base):
     
     def is_overdue(self) -> bool:
         """Проверка, просрочено ли уведомление."""
-        if not self.scheduled_at or self.status != NotificationStatus.PENDING:
+        if not self.scheduled_at or self.status_enum != NotificationStatus.PENDING:
             return False
         now = datetime.now(timezone.utc)
         scheduled_at = self.scheduled_at
@@ -156,29 +211,29 @@ class Notification(Base):
     
     def is_read(self) -> bool:
         """Проверка, прочитано ли уведомление."""
-        return self.read_at is not None or self.status == NotificationStatus.READ
+        return self.read_at is not None or self.status_enum == NotificationStatus.READ
     
     def is_urgent(self) -> bool:
         """Проверка, является ли уведомление срочным."""
-        return self.priority == NotificationPriority.URGENT
+        return self.priority_enum == NotificationPriority.URGENT
     
     def mark_as_sent(self, sent_at: Optional[datetime] = None) -> None:
         """Отметить как отправленное."""
-        self.status = NotificationStatus.SENT
+        self.status = NotificationStatus.SENT.name  # Сохраняем имя enum в БД
         self.sent_at = sent_at or datetime.now(timezone.utc)
     
     def mark_as_delivered(self) -> None:
         """Отметить как доставленное."""
-        self.status = NotificationStatus.DELIVERED
+        self.status = NotificationStatus.DELIVERED.name  # Сохраняем имя enum в БД
     
     def mark_as_read(self, read_at: Optional[datetime] = None) -> None:
         """Отметить как прочитанное."""
-        self.status = NotificationStatus.READ
+        self.status = NotificationStatus.READ.name  # Сохраняем имя enum в БД
         self.read_at = read_at or datetime.now(timezone.utc)
     
     def mark_as_failed(self, error_message: Optional[str] = None) -> None:
         """Отметить как неудавшееся."""
-        self.status = NotificationStatus.FAILED
+        self.status = NotificationStatus.FAILED.name  # Сохраняем имя enum в БД
         self.error_message = error_message
         self.retry_count += 1
     

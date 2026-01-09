@@ -143,6 +143,7 @@
                                     <th>Объект</th>
                                     <th>Адрес</th>
                                     <th>Статус</th>
+                                    <th>Сотрудник</th>
                                     <th>Время</th>
                                     <th>Статус работы</th>
                                 </tr>
@@ -160,6 +161,13 @@
                                         {% endif %}
                                     </td>
                                     <td>
+                                        {% if obj.work_employee %}
+                                            {{ obj.work_employee }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
                                         {% if obj.status_time %}
                                             {{ format_datetime_local(obj.status_time, 'Europe/Moscow', '%d.%m.%Y %H:%M') }}
                                         {% else %}-{% endif %}
@@ -168,16 +176,14 @@
                                         {% if obj.work_status %}
                                             {% if obj.work_status == 'timely_opening' %}
                                                 <span class="badge bg-success">Открылся вовремя</span>
-                                                {% if obj.work_employee %}<br><small>{{ obj.work_employee }}</small>{% endif %}
                                             {% elif obj.work_status == 'late_opening' %}
                                                 <span class="badge bg-warning">Опоздание {{ obj.work_delay }} мин</span>
-                                                {% if obj.work_employee %}<br><small>{{ obj.work_employee }}</small>{% endif %}
                                             {% elif obj.work_status == 'early_closing' %}
                                                 <span class="badge bg-warning">Раннее закрытие {{ obj.work_early }} мин</span>
-                                                {% if obj.work_employee %}<br><small>{{ obj.work_employee }}</small>{% endif %}
                                             {% elif obj.work_status == 'closed' %}
                                                 <span class="badge bg-secondary">Закрылся вовремя</span>
-                                                {% if obj.work_employee %}<br><small>{{ obj.work_employee }}</small>{% endif %}
+                                            {% elif obj.work_status == 'no_shifts_today' %}
+                                                <span class="badge bg-danger">Нет смен на объекте</span>
                                             {% endif %}
                                         {% else %}
                                             <span class="text-muted">—</span>
