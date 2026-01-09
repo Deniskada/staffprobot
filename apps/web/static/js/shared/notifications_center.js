@@ -444,9 +444,20 @@ class NotificationCenter {
             });
             
             if (response.ok) {
-                // Обновляем все уведомления
-                this.notifications.forEach(n => n.status = 'read');
-                this.renderNotifications();
+                const data = await response.json();
+                console.log('[NotificationCenter] Mark all read result:', data);
+                
+                // Если фильтр был "unread", переключаем на "all" чтобы показать прочитанные
+                if (this.filters.status === 'unread') {
+                    this.filters.status = 'all';
+                    const statusFilter = document.getElementById('status-filter');
+                    if (statusFilter) {
+                        statusFilter.value = 'all';
+                    }
+                }
+                
+                // Перезагружаем уведомления с сервера
+                this.resetAndReload();
                 this.updateUnreadCount();
             }
         } catch (error) {

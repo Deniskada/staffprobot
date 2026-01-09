@@ -159,7 +159,8 @@ async def api_notifications_center(
             "limit": limit
         }
     except Exception as e:
-        logger.error(f"Error getting notifications center for user {current_user.id}: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Error getting notifications center for user {current_user.id}: {e}", error=str(e), traceback=traceback.format_exc())
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -268,7 +269,9 @@ async def api_notifications_center_grouped(
         grouped: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
         
         for notification in notifications:
-            notif_type = notification.type.value
+            # notification.type - это строка (из-за native_enum=False)
+            # Используем type напрямую или через type_enum если нужно
+            notif_type = notification.type if isinstance(notification.type, str) else notification.type.value
             category = CATEGORY_MAP.get(notif_type, "other")
             
             if category not in grouped:
@@ -290,7 +293,8 @@ async def api_notifications_center_grouped(
             "total_count": len(notifications)
         }
     except Exception as e:
-        logger.error(f"Error getting grouped notifications for user {current_user.id}: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Error getting grouped notifications for user {current_user.id}: {e}", error=str(e), traceback=traceback.format_exc())
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 

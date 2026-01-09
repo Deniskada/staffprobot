@@ -128,34 +128,51 @@ class NotificationService:
                 
                 # Применяем фильтры
                 if status:
-                    query = query.where(Notification.status == status)
+                    # В БД хранятся имена enum (READ, SENT), а не значения
+                    # Используем cast для сравнения с именем enum
+                    from sqlalchemy import cast, String
+                    query = query.where(
+                        cast(Notification.status, String) == status.name
+                    )
                 
                 if type:
                     query = query.where(Notification.type == type)
                 
                 if channel:
-                    query = query.where(Notification.channel == channel)
+                    # В БД хранятся имена enum (IN_APP, TELEGRAM), а не значения
+                    # Используем cast для сравнения с именем enum
+                    from sqlalchemy import cast, String
+                    query = query.where(
+                        cast(Notification.channel, String) == channel.name
+                    )
                 
                 if not include_read:
                     # Показываем все уведомления, кроме прочитанных (READ)
-                    # Используем cast для сравнения с enum значением
+                    # В БД хранятся имена enum (READ, SENT), а не значения
                     from sqlalchemy import cast, String
                     query = query.where(
-                        cast(Notification.status, String) != NotificationStatus.READ.value
+                        cast(Notification.status, String) != NotificationStatus.READ.name
                     )
                 
                 # Сортировка
+                # Используем cast для правильного сравнения статуса при сортировке
+                from sqlalchemy import case
+                status_is_unread = case(
+                    (cast(Notification.status, String) != NotificationStatus.READ.name, 1),
+                    else_=0
+                )
+                
                 if sort_by == "priority":
                     # Сортируем по приоритету (URGENT > HIGH > NORMAL > LOW), затем по дате
                     query = query.order_by(
-                        desc(Notification.status != NotificationStatus.READ),
+                        desc(status_is_unread),
                         desc(Notification.priority),
                         desc(Notification.created_at)
                     )
                 else:
                     # По умолчанию: сначала непрочитанные, затем по дате создания
                     query = query.order_by(
-                        desc(Notification.status != NotificationStatus.READ),
+                        desc(status_is_unread),
                         desc(Notification.created_at)
                     )
                 
@@ -189,13 +206,18 @@ class NotificationService:
         """
         try:
             async with get_async_session() as session:
+                from sqlalchemy import cast, String
                 conditions = [
                     Notification.user_id == user_id,
-                    Notification.status != NotificationStatus.READ
+                    # В БД хранятся имена enum (READ, SENT), а не значения
+                    cast(Notification.status, String) != NotificationStatus.READ.name
                 ]
                 
                 if channel:
-                    conditions.append(Notification.channel == channel)
+                    # В БД хранятся имена enum (IN_APP, TELEGRAM), а не значения
+                    conditions.append(
+                        cast(Notification.channel, String) == channel.name
+                    )
                 
                 query = select(func.count(Notification.id)).where(and_(*conditions))
                 
@@ -239,7 +261,18 @@ class NotificationService:
                     return False
                 
                 # Отмечаем как прочитанное
-                notification.mark_as_read()
+                # Используем прямое обновление через SQL для надежности
+                from sqlalchemy import update
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                await session.execute(
+                    update(Notification)
+                    .where(Notification.id == notification_id)
+                    .values(
+                        status=NotificationStatus.READ.name,  # В БД хранятся имена enum
+                        read_at=now
+                    )
+                )
                 await session.commit()
                 
                 # Инвалидируем кэш
@@ -270,30 +303,74 @@ class NotificationService:
         try:
             async with get_async_session() as session:
                 # Получаем все непрочитанные
+                from sqlalchemy import cast, String, func
                 conditions = [
                     Notification.user_id == user_id,
-                    Notification.status != NotificationStatus.READ
+                    # В БД хранятся имена enum (READ, SENT), а не значения
+                    cast(Notification.status, String) != NotificationStatus.READ.name
                 ]
                 
                 if channel:
-                    conditions.append(Notification.channel == channel)
+                    # В БД хранятся имена enum (IN_APP, TELEGRAM), а не значения
+                    conditions.append(
+                        cast(Notification.channel, String) == channel.name
+                    )
                 
-                query = select(Notification).where(and_(*conditions))
+                # Сначала проверим, сколько уведомлений найдено
+                count_query = select(func.count(Notification.id)).where(and_(*conditions))
+                count_result = await session.execute(count_query)
+                found_count = count_result.scalar_one()
+                logger.info(f"mark_all_as_read: found {found_count} notifications for user {user_id}, channel={channel.name if channel else None}")
                 
-                result = await session.execute(query)
-                notifications = result.scalars().all()
+                if found_count == 0:
+                    logger.warning(f"mark_all_as_read: no notifications found for user {user_id}, channel={channel.name if channel else None}")
+                    return 0
                 
-                count = 0
-                for notification in notifications:
-                    notification.mark_as_read()
-                    count += 1
+                # Используем SQL UPDATE для массового обновления через text для надежности
+                from sqlalchemy import text
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                
+                # Формируем SQL запрос напрямую для надежности
+                if channel:
+                    sql = text("""
+                        UPDATE notifications 
+                        SET status = CAST(:status AS notificationstatus), 
+                            read_at = :read_at
+                        WHERE user_id = :user_id
+                          AND CAST(channel AS VARCHAR) = :channel
+                          AND CAST(status AS VARCHAR) != 'READ'
+                    """)
+                    params = {
+                        "status": NotificationStatus.READ.name,
+                        "read_at": now,
+                        "user_id": user_id,
+                        "channel": channel.name
+                    }
+                else:
+                    sql = text("""
+                        UPDATE notifications 
+                        SET status = CAST(:status AS notificationstatus), 
+                            read_at = :read_at
+                        WHERE user_id = :user_id
+                          AND CAST(status AS VARCHAR) != 'READ'
+                    """)
+                    params = {
+                        "status": NotificationStatus.READ.name,
+                        "read_at": now,
+                        "user_id": user_id
+                    }
+                
+                result = await session.execute(sql, params)
+                count = result.rowcount
                 
                 await session.commit()
+                
+                logger.info(f"mark_all_as_read: updated {count} notifications for user {user_id}, channel={channel.name if channel else None}")
                 
                 # Инвалидируем кэш
                 await self._invalidate_user_cache(user_id)
                 
-                logger.info(f"Marked {count} notifications as read for user {user_id}")
                 return count
                 
         except Exception as e:
@@ -529,9 +606,11 @@ class NotificationService:
             user_id: ID пользователя
         """
         try:
-            # Инвалидируем все кэшированные ключи пользователя
-            await CacheService.invalidate_pattern(f"user_notifications:*:{user_id}*")
-            await CacheService.invalidate_pattern(f"unread_count:*:{user_id}*")
+            # Ключи кэша формируются как: {key_prefix}:{func_name}:{args_hash}
+            # Нужно инвалидировать все ключи с префиксами user_notifications и unread_count
+            # Используем широкие паттерны для инвалидации всех ключей этих префиксов
+            await CacheService.invalidate_pattern(f"user_notifications:*")
+            await CacheService.invalidate_pattern(f"unread_count:*")
             
             logger.debug(f"Invalidated notification cache for user {user_id}")
             

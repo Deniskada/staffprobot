@@ -239,13 +239,20 @@ class Notification(Base):
     
     def to_dict(self) -> Dict[str, Any]:
         """Преобразование в словарь."""
+        # type, channel, status, priority - это строки (из-за native_enum=False)
+        # Используем их напрямую, если это строки, иначе через .value
+        type_str = self.type if isinstance(self.type, str) else self.type.value
+        channel_str = self.channel if isinstance(self.channel, str) else self.channel.value
+        status_str = self.status if isinstance(self.status, str) else self.status.value
+        priority_str = self.priority if isinstance(self.priority, str) else self.priority.value
+        
         return {
             "id": self.id,
             "user_id": self.user_id,
-            "type": self.type.value,
-            "channel": self.channel.value,
-            "status": self.status.value,
-            "priority": self.priority.value,
+            "type": type_str,
+            "channel": channel_str,
+            "status": status_str,
+            "priority": priority_str,
             "title": self.title,
             "message": self.message,
             "data": self.data,

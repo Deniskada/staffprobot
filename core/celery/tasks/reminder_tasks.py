@@ -245,27 +245,22 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                     logger.info(f"Object {current_obj.id} ({current_obj.name}): {len(shifts_today)} shifts found, opening_time={current_obj.opening_time}, closing_time={current_obj.closing_time}")
                     
                     # Проверка 1: НЕТ СМЕН НА ОБЪЕКТЕ
+                    # Уведомление "нет активных смен" должно приходить каждый раз, когда задача отрабатывает
                     if not shifts_today and current_obj.opening_time:
-                        # Проверяем только один раз в день (например, после времени открытия)
+                        # Проверяем после времени открытия
                         expected_open_time = datetime.combine(today_local, current_obj.opening_time).replace(tzinfo=timezone_helper.local_tz)
                         if now >= expected_open_time.astimezone(timezone.utc):
-                            # Проверить не создано ли уже уведомление
-                            notification_exists = await _check_notification_exists(
-                                session, current_obj.owner_id, NotificationType.OBJECT_NO_SHIFTS_TODAY.value, 
-                                {"object_id": current_obj.id, "date": str(today_local)}
+                            # НЕ проверяем существование - уведомление должно приходить каждый раз
+                            await _create_object_notification(
+                                session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
+                                {
+                                    "object_name": current_obj.name,
+                                    "object_address": current_obj.address or "",
+                                    "date": today_local.strftime("%d.%m.%Y")
+                                },
+                                now
                             )
-                            
-                            if not notification_exists:
-                                await _create_object_notification(
-                                    session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
-                                    {
-                                        "object_name": current_obj.name,
-                                        "object_address": current_obj.address or "",
-                                        "date": today_local.strftime("%d.%m.%Y")
-                                    },
-                                    now
-                                )
-                                stats["no_shifts"] += 1
+                            stats["no_shifts"] += 1
                         continue
                     
                     # Для объектов со сменами проверяем открытие/закрытие
@@ -283,12 +278,13 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                             
                             delay_minutes = int((actual_open_local - expected_open).total_seconds() / 60)
                             
-                            # Уже создавали уведомление?
+                            # Уже создавали уведомление для этого объекта на сегодня?
+                            # Проверяем по дате, чтобы не создавать дубликаты при каждом запуске задачи
                             notif_type = NotificationType.OBJECT_LATE_OPENING if delay_minutes > 5 else NotificationType.OBJECT_OPENED
                             notification_exists = await _check_notification_exists(
                                 session, current_obj.owner_id, 
                                 notif_type.value,  # Передаём строковое значение
-                                {"object_id": current_obj.id, "shift_id": first_shift.id}
+                                {"object_id": current_obj.id, "date": str(today_local)}
                             )
                             
                             if not notification_exists:
@@ -296,6 +292,8 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                     await _create_object_notification(
                                         session, current_obj.id, current_obj.owner, NotificationType.OBJECT_LATE_OPENING,
                                         {
+                                            "object_id": current_obj.id,
+                                            "date": str(today_local),
                                             "object_name": current_obj.name,
                                             "employee_name": f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный",
                                             "planned_time": expected_open.strftime("%H:%M"),
@@ -309,6 +307,8 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                     await _create_object_notification(
                                         session, current_obj.id, current_obj.owner, NotificationType.OBJECT_OPENED,
                                         {
+                                            "object_id": current_obj.id,
+                                            "date": str(today_local),
                                             "object_name": current_obj.name,
                                             "employee_name": f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный",
                                             "open_time": actual_open_local.strftime("%H:%M")
@@ -324,12 +324,13 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                             
                             early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
                             
-                            # Уже создавали уведомление?
+                            # Уже создавали уведомление для этого объекта на сегодня?
+                            # Проверяем по дате, чтобы не создавать дубликаты при каждом запуске задачи
                             notif_type_close = NotificationType.OBJECT_EARLY_CLOSING if early_minutes > 5 else NotificationType.OBJECT_CLOSED
                             notification_exists = await _check_notification_exists(
                                 session, current_obj.owner_id,
                                 notif_type_close.value,  # Передаём строковое значение
-                                {"object_id": current_obj.id, "shift_id": last_shift.id}
+                                {"object_id": current_obj.id, "date": str(today_local)}
                             )
                             
                             if not notification_exists:
@@ -337,6 +338,8 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                     await _create_object_notification(
                                         session, current_obj.id, current_obj.owner, NotificationType.OBJECT_EARLY_CLOSING,
                                         {
+                                            "object_id": current_obj.id,
+                                            "date": str(today_local),
                                             "object_name": current_obj.name,
                                             "employee_name": f"{last_shift.user.first_name} {last_shift.user.last_name}" if last_shift.user else "Неизвестный",
                                             "planned_time": expected_close.strftime("%H:%M"),
@@ -350,6 +353,8 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                     await _create_object_notification(
                                         session, current_obj.id, current_obj.owner, NotificationType.OBJECT_CLOSED,
                                         {
+                                            "object_id": current_obj.id,
+                                            "date": str(today_local),
                                             "object_name": current_obj.name,
                                             "employee_name": f"{last_shift.user.first_name} {last_shift.user.last_name}" if last_shift.user else "Неизвестный",
                                             "close_time": actual_close_local.strftime("%H:%M")
@@ -363,29 +368,23 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                             all_shifts_completed = all(s.status in ('completed', 'closed') for s in shifts_today)
                             
                             if all_shifts_completed and last_shift.end_time:
-                                # Проверить не создано ли уже уведомление "нет смен" после закрытия
-                                notification_exists_no_shifts = await _check_notification_exists(
-                                    session, current_obj.owner_id, NotificationType.OBJECT_NO_SHIFTS_TODAY.value, 
-                                    {"object_id": current_obj.id, "date": str(today_local), "after_close": "true"}
-                                )
+                                # Создаем уведомление через 10 минут после закрытия последней смены
+                                # НЕ проверяем существование - уведомление должно приходить каждый раз, когда задача отрабатывает
+                                close_time_utc = last_shift.end_time
+                                delay_minutes = 10
+                                notification_time = close_time_utc + timedelta(minutes=delay_minutes)
                                 
-                                if not notification_exists_no_shifts:
-                                    # Создаем уведомление через 10 минут после закрытия последней смены
-                                    close_time_utc = last_shift.end_time
-                                    delay_minutes = 10
-                                    notification_time = close_time_utc + timedelta(minutes=delay_minutes)
-                                    
-                                    if now >= notification_time:
-                                        await _create_object_notification(
-                                            session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
-                                            {
-                                                "object_name": current_obj.name,
-                                                "object_address": current_obj.address or "",
-                                                "date": today_local.strftime("%d.%m.%Y")
-                                            },
-                                            now
-                                        )
-                                        stats["no_shifts"] += 1
+                                if now >= notification_time:
+                                    await _create_object_notification(
+                                        session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
+                                        {
+                                            "object_name": current_obj.name,
+                                            "object_address": current_obj.address or "",
+                                            "date": today_local.strftime("%d.%m.%Y")
+                                        },
+                                        now
+                                    )
+                                    stats["no_shifts"] += 1
                     
             except Exception as e:
                 error_obj_id = current_obj_id if 'current_obj_id' in locals() else 'unknown'
@@ -407,16 +406,32 @@ async def _check_object_openings_async() -> Dict[str, Any]:
 
 async def _check_notification_exists(session, user_id: int, notif_type_value: str, data_match: dict) -> bool:
     """Проверка существования уведомления с заданными параметрами."""
-    from sqlalchemy import func, cast, String
-    query = select(func.count(Notification.id)).where(
-        and_(
-            Notification.user_id == user_id,
-            cast(Notification.type, String) == notif_type_value,
-            *[cast(Notification.data[key], String) == str(value) for key, value in data_match.items()]
+    from sqlalchemy import func, cast, String, text
+    # Для JSONB полей используем правильный синтаксис PostgreSQL через raw SQL
+    conditions = [
+        Notification.user_id == user_id,
+        cast(Notification.type, String) == notif_type_value
+    ]
+    
+    # Добавляем условия для каждого ключа в data_match через JSONB оператор ->>
+    for key, value in data_match.items():
+        # Используем JSONB оператор ->> для доступа к полю как тексту
+        conditions.append(
+            text(f"notifications.data->>'{key}' = :{key}")
         )
-    )
-    result = await session.execute(query)
+    
+    # Формируем параметры для подстановки
+    params = {key: str(value) for key, value in data_match.items()}
+    
+    query = select(func.count(Notification.id)).where(and_(*conditions))
+    result = await session.execute(query, params)
     count = result.scalar_one()
+    
+    logger.debug(
+        f"_check_notification_exists: user_id={user_id}, type={notif_type_value}, "
+        f"data_match={data_match}, found_count={count}"
+    )
+    
     return count > 0
 
 
@@ -429,13 +444,31 @@ async def _create_object_notification(
     scheduled_at: datetime
 ):
     """Создание уведомлений для объекта (TG + In-App)."""
+    # Загрузить owner заново из БД, чтобы получить актуальные настройки
+    # JSONB поля могут не обновляться через refresh, поэтому загружаем заново
+    owner_query = select(User).where(User.id == owner.id)
+    owner_result = await session.execute(owner_query)
+    current_owner = owner_result.scalar_one_or_none()
+    
+    if not current_owner:
+        logger.error(f"Owner {owner.id} not found when creating notification")
+        return
+    
     # Проверить настройки владельца
-    prefs = owner.notification_preferences or {}
+    prefs = current_owner.notification_preferences or {}
     type_code = notif_type.value
     type_prefs = prefs.get(type_code, {})
     
-    telegram_enabled = type_prefs.get("telegram", True)
-    inapp_enabled = type_prefs.get("inapp", True)
+    # Если настройка найдена в словаре, используем её значение
+    # Если настройка не найдена (type_code отсутствует в prefs), используем значение по умолчанию True
+    telegram_enabled = type_prefs.get("telegram", True) if type_code in prefs else True
+    inapp_enabled = type_prefs.get("inapp", True) if type_code in prefs else True
+    
+    logger.info(
+        f"Notification settings for owner {current_owner.id}, type {type_code}: "
+        f"telegram={telegram_enabled}, inapp={inapp_enabled}, "
+        f"prefs_keys={list(prefs.keys())}, type_prefs={type_prefs}"
+    )
     
     from shared.templates.notifications.base_templates import NotificationTemplateManager
     
@@ -460,7 +493,7 @@ async def _create_object_notification(
                         :title, :message, CAST(:data AS jsonb), :scheduled_at)
             """),
             {
-                "user_id": owner.id,
+                "user_id": current_owner.id,
                 "type": type_name,
                 "channel": NotificationChannel.TELEGRAM.name,  # В БД хранится имя enum (TELEGRAM), а не значение
                 "status": NotificationStatus.PENDING.name,  # В БД хранится имя enum (PENDING)
@@ -475,7 +508,8 @@ async def _create_object_notification(
     # Создать In-App уведомление
     if inapp_enabled:
         rendered_inapp = NotificationTemplateManager.render(notif_type, NotificationChannel.IN_APP, template_vars)
-        data_json = json.dumps({**template_vars, "object_id": obj_id})
+        # Включаем object_id и date в data для проверки дубликатов
+        data_json = json.dumps({**template_vars})
         await session.execute(
             text("""
                 INSERT INTO notifications (user_id, type, channel, status, priority, title, message, data, scheduled_at)
@@ -484,7 +518,7 @@ async def _create_object_notification(
                         :title, :message, CAST(:data AS jsonb), :scheduled_at)
             """),
             {
-                "user_id": owner.id,
+                "user_id": current_owner.id,
                 "type": type_name,
                 "channel": NotificationChannel.IN_APP.name,  # В БД хранится имя enum (IN_APP), а не значение
                 "status": NotificationStatus.PENDING.name,  # В БД хранится имя enum (PENDING)
@@ -499,7 +533,7 @@ async def _create_object_notification(
     await session.commit()
     
     logger.info(
-        f"Created {notif_type.value} notification for owner {owner.id}",
+        f"Created {notif_type.value} notification for owner {current_owner.id}",
         object_id=obj_id,
         telegram=telegram_enabled,
         inapp=inapp_enabled

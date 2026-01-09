@@ -330,27 +330,24 @@ async def owner_dashboard(request: Request):
                         late_settings = await get_effective_late_settings_for_object(obj)
                         threshold_minutes = late_settings.get('threshold_minutes') or 0
                         
+                        # Сначала определяем сотрудника для открытия (если есть opener_shift)
+                        opener_employee = None
+                        if opener_shift:
+                            if opener_shift.user:
+                                opener_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
+                            else:
+                                # Если смена есть, но user не загружен, загружаем его
+                                await session.refresh(opener_shift, ['user'])
+                                if opener_shift.user:
+                                    opener_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
+                        
                         if delay_minutes > threshold_minutes:
                             work_status = 'late_opening'
                             work_delay = delay_minutes
-                            # opener_shift уже определён выше
-                            if opener_shift and opener_shift.user:
-                                work_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
-                            elif opener_shift:
-                                # Если смена есть, но user не загружен, загружаем его
-                                await session.refresh(opener_shift, ['user'])
-                                if opener_shift.user:
-                                    work_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
+                            work_employee = opener_employee
                         else:
                             work_status = 'timely_opening'
-                            # Укажем сотрудника, кто первый открыл (если определён)
-                            if opener_shift and opener_shift.user:
-                                work_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
-                            elif opener_shift:
-                                # Если смена есть, но user не загружен, загружаем его
-                                await session.refresh(opener_shift, ['user'])
-                                if opener_shift.user:
-                                    work_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
+                            work_employee = opener_employee
                         
                         # Проверка закрытия (как было)
                         # Только если объект не открыт (нет активных смен) и последняя смена завершена
@@ -384,39 +381,31 @@ async def owner_dashboard(request: Request):
                                 work_status = 'early_closing'
                                 work_early = early_minutes
                                 # Используем сотрудника из last_shift, если он есть, иначе из opener_shift
+                                closer_employee = None
                                 if last_shift.user:
-                                    work_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
+                                    closer_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
                                 elif last_shift:
                                     # Если смена есть, но user не загружен, загружаем его
                                     await session.refresh(last_shift, ['user'])
                                     if last_shift.user:
-                                        work_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
-                                elif opener_shift and opener_shift.user:
-                                    work_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
-                                elif opener_shift:
-                                    await session.refresh(opener_shift, ['user'])
-                                    if opener_shift.user:
-                                        work_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
-                                else:
-                                    work_employee = "Неизвестный"
+                                        closer_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
+                                
+                                # Если не удалось получить из last_shift, используем opener_employee
+                                work_employee = closer_employee or opener_employee or "Неизвестный"
                             else:
                                 work_status = 'closed'
                                 # Используем сотрудника из last_shift, если он есть, иначе из opener_shift
+                                closer_employee = None
                                 if last_shift.user:
-                                    work_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
+                                    closer_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
                                 elif last_shift:
                                     # Если смена есть, но user не загружен, загружаем его
                                     await session.refresh(last_shift, ['user'])
                                     if last_shift.user:
-                                        work_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
-                                elif opener_shift and opener_shift.user:
-                                    work_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
-                                elif opener_shift:
-                                    await session.refresh(opener_shift, ['user'])
-                                    if opener_shift.user:
-                                        work_employee = f"{opener_shift.user.last_name} {opener_shift.user.first_name}".strip()
-                                else:
-                                    work_employee = "Неизвестный"
+                                        closer_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
+                                
+                                # Если не удалось получить из last_shift, используем opener_employee
+                                work_employee = closer_employee or opener_employee or "Неизвестный"
                 
                 all_objects.append(
                     type("OwnerObjectRow", (), {
