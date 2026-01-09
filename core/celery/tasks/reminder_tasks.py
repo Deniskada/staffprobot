@@ -77,8 +77,35 @@ async def _create_shift_reminders_async() -> Dict[str, Any]:
             
             logger.info(
                 f"Found {len(upcoming_shifts)} shifts starting in ~1 hour",
-                target_range=f"{target_time_start} - {target_time_end}"
+                target_range=f"{target_time_start} - {target_time_end}",
+                now_utc=now.isoformat(),
+                target_start=target_time_start.isoformat(),
+                target_end=target_time_end.isoformat()
             )
+            
+            # Дополнительная диагностика: проверим все смены в ближайшие 2 часа
+            if len(upcoming_shifts) == 0:
+                debug_query = select(ShiftSchedule).options(
+                    selectinload(ShiftSchedule.user),
+                    selectinload(ShiftSchedule.object)
+                ).where(
+                    and_(
+                        ShiftSchedule.planned_start >= now,
+                        ShiftSchedule.planned_start <= now + timedelta(hours=2),
+                        ShiftSchedule.status.in_(["planned", "confirmed"])
+                    )
+                ).order_by(ShiftSchedule.planned_start)
+                debug_result = await session.execute(debug_query)
+                debug_shifts = debug_result.scalars().all()
+                logger.debug(
+                    f"Debug: Found {len(debug_shifts)} shifts in next 2 hours",
+                    shifts_info=[{
+                        "id": s.id,
+                        "planned_start": s.planned_start.isoformat() if s.planned_start else None,
+                        "status": s.status,
+                        "user_id": s.user_id
+                    } for s in debug_shifts[:5]]  # Первые 5 для примера
+                )
             
             notification_service = ShiftNotificationService()
             for shift_schedule in upcoming_shifts:

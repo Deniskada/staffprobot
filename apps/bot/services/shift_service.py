@@ -333,6 +333,20 @@ class ShiftService:
                 await session.commit()
                 await session.refresh(new_shift)
                 
+                # Отправка уведомления об открытии смены
+                try:
+                    from shared.services.shift_notification_service import ShiftNotificationService
+                    await ShiftNotificationService().notify_shift_started(
+                        shift_id=new_shift.id,
+                        actor_role="employee",
+                    )
+                except Exception as notification_error:
+                    logger.warning(
+                        "Failed to send shift started notification",
+                        shift_id=new_shift.id,
+                        error=str(notification_error),
+                    )
+                
                 logger.info(
                     f"Shift opened successfully: shift_id={new_shift.id}, user_id={user_id}, object_id={object_id}, coordinates={coordinates}, distance_meters={location_validation['distance_meters']}"
                 )
