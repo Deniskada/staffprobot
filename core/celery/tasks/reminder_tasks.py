@@ -55,10 +55,11 @@ async def _create_shift_reminders_async() -> Dict[str, Any]:
     
     try:
         async with get_async_session() as session:
-            # Время проверки: через 1 час (окно 55-65 минут)
+            # Время проверки: через 1 час (окно 50-75 минут для учета погрешности)
+            # Задача запускается каждые 5 минут, поэтому окно должно быть шире, чтобы не пропустить смены
             now = datetime.now(timezone.utc)
-            target_time_start = now + timedelta(minutes=55)
-            target_time_end = now + timedelta(minutes=65)
+            target_time_start = now + timedelta(minutes=50)
+            target_time_end = now + timedelta(minutes=75)
             
             # Найти запланированные смены (shift_schedules) начинающиеся через ~1 час
             query = select(ShiftSchedule).options(
