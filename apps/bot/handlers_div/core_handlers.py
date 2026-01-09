@@ -1,5 +1,6 @@
 """Основные обработчики команд и сообщений бота."""
 
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from core.logging.logger import logger
@@ -43,8 +44,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         
         # Проверяем и регистрируем пользователя
+        # Используем asyncio.to_thread для синхронных вызовов БД, чтобы не блокировать event loop
         try:
-            is_registered = user_manager.is_user_registered(user.id)
+            is_registered = await asyncio.to_thread(user_manager.is_user_registered, user.id)
             logger.info(f"start_command: user {user.id} is_registered={is_registered}")
         except Exception as e:
             logger.error(f"start_command: error checking user registration {user.id}: {e}")
@@ -53,12 +55,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         
         if not is_registered:
             try:
-                user_data = user_manager.register_user(
-                    user_id=user.id,
-                    first_name=user.first_name or "",
-                    username=user.username,
-                    last_name=user.last_name,
-                    language_code=user.language_code
+                user_data = await asyncio.to_thread(
+                    user_manager.register_user,
+                    user.id,
+                    user.first_name or "",
+                    user.username,
+                    user.last_name,
+                    user.language_code
                 )
                 welcome_message = f"""
 👋 Привет, {user_first_name}!
@@ -114,7 +117,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         else:
             # Обновляем активность существующего пользователя
             try:
-                user_manager.update_user_activity(user.id)
+                await asyncio.to_thread(user_manager.update_user_activity, user.id)
             except Exception as e:
                 logger.warning(f"start_command: error updating user activity {user.id}: {e}")
             
