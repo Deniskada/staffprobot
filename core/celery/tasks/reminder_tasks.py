@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 from celery import Task
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, exists
 from sqlalchemy.orm import selectinload
 
 from core.celery.celery_app import celery_app
@@ -141,6 +141,127 @@ async def _create_shift_reminders_async() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Fatal error in _create_shift_reminders_async: {e}")
         return {"created": 0, "skipped": 0, "errors": 1, "total_shifts": 0, "error": str(e)}
+
+
+@celery_app.task(base=ReminderTask, bind=True, name="check_shifts_did_not_start")
+def check_shifts_did_not_start(self) -> Dict[str, Any]:
+    """
+    Проверка несостоявшихся смен.
+    Запускается каждые 10 минут.
+    
+    Создает уведомления SHIFT_DID_NOT_START для запланированных смен,
+    которые не начались через час после планового начала.
+    
+    Returns:
+        Статистика: сколько уведомлений создано
+    """
+    try:
+        import asyncio
+        return asyncio.run(_check_shifts_did_not_start_async())
+    except Exception as e:
+        logger.error(f"check_shifts_did_not_start failed: {e}")
+        raise
+
+
+async def _check_shifts_did_not_start_async() -> Dict[str, Any]:
+    """Асинхронная логика проверки несостоявшихся смен."""
+    stats = {
+        "checked": 0,
+        "notifications_created": 0,
+        "skipped": 0,
+        "errors": 0
+    }
+    
+    try:
+        async with get_async_session() as session:
+            now = datetime.now(timezone.utc)
+            # Проверяем смены, которые должны были начаться более часа назад
+            # но не более 24 часов назад (чтобы не проверять старые смены)
+            one_hour_ago = now - timedelta(hours=1)
+            one_day_ago = now - timedelta(hours=24)
+            
+            # Находим запланированные смены, которые не начались
+            query = select(ShiftSchedule).options(
+                selectinload(ShiftSchedule.user),
+                selectinload(ShiftSchedule.object).selectinload(Object.owner)
+            ).where(
+                and_(
+                    ShiftSchedule.planned_start >= one_day_ago,
+                    ShiftSchedule.planned_start <= one_hour_ago,
+                    ShiftSchedule.status.in_(["planned", "confirmed"]),
+                    # Проверяем, что нет реальной смены, которая началась
+                    ~exists(
+                        select(Shift.id).where(
+                            and_(
+                                Shift.schedule_id == ShiftSchedule.id,
+                                Shift.status.in_(["active", "completed"]),
+                                Shift.start_time.isnot(None)
+                            )
+                        )
+                    )
+                )
+            )
+            
+            result = await session.execute(query)
+            schedules = result.scalars().all()
+            
+            logger.info(
+                f"Found {len(schedules)} shifts that did not start",
+                one_hour_ago=one_hour_ago.isoformat(),
+                now=now.isoformat()
+            )
+            
+            from shared.services.shift_notification_service import ShiftNotificationService
+            notification_service = ShiftNotificationService()
+            
+            for schedule in schedules:
+                try:
+                    stats["checked"] += 1
+                    
+                    if not schedule.object or not schedule.object.owner:
+                        stats["skipped"] += 1
+                        continue
+                    
+                    # Проверяем, не создано ли уже уведомление для этой смены
+                    from shared.services.notification_service import NotificationService
+                    notif_service = NotificationService()
+                    
+                    # Проверяем существование уведомления
+                    notification_exists = await _check_notification_exists(
+                        session,
+                        schedule.object.owner_id,
+                        NotificationType.SHIFT_DID_NOT_START.value,
+                        {"shift_schedule_id": schedule.id}
+                    )
+                    
+                    if notification_exists:
+                        stats["skipped"] += 1
+                        continue
+                    
+                    # Создаем уведомление
+                    await notification_service.notify_shift_did_not_start(schedule.id)
+                    stats["notifications_created"] += 1
+                    
+                except Exception as e:
+                    logger.error(
+                        f"Error processing shift_schedule {schedule.id}: {e}",
+                        schedule_id=schedule.id,
+                        error=str(e)
+                    )
+                    stats["errors"] += 1
+                    continue
+            
+            logger.info(
+                f"Shifts did not start check completed: checked={stats['checked']}, "
+                f"created={stats['notifications_created']}, skipped={stats['skipped']}, errors={stats['errors']}"
+            )
+            return stats
+            
+    except Exception as e:
+        import traceback
+        logger.error(f"Fatal error in _check_shifts_did_not_start_async: {e}\n{traceback.format_exc()}")
+        stats["errors"] = 1
+        return stats
 
 
 @celery_app.task(base=ReminderTask, bind=True, name="check_object_openings")

@@ -63,6 +63,11 @@ celery_app.conf.update(
             'task': 'create_shift_reminders',
             'schedule': 5 * 60,  # 5 минут
         },
+        # Проверка несостоявшихся смен каждые 10 минут
+        'check-shifts-did-not-start': {
+            'task': 'check_shifts_did_not_start',
+            'schedule': 10 * 60,  # 10 минут
+        },
         # Проверка открытия/закрытия объектов каждые 10 минут
         'check-object-openings': {
             'task': 'check_object_openings',

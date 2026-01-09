@@ -769,6 +769,62 @@ class ShiftNotificationService:
             )
             return []
 
+    async def notify_shift_did_not_start(self, schedule_id: int) -> bool:
+        """Уведомить владельца о том, что смена не состоялась."""
+        async with get_async_session() as session:
+            schedule = await self._load_schedule(session, schedule_id)
+            if not schedule or not schedule.object or not schedule.object.owner:
+                return False
+
+            owner_id = schedule.object.owner_id
+            if not owner_id:
+                return False
+
+            channels = await self._get_channels(owner_id, NotificationType.SHIFT_DID_NOT_START)
+            if not channels:
+                return False
+
+            employee_name = self._build_user_name(schedule.user.first_name, schedule.user.last_name, schedule.user.username) if schedule.user else "Неизвестный сотрудник"
+            shift_window = self._format_shift_window(schedule.planned_start, schedule.planned_end, schedule.object.timezone)
+
+            data = {
+                "shift_schedule_id": str(schedule.id),
+                "object_id": str(schedule.object_id),
+                "object_name": schedule.object.name,
+                "employee_id": str(schedule.user_id) if schedule.user else None,
+                "employee_name": employee_name,
+                "shift_time": shift_window,
+            }
+
+            try:
+                # Используем шаблоны через _send (title и message будут None, шаблоны подставятся автоматически)
+                await self._send(owner_id, NotificationType.SHIFT_DID_NOT_START, channels, None, None, data, priority=NotificationPriority.HIGH)
+                
+                # Отправляем уведомления управляющим
+                manager_user_ids = await self._get_managers_for_object(session, schedule.object_id)
+                for manager_user_id in manager_user_ids:
+                    try:
+                        manager_channels = await self._get_channels(manager_user_id, NotificationType.SHIFT_DID_NOT_START)
+                        if manager_channels:
+                            await self._send(manager_user_id, NotificationType.SHIFT_DID_NOT_START, manager_channels, None, None, data, priority=NotificationPriority.HIGH)
+                    except Exception as manager_exc:
+                        logger.error(
+                            "Failed to send shift did not start notification to manager",
+                            manager_id=manager_user_id,
+                            schedule_id=schedule_id,
+                            error=str(manager_exc),
+                        )
+                
+                return True
+            except Exception as exc:
+                logger.error(
+                    "Failed to send shift did not start notification",
+                    owner_id=owner_id,
+                    schedule_id=schedule_id,
+                    error=str(exc),
+                )
+                return False
+
     def _build_user_name(self, first: Optional[str], last: Optional[str], username: Optional[str]) -> str:
         parts = [part for part in [last, first] if part]
         if parts:

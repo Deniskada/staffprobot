@@ -18,6 +18,7 @@ class NotificationType(enum.Enum):
     SHIFT_CANCELLED = "shift_cancelled"                 # Смена отменена
     SHIFT_STARTED = "shift_started"                     # Смена началась
     SHIFT_COMPLETED = "shift_completed"                 # Смена завершена
+    SHIFT_DID_NOT_START = "shift_did_not_start"         # Смена не состоялась
     
     # Объекты (lowercase для совместимости с новыми миграциями)
     OBJECT_OPENED = "object_opened"                     # Объект открылся вовремя
