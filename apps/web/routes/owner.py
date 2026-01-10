@@ -276,11 +276,46 @@ async def owner_dashboard(request: Request):
                                 f"delay_minutes={delay_minutes}, opener_shift_id={opener_shift.id}"
                             )
                         else:
-                            # Нет открытия после времени начала работы — считаем без опоздания (нет данных)
-                            delay_minutes = 0
-                            earliest_open_local = None
-                            opener_shift = None
-                            logger.debug(f"Dashboard: no candidates_after, setting delay_minutes=0")
+                            # Нет открытия после времени начала работы — берём первую смену дня как открывающую
+                            # Это может быть случай, когда смена началась до expected_open (раньше времени открытия объекта)
+                            if shifts_today:
+                                # Берём первую смену по времени начала (actual_start или start_time)
+                                first_shift = None
+                                first_start_local = None
+                                for s in shifts_today:
+                                    start_local = None
+                                    if s.actual_start:
+                                        start_local = timezone_helper.utc_to_local(s.actual_start)
+                                    elif s.start_time:
+                                        start_local = timezone_helper.utc_to_local(s.start_time)
+                                    
+                                    if start_local and (first_start_local is None or start_local < first_start_local):
+                                        first_start_local = start_local
+                                        first_shift = s
+                                
+                                if first_shift:
+                                    opener_shift = first_shift
+                                    earliest_open_local = first_start_local
+                                    # Если смена началась до expected_open, считаем без опоздания (отрицательная задержка = 0)
+                                    if earliest_open_local < expected_open:
+                                        delay_minutes = 0
+                                    else:
+                                        delay_minutes = int((earliest_open_local - expected_open).total_seconds() / 60)
+                                    logger.debug(
+                                        f"Dashboard: no candidates_after, using first shift {first_shift.id}, "
+                                        f"start_local={earliest_open_local.isoformat()}, delay_minutes={delay_minutes}"
+                                    )
+                                else:
+                                    delay_minutes = 0
+                                    earliest_open_local = None
+                                    opener_shift = None
+                                    logger.debug(f"Dashboard: no candidates_after, no shifts with start_time, setting delay_minutes=0")
+                            else:
+                                # Нет смен вообще
+                                delay_minutes = 0
+                                earliest_open_local = None
+                                opener_shift = None
+                                logger.debug(f"Dashboard: no candidates_after, no shifts today, setting delay_minutes=0")
 
                         logger.debug(
                             f"Dashboard: object {obj.id} ({obj.name}) expected_open={expected_open.isoformat()}, "
@@ -391,7 +426,12 @@ async def owner_dashboard(request: Request):
                                         closer_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
                                 
                                 # Если не удалось получить из last_shift, используем opener_employee
-                                work_employee = closer_employee or opener_employee or "Неизвестный"
+                                # НЕ перезаписываем work_employee, если он уже установлен (для своевременного открытия/закрытия)
+                                if closer_employee:
+                                    work_employee = closer_employee
+                                elif not work_employee:
+                                    # Только если work_employee еще не установлен, используем opener_employee
+                                    work_employee = opener_employee or "Неизвестный"
                             else:
                                 work_status = 'closed'
                                 # Используем сотрудника из last_shift, если он есть, иначе из opener_shift
@@ -405,7 +445,12 @@ async def owner_dashboard(request: Request):
                                         closer_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
                                 
                                 # Если не удалось получить из last_shift, используем opener_employee
-                                work_employee = closer_employee or opener_employee or "Неизвестный"
+                                # НЕ перезаписываем work_employee, если он уже установлен (для своевременного открытия/закрытия)
+                                if closer_employee:
+                                    work_employee = closer_employee
+                                elif not work_employee:
+                                    # Только если work_employee еще не установлен, используем opener_employee
+                                    work_employee = opener_employee or "Неизвестный"
                 
                 all_objects.append(
                     type("OwnerObjectRow", (), {

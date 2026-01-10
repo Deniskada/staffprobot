@@ -5,6 +5,7 @@ from typing import Dict, Any
 from celery import Task
 from sqlalchemy import select, and_, or_, exists
 from sqlalchemy.orm import selectinload
+import pytz
 
 from core.celery.celery_app import celery_app
 from core.logging.logger import logger
@@ -444,10 +445,14 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                     # Проверка 1: НЕТ СМЕН НА ОБЪЕКТЕ
                     # Уведомление "нет активных смен" должно приходить только в рабочее время
                     if not shifts_today and current_obj.opening_time and current_obj.closing_time:
-                        # Проверяем, что текущее время находится в рабочем времени объекта
-                        expected_open_time = datetime.combine(today_local, current_obj.opening_time).replace(tzinfo=timezone_helper.local_tz)
-                        expected_close_time = datetime.combine(today_local, current_obj.closing_time).replace(tzinfo=timezone_helper.local_tz)
-                        now_local = timezone_helper.utc_to_local(now)
+                        # Используем timezone объекта для проверки рабочего времени (как в дашборде)
+                        obj_timezone = current_obj.timezone or "Europe/Moscow"
+                        naive_expected_open_time = datetime.combine(today_local, current_obj.opening_time)
+                        naive_expected_close_time = datetime.combine(today_local, current_obj.closing_time)
+                        obj_tz = pytz.timezone(obj_timezone)
+                        expected_open_time = obj_tz.localize(naive_expected_open_time)
+                        expected_close_time = obj_tz.localize(naive_expected_close_time)
+                        now_local = timezone_helper.utc_to_local(now, timezone_str=obj_timezone)
                         
                         # Проверяем, что время открытия прошло и мы еще в рабочем времени
                         if now_local >= expected_open_time and now_local <= expected_close_time:
@@ -474,8 +479,12 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                         
                         # Проверка 2: ОТКРЫТИЕ ОБЪЕКТА (вовремя или с опозданием)
                         if first_shift.actual_start:
-                            expected_open = datetime.combine(today_local, current_obj.opening_time).replace(tzinfo=timezone_helper.local_tz)
-                            actual_open_local = timezone_helper.utc_to_local(first_shift.actual_start)
+                            # Используем timezone объекта, а не default_timezone (как в дашборде)
+                            obj_timezone = current_obj.timezone or "Europe/Moscow"
+                            naive_expected_open = datetime.combine(today_local, current_obj.opening_time)
+                            obj_tz = pytz.timezone(obj_timezone)
+                            expected_open = obj_tz.localize(naive_expected_open)
+                            actual_open_local = timezone_helper.utc_to_local(first_shift.actual_start, timezone_str=obj_timezone)
                             
                             delay_minutes = int((actual_open_local - expected_open).total_seconds() / 60)
                             
@@ -519,11 +528,28 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                     stats["opened"] += 1
                         
                         # Проверка 3: ЗАКРЫТИЕ ОБЪЕКТА (вовремя или раньше)
-                        if last_shift.end_time and last_shift.status in ('completed', 'closed'):
-                            expected_close = datetime.combine(today_local, current_obj.closing_time).replace(tzinfo=timezone_helper.local_tz)
-                            actual_close_local = timezone_helper.utc_to_local(last_shift.end_time)
+                        # Используем ту же логику, что и в дашборде (owner.py)
+                        # Проверяем только completed смены и только если нет активных смен
+                        active_shifts_on_object = [s for s in shifts_today if s.status == 'active']
+                        if last_shift.end_time and last_shift.status == 'completed' and not active_shifts_on_object:
+                            # Используем timezone объекта, а не default_timezone (как в дашборде)
+                            obj_timezone = current_obj.timezone or "Europe/Moscow"
+                            naive_expected_close = datetime.combine(today_local, current_obj.closing_time)
+                            obj_tz = pytz.timezone(obj_timezone)
+                            expected_close = obj_tz.localize(naive_expected_close)
+                            actual_close_local = timezone_helper.utc_to_local(last_shift.end_time, timezone_str=obj_timezone)
                             
                             early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
+                            
+                            # Проверка: если все смены завершены и прошло 10 минут после закрытия - не создаем уведомление
+                            all_shifts_completed = all(s.status in ('completed', 'closed') for s in shifts_today)
+                            close_time_utc = last_shift.end_time
+                            delay_minutes = 10
+                            notification_time_utc = close_time_utc + timedelta(minutes=delay_minutes)
+                            
+                            # Если прошло больше 10 минут после закрытия, не создаем уведомления
+                            if all_shifts_completed and now >= notification_time_utc:
+                                continue
                             
                             # Уже создавали уведомление для этого объекта на сегодня?
                             # Проверяем по дате, чтобы не создавать дубликаты при каждом запуске задачи
@@ -563,29 +589,6 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                         now
                                     )
                                     stats["closed"] += 1
-                            
-                            # Проверка 4: После закрытия всех смен - объект без смен до конца дня
-                            # Если все смены завершены и объект закрылся, создаем уведомление "нет смен"
-                            all_shifts_completed = all(s.status in ('completed', 'closed') for s in shifts_today)
-                            
-                            if all_shifts_completed and last_shift.end_time:
-                                # Создаем уведомление через 10 минут после закрытия последней смены
-                                # НЕ проверяем существование - уведомление должно приходить каждый раз, когда задача отрабатывает
-                                close_time_utc = last_shift.end_time
-                                delay_minutes = 10
-                                notification_time = close_time_utc + timedelta(minutes=delay_minutes)
-                                
-                                if now >= notification_time:
-                                    await _create_object_notification(
-                                        session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
-                                        {
-                                            "object_name": current_obj.name,
-                                            "object_address": current_obj.address or "",
-                                            "date": today_local.strftime("%d.%m.%Y")
-                                        },
-                                        now
-                                    )
-                                    stats["no_shifts"] += 1
                     
             except Exception as e:
                 error_obj_id = current_obj_id if 'current_obj_id' in locals() else 'unknown'
