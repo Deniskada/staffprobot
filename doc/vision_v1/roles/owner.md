@@ -26,17 +26,50 @@
   
 ### Инциденты
 - [GET] `/owner/incidents` — список инцидентов (apps/web/routes/owner_incidents.py)
-- [POST] `/owner/incidents/create` — создать инцидент (необязательные поля: Номер, Дата, Объект, Сотрудник, Ущерб)
-- [GET] `/owner/incidents/{id}/edit` — форма редактирования, смена статуса, история изменений
-- [POST] `/owner/incidents/{id}/edit` — сохранить изменения
-- [POST] `/owner/incidents/{id}/status` — смена статуса (учитываются автокорректировки)
-- [GET] `/owner/incidents/categories` — пользовательские категории владельца
-- [POST] `/owner/incidents/categories` — создать/деактивировать категорию
-- [GET] `/owner/incidents/reports` — отчеты по инцидентам
-  - Форма редактирования отображает таблицу всех корректировок, привязанных к инциденту; при изменении даты инцидента обновляются даты только корректировок текущего сотрудника, а применённые корректировки возвращаются в статус «не применена», чтобы попасть в новый расчёт.
-  - Фильтрация: Contract.owner_id == user_id AND allowed_objects @> [object_id]
-  - Используется в модальном окне планирования смен на /owner/shifts
-  - **UI:** выбор сотрудника блокируется до выбора объекта; после загрузки показываются активные сотрудники (алфавитно), затем разделитель «Бывшие» (жирный курсив) и архивные сотрудники (курсив). Данные предоставляет `EmployeeSelectorService.get_employees_for_owner`.
+  - Фильтрация: множественный выбор статусов (`statuses=new,in_review`), категория, объект, сотрудник
+  - Сортировка: по столбцам (клик по заголовку, asc/desc), параметры `sort_by`, `sort_order`
+  - Пагинация: параметры `page`, `per_page` (25/50/100 по умолчанию), сохранение фильтров в URL
+  - Кнопка экспорта: выпадающее меню (Excel .xlsx, PDF .pdf) с учетом всех фильтров и сортировки
+  - Кнопка отмены: в столбце "Действия" списка и на странице редактирования
+  - Контекст шаблона: `current_user`, `available_interfaces`, `new_applications_count` для отображения топбара
+- [GET] `/owner/incidents/create` — форма создания инцидента (apps/web/routes/owner_incidents.py)
+- [POST] `/owner/incidents/create` — создать инцидент (apps/web/routes/owner_incidents.py)
+  - Необязательные поля: Номер, Дата, Объект, Сотрудник, Ущерб
+  - Автоматические уведомления: владельцу, сотруднику, управляющим объекта при создании
+- [GET] `/owner/incidents/{id}/edit` — форма редактирования (apps/web/routes/owner_incidents.py)
+  - История изменений, таблица корректировок, кнопка "Вернуться к списку" с сохранением фильтров (`return_url`)
+  - Кнопка "Отменить инцидент" для неотмененных/нерешенных/неотклоненных инцидентов
+  - Контекст шаблона: `current_user`, `available_interfaces`, `new_applications_count`
+- [POST] `/owner/incidents/{id}/edit` — сохранить изменения (apps/web/routes/owner_incidents.py)
+  - Параметр `return_url` для возврата на исходную страницу с фильтрами
+  - При изменении даты инцидента обновляются даты только корректировок текущего сотрудника
+  - Применённые корректировки возвращаются в статус «не применена» для пересчёта
+- [POST] `/owner/incidents/{id}/status` — смена статуса (apps/web/routes/owner_incidents.py)
+  - Учитываются автокорректировки при изменении статуса на resolved/rejected
+  - Параметр `return_url` для возврата на исходную страницу
+  - Автоматические уведомления: при решении/отклонении отправляются владельцу, сотруднику, управляющим
+- [POST] `/owner/incidents/{id}/cancel` — отменить инцидент (apps/web/routes/owner_incidents.py)
+  - Причины отмены: "Ошибочно заведен (дубль)", "Инцидент не подтвердился", "Решение владельца"
+  - Сохранение в истории через `IncidentHistory`, статус меняется на `cancelled`
+  - Параметр `return_url` для возврата на исходную страницу
+  - Автоматические уведомления: владельцу, сотруднику, управляющим при отмене
+- [POST] `/owner/incidents/{id}/apply-adjustments` — применить предложенные корректировки (apps/web/routes/owner_incidents.py)
+  - Параметр `return_url` для возврата на исходную страницу
+- [GET] `/owner/incidents/export/excel` — экспорт в Excel (apps/web/routes/owner_incidents.py)
+  - Учитывает все фильтры (`statuses`, `category`, `object_id`, `employee_id`) и сортировку (`sort_by`, `sort_order`)
+  - Формат: .xlsx, столбцы: Номер, Дата, Категория, Критичность, Статус, Объект, Сотрудник, Ущерб, Создал, Создан, Примечания
+  - Имя файла: `incidents_YYYYMMDD_HHMMSS.xlsx`
+- [GET] `/owner/incidents/export/pdf` — экспорт в PDF (apps/web/routes/owner_incidents.py)
+  - Учитывает все фильтры и сортировку
+  - Формат: .pdf, таблица с информацией о фильтрах и списком инцидентов
+  - Имя файла: `incidents_YYYYMMDD_HHMMSS.pdf`
+- [GET] `/owner/incidents/categories` — пользовательские категории владельца (apps/web/routes/owner_incidents.py)
+- [POST] `/owner/incidents/categories` — создать/деактивировать категорию (apps/web/routes/owner_incidents.py)
+- [GET] `/owner/incidents/reports` — отчеты по инцидентам (apps/web/routes/owner_incidents.py)
+- [GET] `/owner/incidents/api/employees?object_id={id}` — API сотрудников для форм (apps/web/routes/owner_incidents.py)
+  - Возвращает JSONResponse с группировкой: `{"active": [...], "former": [...]}`
+  - Используется в формах создания/редактирования инцидентов для динамической загрузки сотрудников
+  - Данные предоставляет `EmployeeSelectorService.get_employees_for_owner`
 - [GET] `/owner/api/summary`  — (apps/web/routes/limits.py)
 - [GET] `/owner/applications`  — (apps/web/routes/owner.py)
 - [POST] `/owner/bulk-delete`  — (apps/web/routes/owner_timeslots.py)
