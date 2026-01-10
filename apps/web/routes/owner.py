@@ -222,18 +222,23 @@ async def owner_dashboard(request: Request):
                     
                     # Если смен нет, но объект должен работать - проверяем статус "нет смен"
                     if not shifts_today:
-                        # Проверяем, прошло ли время открытия объекта
-                        naive_expected = datetime.combine(today_local, obj.opening_time)
-                        expected_open = timezone_helper.local_tz.localize(naive_expected)
-                        now_local = timezone_helper.utc_to_local(datetime.now(timezone.utc))
+                        # Проверяем, что текущее время находится в рабочем времени объекта (как в Celery)
+                        obj_timezone = obj.timezone or "Europe/Moscow"
+                        naive_expected_open = datetime.combine(today_local, obj.opening_time)
+                        naive_expected_close = datetime.combine(today_local, obj.closing_time)
+                        obj_tz = pytz.timezone(obj_timezone)
+                        expected_open = obj_tz.localize(naive_expected_open)
+                        expected_close = obj_tz.localize(naive_expected_close)
+                        now_local = timezone_helper.utc_to_local(datetime.now(timezone.utc), timezone_str=obj_timezone)
                         
-                        # Если время открытия уже прошло, но смен нет - статус "нет смен"
-                        if now_local >= expected_open:
+                        # Если время открытия прошло и мы еще в рабочем времени - статус "нет смен"
+                        if now_local >= expected_open and now_local <= expected_close:
                             work_status = 'no_shifts_today'
                             work_employee = None
                             logger.debug(
-                                f"Dashboard: object {obj.id} ({obj.name}) - no shifts today, "
-                                f"expected_open={expected_open.isoformat()}, now={now_local.isoformat()}"
+                                f"Dashboard: object {obj.id} ({obj.name}) - no shifts today (within working hours), "
+                                f"expected_open={expected_open.isoformat()}, expected_close={expected_close.isoformat()}, "
+                                f"now={now_local.isoformat()}"
                             )
                     elif shifts_today:
                         # Логика: учитываем все смены, которые фактически открыли объект
@@ -396,20 +401,25 @@ async def owner_dashboard(request: Request):
                             early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
                             
                             # Проверка: если все смены завершены и прошло 10 минут после закрытия - статус "нет смен"
+                            # НО только если объект был закрыт в рабочее время или вскоре после него (не более чем через 2 часа после closing_time)
                             all_shifts_completed = all(s.status in ('completed', 'closed') for s in shifts_today)
                             close_time_utc = last_shift.end_time
                             delay_minutes = 10
                             notification_time_utc = close_time_utc + timedelta(minutes=delay_minutes)
                             now_utc = datetime.now(timezone.utc)
+                            now_local = timezone_helper.utc_to_local(now_utc, timezone_str=obj_timezone)
                             
-                            if all_shifts_completed and now_utc >= notification_time_utc:
+                            # Максимальное время для установки статуса "нет смен" - не более 2 часов после expected_close
+                            max_status_time = expected_close + timedelta(hours=2)
+                            
+                            if all_shifts_completed and now_utc >= notification_time_utc and now_local <= max_status_time:
                                 work_status = 'no_shifts_today'
                                 work_employee = None
                                 logger.debug(
                                     f"Dashboard: object {obj.id} ({obj.name}) - all shifts completed, "
                                     f"close_time={close_time_utc.isoformat()}, "
                                     f"notification_time={notification_time_utc.isoformat()}, "
-                                    f"now={now_utc.isoformat()}"
+                                    f"now={now_utc.isoformat()}, max_status_time={max_status_time.isoformat()}"
                                 )
                             # Порог раннего закрытия: 5 минут (хардкод, можно вынести в настройки объекта)
                             elif early_minutes > 5:
