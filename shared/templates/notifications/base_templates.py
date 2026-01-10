@@ -321,6 +321,56 @@ class NotificationTemplateManager:
         }
     }
     
+    # Шаблоны для инцидентов
+    INCIDENT_TEMPLATES = {
+        NotificationType.INCIDENT_CREATED: {
+            "title": "Инцидент создан",
+            "plain": "Создан новый инцидент #$incident_number.\n\nКатегория: $category\nКритичность: $severity\nОбъект: $object_name\nСотрудник: $employee_name\nДата: $incident_date",
+            "html": """<h2>Инцидент создан ⚠️</h2>
+<p>Создан новый инцидент <strong>#$incident_number</strong>.</p>
+<p><strong>Категория:</strong> $category<br>
+<strong>Критичность:</strong> $severity<br>
+<strong>Объект:</strong> $object_name<br>
+<strong>Сотрудник:</strong> $employee_name<br>
+<strong>Дата:</strong> $incident_date</p>""",
+            "telegram": "⚠️ *Инцидент создан*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n🔴 Критичность: $severity\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата: $incident_date"
+        },
+        NotificationType.INCIDENT_RESOLVED: {
+            "title": "Инцидент решён",
+            "plain": "Инцидент #$incident_number решён.\n\nКатегория: $category\nОбъект: $object_name\nСотрудник: $employee_name\nДата решения: $resolved_date",
+            "html": """<h2>Инцидент решён ✅</h2>
+<p>Инцидент <strong>#$incident_number</strong> решён.</p>
+<p><strong>Категория:</strong> $category<br>
+<strong>Объект:</strong> $object_name<br>
+<strong>Сотрудник:</strong> $employee_name<br>
+<strong>Дата решения:</strong> $resolved_date</p>""",
+            "telegram": "✅ *Инцидент решён*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата решения: $resolved_date"
+        },
+        NotificationType.INCIDENT_REJECTED: {
+            "title": "Инцидент отклонён",
+            "plain": "Инцидент #$incident_number отклонён.\n\nКатегория: $category\nОбъект: $object_name\nСотрудник: $employee_name\nДата отклонения: $rejected_date",
+            "html": """<h2>Инцидент отклонён ❌</h2>
+<p>Инцидент <strong>#$incident_number</strong> отклонён.</p>
+<p><strong>Категория:</strong> $category<br>
+<strong>Объект:</strong> $object_name<br>
+<strong>Сотрудник:</strong> $employee_name<br>
+<strong>Дата отклонения:</strong> $rejected_date</p>""",
+            "telegram": "❌ *Инцидент отклонён*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата отклонения: $rejected_date"
+        },
+        NotificationType.INCIDENT_CANCELLED: {
+            "title": "Инцидент отменён",
+            "plain": "Инцидент #$incident_number отменён.\n\nПричина отмены: $cancellation_reason\nКатегория: $category\nОбъект: $object_name\nСотрудник: $employee_name\nДата отмены: $cancelled_date",
+            "html": """<h2>Инцидент отменён 🚫</h2>
+<p>Инцидент <strong>#$incident_number</strong> отменён.</p>
+<p><strong>Причина отмены:</strong> $cancellation_reason<br>
+<strong>Категория:</strong> $category<br>
+<strong>Объект:</strong> $object_name<br>
+<strong>Сотрудник:</strong> $employee_name<br>
+<strong>Дата отмены:</strong> $cancelled_date</p>""",
+            "telegram": "🚫 *Инцидент отменён*\n\n📋 Инцидент #$incident_number\n\n📝 Причина: $cancellation_reason\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата отмены: $cancelled_date"
+        }
+    }
+    
     # Объединяем все шаблоны
     ALL_TEMPLATES = {
         **SHIFT_TEMPLATES,
@@ -328,7 +378,8 @@ class NotificationTemplateManager:
         **REVIEW_TEMPLATES,
         **PAYMENT_TEMPLATES,
         **SYSTEM_TEMPLATES,
-        **OBJECT_TEMPLATES
+        **OBJECT_TEMPLATES,
+        **INCIDENT_TEMPLATES
     }
     
     @classmethod

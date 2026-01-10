@@ -53,6 +53,12 @@ class NotificationType(enum.Enum):
     TASK_COMPLETED = "task_completed"                   # Задача выполнена
     TASK_OVERDUE = "task_overdue"                       # Задача просрочена
     
+    # Инциденты
+    INCIDENT_CREATED = "incident_created"               # Инцидент создан
+    INCIDENT_RESOLVED = "incident_resolved"             # Инцидент решён
+    INCIDENT_REJECTED = "incident_rejected"             # Инцидент отклонён
+    INCIDENT_CANCELLED = "incident_cancelled"           # Инцидент отменён
+    
     # Системные
     WELCOME = "welcome"                                 # Приветствие
     PASSWORD_RESET = "password_reset"                   # Сброс пароля

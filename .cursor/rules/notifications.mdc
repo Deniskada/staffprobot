@@ -1,0 +1,434 @@
+# Правила работы с уведомлениями в StaffProBot
+
+## 🎯 Общие принципы
+
+### Унифицированный формат enum значений
+**КРИТИЧЕСКИЙ ПРИНЦИП**: Все enum поля в уведомлениях используют **`.value`** (lowercase строки), а не `.name` (uppercase строки).
+
+Это соответствует значениям enum в Python:
+- `NotificationType.SHIFT_STARTED = "shift_started"` → используем `"shift_started"`
+- `NotificationChannel.TELEGRAM = "telegram"` → используем `"telegram"`
+- `NotificationStatus.PENDING = "pending"` → используем `"pending"`
+- `NotificationPriority.NORMAL = "normal"` → используем `"normal"`
+
+### Структура enum типов
+```python
+# Все enum определены в domain/entities/notification.py
+from domain.entities.notification import (
+    NotificationType,
+    NotificationStatus,
+    NotificationChannel,
+    NotificationPriority
+)
+
+# Примеры значений:
+NotificationType.SHIFT_STARTED.value == "shift_started"  # ✅ Правильно
+NotificationType.SHIFT_STARTED.name == "SHIFT_STARTED"   # ❌ НЕПРАВИЛЬНО для БД
+
+NotificationChannel.TELEGRAM.value == "telegram"         # ✅ Правильно
+NotificationChannel.TELEGRAM.name == "TELEGRAM"          # ❌ НЕПРАВИЛЬНО для БД
+```
+
+## 📋 Создание уведомлений
+
+### Через NotificationService (рекомендуемый способ)
+
+```python
+from shared.services.notification_service import NotificationService
+
+notification_service = NotificationService()
+
+# Передаем enum объекты - сервис сам конвертирует в .value
+notification = await notification_service.create_notification(
+    user_id=user_id,
+    type=NotificationType.SHIFT_STARTED,  # Enum объект
+    channel=NotificationChannel.TELEGRAM,  # Enum объект
+    title="Заголовок",
+    message="Текст сообщения",
+    data={"shift_id": 123, "object_id": 456},  # Дополнительные данные (JSON)
+    priority=NotificationPriority.HIGH,  # Опционально, по умолчанию NORMAL
+    scheduled_at=datetime.now(timezone.utc)  # Опционально
+)
+```
+
+**ВАЖНО**: `NotificationService.create_notification()` автоматически использует `.value` для всех enum полей. Сервис создает свою сессию БД, что безопасно для использования из любого контекста.
+
+### Через ORM напрямую (только в исключительных случаях)
+
+```python
+from domain.entities.notification import Notification
+
+# ВСЕГДА используем .value для всех enum полей!
+notification = Notification(
+    user_id=user_id,
+    type=notif_type.value,  # ✅ Обязательно .value
+    channel=channel.value,  # ✅ Обязательно .value
+    status=NotificationStatus.PENDING.value,  # ✅ Обязательно .value
+    priority=priority_enum.value,  # ✅ Обязательно .value
+    title=title,
+    message=message,
+    data=data or {},
+    scheduled_at=scheduled_at
+)
+
+session.add(notification)
+await session.commit()
+```
+
+**ЗАПРЕЩЕНО**:
+```python
+# ❌ НЕПРАВИЛЬНО - использовать .name или enum объект напрямую
+notification = Notification(
+    type=NotificationType.SHIFT_STARTED,  # ❌ Enum объект вместо .value
+    channel="TELEGRAM",  # ❌ Uppercase вместо lowercase
+    status=NotificationStatus.PENDING.name,  # ❌ .name вместо .value
+)
+```
+
+## 🔄 Обновление уведомлений
+
+### Изменение статуса уведомления
+
+```python
+# Через методы модели (они автоматически используют .value)
+notification.mark_as_read()  # Использует NotificationStatus.READ.value
+notification.mark_as_sent()  # Использует NotificationStatus.SENT.value
+notification.mark_as_failed(error_message="Ошибка")  # Использует NotificationStatus.FAILED.value
+
+await session.commit()
+```
+
+### Прямое обновление через SQL (если необходимо)
+
+```python
+from sqlalchemy import update, text
+
+# Используем .value для статуса
+await session.execute(
+    update(Notification)
+    .where(Notification.id == notification_id)
+    .values(
+        status=NotificationStatus.READ.value,  # ✅ .value
+        read_at=datetime.now(timezone.utc)
+    )
+)
+await session.commit()
+```
+
+## 🔍 Чтение уведомлений
+
+### Фильтрация по enum полям
+
+**КРИТИЧЕСКИ ВАЖНО**: При фильтрации через SQL запросы ВСЕГДА используйте `.value`, а не `.name`!
+
+```python
+from sqlalchemy import select, cast, String
+
+# При фильтрации нужно учитывать, что в БД хранятся значения (.value)
+query = select(Notification).where(
+    Notification.type == NotificationType.SHIFT_STARTED.value,  # ✅ Используем .value
+    Notification.status == NotificationStatus.PENDING.value,  # ✅ Используем .value
+    Notification.channel == NotificationChannel.TELEGRAM.value  # ✅ Используем .value
+)
+
+# При использовании cast для String колонок - ВСЕГДА используем .value
+from sqlalchemy import cast, String
+query = select(Notification).where(
+    cast(Notification.status, String) != NotificationStatus.READ.value,  # ✅ .value
+    cast(Notification.channel, String) == NotificationChannel.IN_APP.value  # ✅ .value
+)
+
+# ❌ НЕПРАВИЛЬНО - использование .name
+query = select(Notification).where(
+    cast(Notification.status, String) != NotificationStatus.READ.name,  # ❌ .name - ошибка!
+    cast(Notification.channel, String) == NotificationChannel.IN_APP.name  # ❌ .name - ошибка!
+)
+```
+
+**В `NotificationService.get_user_notifications()` и других методах**: Все фильтры используют `.value` для сравнения с данными в БД.
+
+### Доступ к enum из модели
+
+```python
+# Модель Notification имеет свойства для конвертации строки в enum
+notification = await session.get(Notification, notification_id)
+
+# Доступ к enum объектам через свойства модели
+type_enum = notification.type_enum  # Возвращает NotificationType
+channel_enum = notification.channel_enum  # Возвращает NotificationChannel
+status_enum = notification.status_enum  # Возвращает NotificationStatus
+priority_enum = notification.priority_enum  # Возвращает NotificationPriority
+
+# Прямой доступ к строковому значению (как хранится в БД)
+type_str = notification.type  # "shift_started"
+status_str = notification.status  # "pending"
+```
+
+## 🚨 Частые ошибки
+
+### Ошибка 1: Использование .name вместо .value
+```python
+# ❌ НЕПРАВИЛЬНО
+notification = Notification(
+    type=NotificationType.SHIFT_STARTED.name,  # "SHIFT_STARTED" - не существует в enum!
+    channel=NotificationChannel.TELEGRAM.name  # "TELEGRAM" - не существует в enum!
+)
+
+# ✅ ПРАВИЛЬНО
+notification = Notification(
+    type=NotificationType.SHIFT_STARTED.value,  # "shift_started"
+    channel=NotificationChannel.TELEGRAM.value  # "telegram"
+)
+```
+
+### Ошибка 2: Передача enum объекта напрямую в модель
+```python
+# ❌ НЕПРАВИЛЬНО - модель использует String, а не Enum
+notification = Notification(
+    type=NotificationType.SHIFT_STARTED,  # Enum объект вместо строки
+    channel=NotificationChannel.TELEGRAM  # Enum объект вместо строки
+)
+# Ошибка: DatatypeMismatchError
+
+# ✅ ПРАВИЛЬНО - используем .value
+notification = Notification(
+    type=NotificationType.SHIFT_STARTED.value,
+    channel=NotificationChannel.TELEGRAM.value
+)
+```
+
+### Ошибка 3: Смешанный формат (uppercase и lowercase)
+```python
+# ❌ НЕПРАВИЛЬНО - смешиваем форматы
+notification = Notification(
+    type="shift_started",  # lowercase - правильно
+    channel="TELEGRAM",  # uppercase - неправильно!
+    status="pending",  # lowercase - правильно
+    priority="HIGH"  # uppercase - неправильно!
+)
+
+# ✅ ПРАВИЛЬНО - все lowercase через .value
+notification = Notification(
+    type=NotificationType.SHIFT_STARTED.value,  # "shift_started"
+    channel=NotificationChannel.TELEGRAM.value,  # "telegram"
+    status=NotificationStatus.PENDING.value,  # "pending"
+    priority=NotificationPriority.NORMAL.value  # "normal"
+)
+```
+
+## 📝 Правила для Celery задач
+
+### Создание уведомлений в Celery задачах
+
+```python
+# В core/celery/tasks/reminder_tasks.py
+from shared.services.notification_service import NotificationService
+
+async def _create_notification_task():
+    async with get_async_session() as session:
+        notification_service = NotificationService()
+        
+        # Используем сервис - он правильно обрабатывает enum
+        await notification_service.create_notification(
+            user_id=user_id,
+            type=NotificationType.OBJECT_NO_SHIFTS_TODAY,  # Enum объект
+            channel=NotificationChannel.TELEGRAM,  # Enum объект
+            title="Нет смен",
+            message="На объекте нет активных смен",
+            priority=NotificationPriority.HIGH
+        )
+```
+
+### Прямое создание через ORM (если сервис недоступен)
+
+```python
+from domain.entities.notification import Notification
+
+async def _create_notification_direct(session):
+    notification = Notification(
+        user_id=user_id,
+        type=NotificationType.OBJECT_NO_SHIFTS_TODAY.value,  # ✅ .value
+        channel=NotificationChannel.TELEGRAM.value,  # ✅ .value
+        status=NotificationStatus.PENDING.value,  # ✅ .value
+        priority=NotificationPriority.HIGH.value,  # ✅ .value
+        title="Заголовок",
+        message="Сообщение",
+        data={}
+    )
+    session.add(notification)
+    await session.commit()
+```
+
+## 🎨 Работа с шаблонами уведомлений
+
+```python
+from shared.templates.notifications.base_templates import NotificationTemplateManager
+
+# Рендеринг шаблона для канала
+rendered = NotificationTemplateManager.render(
+    notification_type=NotificationType.SHIFT_STARTED,  # Enum объект
+    channel=NotificationChannel.TELEGRAM,  # Enum объект
+    variables={
+        "shift_id": "123",
+        "object_name": "Объект 1",
+        "employee_name": "Иван Иванов"
+    }
+)
+
+# Результат: {"title": "...", "message": "..."}
+title = rendered["title"]
+message = rendered["message"]
+
+# Создание уведомления с отрендеренным шаблоном
+await notification_service.create_notification(
+    user_id=user_id,
+    type=NotificationType.SHIFT_STARTED,  # Enum объект
+    channel=NotificationChannel.TELEGRAM,  # Enum объект
+    title=title,
+    message=message,
+    data={"shift_id": 123}
+)
+```
+
+## 🔐 Проверка настроек пользователя
+
+```python
+# Получение настроек уведомлений пользователя
+user = await session.get(User, user_id)
+prefs = user.notification_preferences or {}
+
+# Настройки хранятся по type_code (значение enum, например "shift_started")
+type_code = NotificationType.SHIFT_STARTED.value  # "shift_started"
+type_prefs = prefs.get(type_code, {})
+
+# Проверка включен ли канал
+telegram_enabled = type_prefs.get("telegram", True) if type_code in prefs else True
+inapp_enabled = type_prefs.get("inapp", True) if type_code in prefs else True
+
+# Создание уведомлений только для включенных каналов
+if telegram_enabled:
+    await notification_service.create_notification(
+        user_id=user_id,
+        type=NotificationType.SHIFT_STARTED,
+        channel=NotificationChannel.TELEGRAM,  # Enum объект
+        ...
+    )
+
+if inapp_enabled:
+    await notification_service.create_notification(
+        user_id=user_id,
+        type=NotificationType.SHIFT_STARTED,
+        channel=NotificationChannel.IN_APP,  # Enum объект
+        ...
+    )
+```
+
+## 📊 Миграции БД
+
+### Добавление нового типа уведомления
+
+```python
+# В миграции Alembic
+def upgrade() -> None:
+    # Добавить новое значение в enum (используем lowercase)
+    op.execute("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'new_type_code'")
+    
+    # Добавить метаданные в notification_types_meta
+    op.execute("""
+        INSERT INTO notification_types_meta 
+        (type_code, title, description, category, default_priority, ...)
+        VALUES
+        ('new_type_code', 'Новый тип', 'Описание', 'shifts', 'normal', ...)
+        ON CONFLICT (type_code) DO NOTHING
+    """)
+```
+
+**ВАЖНО**: Всегда используйте lowercase значения (как `.value` в Python enum) при добавлении в enum типы PostgreSQL.
+
+### Унификация существующих значений
+
+Если в БД есть смешанный формат (uppercase и lowercase), используйте миграцию для унификации:
+
+```python
+def upgrade() -> None:
+    # 1. Добавить все lowercase значения
+    op.execute("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'shift_started'")
+    
+    # 2. Обновить существующие записи
+    op.execute("""
+        UPDATE notifications 
+        SET type = CAST('shift_started' AS notificationtype)
+        WHERE type::text = 'SHIFT_STARTED'
+    """)
+```
+
+## ✅ Чек-лист при создании уведомления
+
+- [ ] Используется `NotificationService.create_notification()` (предпочтительно) или ORM с `.value`
+- [ ] Все enum поля используют `.value` (lowercase строки), а не `.name` (uppercase)
+- [ ] Проверены настройки пользователя перед созданием уведомления
+- [ ] Используются шаблоны для рендеринга сообщений
+- [ ] Правильно задан приоритет уведомления
+- [ ] В `data` переданы все необходимые дополнительные данные (shift_id, object_id и т.д.)
+- [ ] Уведомление создается в правильной сессии БД (не в новой)
+
+## 🏢 Уведомления об объектах
+
+### Автоматическая отправка при открытии/закрытии объекта
+
+Уведомления об объектах отправляются **немедленно** при открытии/закрытии объекта через бот, а также через периодическую задачу `check_object_openings`.
+
+**Реализация**: `shared/services/object_opening_service.py`
+
+```python
+from shared.services.object_opening_service import ObjectOpeningService
+
+# При открытии объекта уведомления создаются автоматически
+async with get_async_session() as session:
+    opening_service = ObjectOpeningService(session)
+    opening = await opening_service.open_object(
+        object_id=object_id,
+        user_id=user_id,  # Внутренний ID из БД, не telegram_id!
+        coordinates="lat,lon"
+    )
+    # Уведомления OBJECT_OPENED или OBJECT_LATE_OPENING создаются автоматически
+    # Для владельца объекта (obj.owner) в каналах Telegram и InApp (если включены)
+
+# При закрытии объекта уведомления также создаются автоматически
+opening = await opening_service.close_object(
+    object_id=object_id,
+    user_id=user_id,  # Внутренний ID из БД
+    coordinates="lat,lon"
+)
+# Уведомления OBJECT_CLOSED или OBJECT_EARLY_CLOSING создаются автоматически
+```
+
+**Важно**:
+- Уведомления учитывают настройки владельца объекта (`obj.owner.notification_preferences`)
+- Проверяется, вовремя ли открылся/закрылся объект (сравнение с `opening_time`/`closing_time`)
+- Если опоздание/раннее закрытие > 5 минут → `OBJECT_LATE_OPENING`/`OBJECT_EARLY_CLOSING` (HIGH приоритет)
+- Если вовремя → `OBJECT_OPENED`/`OBJECT_CLOSED` (NORMAL приоритет)
+
+### Периодическая проверка (через Celery задачу)
+
+Задача `check_object_openings` (запускается по расписанию):
+- Проверяет состояние всех активных объектов
+- Создает уведомления о статусе работы объектов
+- Проверяет дубликаты по дате, чтобы не отправлять повторные уведомления
+
+## 🔗 Связанные файлы
+
+- **Модель уведомлений**: `domain/entities/notification.py`
+- **Сервис уведомлений**: `shared/services/notification_service.py`
+- **Сервис уведомлений о сменах**: `shared/services/shift_notification_service.py`
+- **Сервис управления объектами**: `shared/services/object_opening_service.py` (уведомления об объектах)
+- **Шаблоны уведомлений**: `shared/templates/notifications/base_templates.py`
+- **Celery задачи**: `core/celery/tasks/reminder_tasks.py` (периодическая проверка объектов)
+- **Миграция унификации**: `migrations/versions/ffaa1ceacd63_unify_notification_enums_to_lowercase_.py`
+
+---
+
+**Помни**: 
+1. Всегда используй `.value` для enum полей при работе с уведомлениями! Это гарантирует единообразие и предотвращает ошибки типа `DatatypeMismatchError`.
+2. При фильтрации уведомлений через SQL запросы (особенно с `cast(Notification.status, String)`) ВСЕГДА используй `.value`, а не `.name`!
+3. Уведомления об объектах отправляются автоматически при открытии/закрытии через `ObjectOpeningService` - не нужно создавать их вручную в обработчиках бота.

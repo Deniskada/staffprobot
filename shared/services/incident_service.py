@@ -1,17 +1,22 @@
 """Shared-сервис для управления инцидентами (все роли)."""
 
 from __future__ import annotations
-from typing import List, Optional, Dict, Any
-from datetime import date
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
+from sqlalchemy.orm import selectinload
 from decimal import Decimal
 import json
 
 from domain.entities.incident import Incident
 from domain.entities.contract import Contract
+from domain.entities.user import User
 from core.logging.logger import logger
+
+if TYPE_CHECKING:
+    from shared.services.notification_service import NotificationService
 
 
 class IncidentService:
@@ -135,13 +140,25 @@ class IncidentService:
                 incident_id=incident.id
             )
             await self.session.commit()
+        
+        # Отправляем уведомления о создании инцидента
+        try:
+            await self._notify_incident_created(incident)
+        except Exception as notification_error:
+            logger.warning(
+                "Failed to send incident created notifications",
+                incident_id=incident.id,
+                error=str(notification_error),
+            )
+        
         return incident
     
     async def update_incident_status(
         self,
         incident_id: int,
         new_status: str,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        changed_by: Optional[int] = None
     ) -> Optional[Incident]:
         """Обновить статус инцидента."""
         incident = await self.session.get(Incident, incident_id)
@@ -154,21 +171,37 @@ class IncidentService:
             incident.notes = (incident.notes or "") + f"\n[{new_status}] {notes}"
         
         # История
+        changed_by_id = changed_by or incident.created_by
         try:
             from domain.entities.incident_history import IncidentHistory
-            self.session.add(IncidentHistory(
+            history_entry = IncidentHistory(
                 incident_id=incident.id,
-                changed_by=incident.created_by,
+                changed_by=changed_by_id,
                 field="status",
-                old_value=None,
+                old_value=old_status,
                 new_value=new_status
-            ))
+            )
+            self.session.add(history_entry)
         except Exception:
             pass
 
         await self.session.commit()
         await self.session.refresh(incident)
         logger.info(f"Updated Incident {incident_id}: status={new_status}")
+
+        # Отправляем уведомления об изменении статуса
+        try:
+            if new_status == "resolved":
+                await self._notify_incident_resolved(incident, changed_by=changed_by_id)
+            elif new_status == "rejected":
+                await self._notify_incident_rejected(incident, changed_by=changed_by_id)
+        except Exception as notification_error:
+            logger.warning(
+                "Failed to send incident status change notifications",
+                incident_id=incident.id,
+                new_status=new_status,
+                error=str(notification_error),
+            )
 
         # Автокорректировки по статусам
         if new_status == "resolved" and incident.damage_amount and incident.employee_id:
@@ -429,4 +462,525 @@ class IncidentService:
         
         logger.info(f"Applied {len(adjustments)} adjustments for Incident {incident_id}")
         return True
+    
+    async def cancel_incident(
+        self,
+        incident_id: int,
+        cancellation_reason: str,
+        cancelled_by: int,
+        notes: Optional[str] = None
+    ) -> Optional[Incident]:
+        """Отменить инцидент с указанием причины отмены."""
+        incident = await self.session.get(Incident, incident_id)
+        if not incident:
+            return None
+        
+        # Проверка: нельзя отменить уже отмененный, решенный или отклоненный инцидент
+        if incident.status in ['cancelled', 'resolved', 'rejected']:
+            raise ValueError(f"Нельзя отменить инцидент со статусом '{incident.status}'")
+        
+        old_status = incident.status
+        incident.status = "cancelled"
+        
+        # Сохраняем причину отмены в notes
+        cancellation_note = f"\n[ОТМЕНЕН] Причина: {cancellation_reason}"
+        if notes:
+            cancellation_note += f"\nКомментарий: {notes}"
+        incident.notes = (incident.notes or "") + cancellation_note
+        
+        # История
+        try:
+            from domain.entities.incident_history import IncidentHistory
+            history_entry = IncidentHistory(
+                incident_id=incident.id,
+                changed_by=cancelled_by,
+                field="status",
+                old_value=old_status,
+                new_value="cancelled"
+            )
+            # Причина отмены сохраняется в notes инцидента
+            self.session.add(history_entry)
+        except Exception:
+            pass
+        
+        await self.session.commit()
+        await self.session.refresh(incident)
+        logger.info(f"Cancelled Incident {incident_id}: reason={cancellation_reason}")
+        
+        # Отправляем уведомления об отмене
+        try:
+            await self._notify_incident_cancelled(incident, cancellation_reason, changed_by=cancelled_by)
+        except Exception as notification_error:
+            logger.warning(
+                "Failed to send incident cancelled notifications",
+                incident_id=incident.id,
+                error=str(notification_error),
+            )
+        
+        return incident
+    
+    async def _notify_incident_created(self, incident: Incident) -> None:
+        """Отправить уведомления о создании инцидента."""
+        from shared.services.notification_service import NotificationService
+        from shared.templates.notifications.base_templates import NotificationTemplateManager
+        from domain.entities.notification import NotificationType, NotificationChannel, NotificationPriority
+        from domain.entities.user import User
+        from domain.entities.object import Object
+        from sqlalchemy.orm import selectinload
+        from datetime import datetime, timezone
+        
+        # Загружаем инцидент с отношениями
+        incident_result = await self.session.execute(
+            select(Incident)
+            .options(
+                selectinload(Incident.owner),
+                selectinload(Incident.employee),
+                selectinload(Incident.object)
+            )
+            .where(Incident.id == incident.id)
+        )
+        incident_with_relations = incident_result.scalar_one_or_none()
+        if not incident_with_relations:
+            return
+        
+        # Получаем категорию для отображения
+        category_display = self._get_category_display(incident_with_relations.category)
+        severity_display = self._get_severity_display(incident_with_relations.severity)
+        incident_date = incident_with_relations.custom_date.strftime('%d.%m.%Y') if incident_with_relations.custom_date else datetime.now(timezone.utc).strftime('%d.%m.%Y')
+        incident_number = incident_with_relations.custom_number or str(incident_with_relations.id)
+        object_name = incident_with_relations.object.name if incident_with_relations.object else "Не указан"
+        employee_name = (
+            f"{incident_with_relations.employee.first_name} {incident_with_relations.employee.last_name}".strip()
+            if incident_with_relations.employee
+            else "Не указан"
+        )
+        
+        template_vars = {
+            "incident_number": incident_number,
+            "category": category_display,
+            "severity": severity_display,
+            "object_name": object_name,
+            "employee_name": employee_name,
+            "incident_date": incident_date
+        }
+        
+        notification_service = NotificationService()
+        
+        # Уведомляем владельца
+        if incident_with_relations.owner:
+            await self._send_incident_notification(
+                notification_service,
+                NotificationType.INCIDENT_CREATED,
+                incident_with_relations.owner.id,
+                template_vars,
+                {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                NotificationPriority.HIGH
+            )
+        
+        # Уведомляем сотрудника (если есть)
+        if incident_with_relations.employee and incident_with_relations.employee.id != incident_with_relations.owner.id:
+            await self._send_incident_notification(
+                notification_service,
+                NotificationType.INCIDENT_CREATED,
+                incident_with_relations.employee.id,
+                template_vars,
+                {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                NotificationPriority.HIGH
+            )
+        
+        # Уведомляем управляющих объекта (если есть объект)
+        if incident_with_relations.object:
+            managers = await self._get_managers_for_object(incident_with_relations.object_id)
+            for manager_id in managers:
+                if manager_id != incident_with_relations.owner.id and manager_id != (incident_with_relations.employee_id or 0):
+                    await self._send_incident_notification(
+                        notification_service,
+                        NotificationType.INCIDENT_CREATED,
+                        manager_id,
+                        template_vars,
+                        {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                        NotificationPriority.HIGH
+                    )
+    
+    async def _notify_incident_resolved(self, incident: Incident, changed_by: int) -> None:
+        """Отправить уведомления о решении инцидента."""
+        from shared.services.notification_service import NotificationService
+        from shared.templates.notifications.base_templates import NotificationTemplateManager
+        from domain.entities.notification import NotificationType, NotificationChannel, NotificationPriority
+        from domain.entities.user import User
+        from domain.entities.object import Object
+        from sqlalchemy.orm import selectinload
+        from datetime import datetime, timezone
+        
+        incident_result = await self.session.execute(
+            select(Incident)
+            .options(
+                selectinload(Incident.owner),
+                selectinload(Incident.employee),
+                selectinload(Incident.object)
+            )
+            .where(Incident.id == incident.id)
+        )
+        incident_with_relations = incident_result.scalar_one_or_none()
+        if not incident_with_relations:
+            return
+        
+        category_display = self._get_category_display(incident_with_relations.category)
+        incident_number = incident_with_relations.custom_number or str(incident_with_relations.id)
+        object_name = incident_with_relations.object.name if incident_with_relations.object else "Не указан"
+        employee_name = (
+            f"{incident_with_relations.employee.first_name} {incident_with_relations.employee.last_name}".strip()
+            if incident_with_relations.employee
+            else "Не указан"
+        )
+        resolved_date = datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')
+        
+        template_vars = {
+            "incident_number": incident_number,
+            "category": category_display,
+            "object_name": object_name,
+            "employee_name": employee_name,
+            "resolved_date": resolved_date
+        }
+        
+        notification_service = NotificationService()
+        
+        # Уведомляем владельца
+        if incident_with_relations.owner:
+            await self._send_incident_notification(
+                notification_service,
+                NotificationType.INCIDENT_RESOLVED,
+                incident_with_relations.owner.id,
+                template_vars,
+                {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                NotificationPriority.NORMAL
+            )
+        
+        # Уведомляем сотрудника
+        if incident_with_relations.employee and incident_with_relations.employee.id != incident_with_relations.owner.id:
+            await self._send_incident_notification(
+                notification_service,
+                NotificationType.INCIDENT_RESOLVED,
+                incident_with_relations.employee.id,
+                template_vars,
+                {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                NotificationPriority.NORMAL
+            )
+        
+        # Уведомляем управляющих
+        if incident_with_relations.object:
+            managers = await self._get_managers_for_object(incident_with_relations.object_id)
+            for manager_id in managers:
+                if manager_id != incident_with_relations.owner.id and manager_id != (incident_with_relations.employee_id or 0):
+                    await self._send_incident_notification(
+                        notification_service,
+                        NotificationType.INCIDENT_RESOLVED,
+                        manager_id,
+                        template_vars,
+                        {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                        NotificationPriority.NORMAL
+                    )
+    
+    async def _notify_incident_rejected(self, incident: Incident, changed_by: int) -> None:
+        """Отправить уведомления об отклонении инцидента."""
+        from shared.services.notification_service import NotificationService
+        from shared.templates.notifications.base_templates import NotificationTemplateManager
+        from domain.entities.notification import NotificationType, NotificationChannel, NotificationPriority
+        from domain.entities.user import User
+        from domain.entities.object import Object
+        from sqlalchemy.orm import selectinload
+        from datetime import datetime, timezone
+        
+        incident_result = await self.session.execute(
+            select(Incident)
+            .options(
+                selectinload(Incident.owner),
+                selectinload(Incident.employee),
+                selectinload(Incident.object)
+            )
+            .where(Incident.id == incident.id)
+        )
+        incident_with_relations = incident_result.scalar_one_or_none()
+        if not incident_with_relations:
+            return
+        
+        category_display = self._get_category_display(incident_with_relations.category)
+        incident_number = incident_with_relations.custom_number or str(incident_with_relations.id)
+        object_name = incident_with_relations.object.name if incident_with_relations.object else "Не указан"
+        employee_name = (
+            f"{incident_with_relations.employee.first_name} {incident_with_relations.employee.last_name}".strip()
+            if incident_with_relations.employee
+            else "Не указан"
+        )
+        rejected_date = datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')
+        
+        template_vars = {
+            "incident_number": incident_number,
+            "category": category_display,
+            "object_name": object_name,
+            "employee_name": employee_name,
+            "rejected_date": rejected_date
+        }
+        
+        notification_service = NotificationService()
+        
+        # Уведомляем владельца
+        if incident_with_relations.owner:
+            await self._send_incident_notification(
+                notification_service,
+                NotificationType.INCIDENT_REJECTED,
+                incident_with_relations.owner.id,
+                template_vars,
+                {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                NotificationPriority.NORMAL
+            )
+        
+        # Уведомляем сотрудника
+        if incident_with_relations.employee and incident_with_relations.employee.id != incident_with_relations.owner.id:
+            await self._send_incident_notification(
+                notification_service,
+                NotificationType.INCIDENT_REJECTED,
+                incident_with_relations.employee.id,
+                template_vars,
+                {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                NotificationPriority.NORMAL
+            )
+        
+        # Уведомляем управляющих
+        if incident_with_relations.object:
+            managers = await self._get_managers_for_object(incident_with_relations.object_id)
+            for manager_id in managers:
+                if manager_id != incident_with_relations.owner.id and manager_id != (incident_with_relations.employee_id or 0):
+                    await self._send_incident_notification(
+                        notification_service,
+                        NotificationType.INCIDENT_REJECTED,
+                        manager_id,
+                        template_vars,
+                        {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                        NotificationPriority.NORMAL
+                    )
+    
+    async def _notify_incident_cancelled(
+        self,
+        incident: Incident,
+        cancellation_reason: str,
+        changed_by: int
+    ) -> None:
+        """Отправить уведомления об отмене инцидента."""
+        from shared.services.notification_service import NotificationService
+        from shared.templates.notifications.base_templates import NotificationTemplateManager
+        from domain.entities.notification import NotificationType, NotificationChannel, NotificationPriority
+        from domain.entities.user import User
+        from domain.entities.object import Object
+        from sqlalchemy.orm import selectinload
+        from datetime import datetime, timezone
+        
+        incident_result = await self.session.execute(
+            select(Incident)
+            .options(
+                selectinload(Incident.owner),
+                selectinload(Incident.employee),
+                selectinload(Incident.object)
+            )
+            .where(Incident.id == incident.id)
+        )
+        incident_with_relations = incident_result.scalar_one_or_none()
+        if not incident_with_relations:
+            return
+        
+        category_display = self._get_category_display(incident_with_relations.category)
+        incident_number = incident_with_relations.custom_number or str(incident_with_relations.id)
+        object_name = incident_with_relations.object.name if incident_with_relations.object else "Не указан"
+        employee_name = (
+            f"{incident_with_relations.employee.first_name} {incident_with_relations.employee.last_name}".strip()
+            if incident_with_relations.employee
+            else "Не указан"
+        )
+        cancelled_date = datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')
+        cancellation_reason_display = self._get_cancellation_reason_display(cancellation_reason)
+        
+        template_vars = {
+            "incident_number": incident_number,
+            "cancellation_reason": cancellation_reason_display,
+            "category": category_display,
+            "object_name": object_name,
+            "employee_name": employee_name,
+            "cancelled_date": cancelled_date
+        }
+        
+        notification_service = NotificationService()
+        
+        # Уведомляем владельца
+        if incident_with_relations.owner:
+            await self._send_incident_notification(
+                notification_service,
+                NotificationType.INCIDENT_CANCELLED,
+                incident_with_relations.owner.id,
+                template_vars,
+                {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                NotificationPriority.NORMAL
+            )
+        
+        # Уведомляем сотрудника
+        if incident_with_relations.employee and incident_with_relations.employee.id != incident_with_relations.owner.id:
+            await self._send_incident_notification(
+                notification_service,
+                NotificationType.INCIDENT_CANCELLED,
+                incident_with_relations.employee.id,
+                template_vars,
+                {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                NotificationPriority.NORMAL
+            )
+        
+        # Уведомляем управляющих
+        if incident_with_relations.object:
+            managers = await self._get_managers_for_object(incident_with_relations.object_id)
+            for manager_id in managers:
+                if manager_id != incident_with_relations.owner.id and manager_id != (incident_with_relations.employee_id or 0):
+                    await self._send_incident_notification(
+                        notification_service,
+                        NotificationType.INCIDENT_CANCELLED,
+                        manager_id,
+                        template_vars,
+                        {"incident_id": incident_with_relations.id, "object_id": incident_with_relations.object_id},
+                        NotificationPriority.NORMAL
+                    )
+    
+    async def _send_incident_notification(
+        self,
+        notification_service: "NotificationService",
+        notif_type: "NotificationType",
+        user_id: int,
+        template_vars: Dict[str, str],
+        data: Dict[str, Any],
+        priority: "NotificationPriority"
+    ) -> None:
+        """Отправить уведомление об инциденте с учетом настроек пользователя."""
+        from shared.templates.notifications.base_templates import NotificationTemplateManager
+        from domain.entities.notification import NotificationChannel, NotificationStatus
+        from domain.entities.user import User
+        from core.celery.tasks.notification_tasks import send_notification_now
+        
+        # Проверяем настройки пользователя
+        user_result = await self.session.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            return
+        
+        prefs = user.notification_preferences or {}
+        type_code = notif_type.value
+        type_prefs = prefs.get(type_code, {})
+        telegram_enabled = type_prefs.get("telegram", True) if type_code in prefs else True
+        inapp_enabled = type_prefs.get("inapp", True) if type_code in prefs else True
+        
+        if not telegram_enabled and not inapp_enabled:
+            logger.debug(f"Incident notifications disabled for user {user_id}, type {type_code}")
+            return
+        
+        # Отправляем Telegram уведомление
+        if telegram_enabled:
+            rendered_tg = NotificationTemplateManager.render(notif_type, NotificationChannel.TELEGRAM, template_vars)
+            notification_tg = await notification_service.create_notification(
+                user_id=user_id,
+                type=notif_type,
+                channel=NotificationChannel.TELEGRAM,
+                title=rendered_tg["title"],
+                message=rendered_tg["message"],
+                data=data,
+                priority=priority,
+                scheduled_at=None
+            )
+            
+            if notification_tg and hasattr(notification_tg, 'id') and notification_tg.id:
+                try:
+                    send_notification_now.apply_async(
+                        args=[notification_tg.id],
+                        queue="notifications"
+                    )
+                    logger.debug(
+                        "Enqueued incident Telegram notification for sending",
+                        notification_id=notification_tg.id,
+                        user_id=user_id,
+                        notification_type=notif_type.value,
+                    )
+                except Exception as send_exc:
+                    logger.warning(
+                        "Failed to enqueue incident Telegram notification",
+                        notification_id=notification_tg.id if notification_tg else None,
+                        error=str(send_exc),
+                    )
+        
+        # Отправляем In-App уведомление
+        if inapp_enabled:
+            rendered_inapp = NotificationTemplateManager.render(notif_type, NotificationChannel.IN_APP, template_vars)
+            await notification_service.create_notification(
+                user_id=user_id,
+                type=notif_type,
+                channel=NotificationChannel.IN_APP,
+                title=rendered_inapp["title"],
+                message=rendered_inapp["message"],
+                data=data,
+                priority=priority,
+                scheduled_at=None
+            )
+    
+    async def _get_managers_for_object(self, object_id: Optional[int]) -> List[int]:
+        """Получить список user_id управляющих, имеющих доступ к объекту."""
+        if not object_id:
+            return []
+        
+        try:
+            from shared.services.manager_permission_service import ManagerPermissionService
+            permission_service = ManagerPermissionService(self.session)
+            permissions = await permission_service.get_object_permissions(object_id)
+            
+            manager_user_ids: List[int] = []
+            for permission in permissions:
+                if not permission.has_any_permission():
+                    continue
+                if not permission.contract or not permission.contract.is_active:
+                    continue
+                manager_user_ids.append(permission.contract.employee_id)
+            
+            return list(set(manager_user_ids))
+        except Exception as exc:
+            logger.error(
+                "Failed to get managers for object",
+                object_id=object_id,
+                error=str(exc),
+            )
+            return []
+    
+    def _get_category_display(self, category: str) -> str:
+        """Получить отображаемое название категории."""
+        category_map = {
+            "late_arrival": "Опоздание",
+            "task_non_completion": "Невыполнение задачи",
+            "damage": "Повреждение",
+            "violation": "Нарушение"
+        }
+        return category_map.get(category, category)
+    
+    def _get_severity_display(self, severity: Optional[str]) -> str:
+        """Получить отображаемое название критичности."""
+        if not severity:
+            return "Средняя"
+        severity_map = {
+            "low": "Низкая",
+            "medium": "Средняя",
+            "high": "Высокая",
+            "critical": "Критично"
+        }
+        return severity_map.get(severity, severity)
+    
+    def _get_cancellation_reason_display(self, reason: str) -> str:
+        """Получить отображаемое название причины отмены."""
+        reason_map = {
+            "duplicate": "Ошибочно заведен (дубль)",
+            "not_confirmed": "Инцидент не подтвердился",
+            "owner_decision": "Решение владельца"
+        }
+        return reason_map.get(reason, reason)
 

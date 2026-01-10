@@ -577,7 +577,8 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
         "payments": "Платежи",
         "system": "Системные",
         "tasks": "Задачи",
-        "applications": "Заявки"
+        "applications": "Заявки",
+        "incidents": "Инциденты"
     }
     
     # Формирование данных для шаблона
@@ -589,7 +590,7 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
     }
     
     categories_data = []
-    for category_code in ["shifts", "objects", "contracts", "reviews", "payments", "tasks", "applications", "system"]:
+    for category_code in ["shifts", "objects", "contracts", "reviews", "payments", "tasks", "applications", "incidents", "system"]:
         if category_code not in types_grouped:
             continue
         

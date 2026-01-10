@@ -1,8 +1,9 @@
 """Сервис уведомлений для StaffProBot."""
 
+import json
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select, and_, or_, func, desc
+from sqlalchemy import select, and_, or_, func, desc, text
 from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from core.logging.logger import logger
@@ -63,21 +64,45 @@ class NotificationService:
                     logger.error(f"User {user_id} not found")
                     return None
                 
-                notification = Notification(
-                    user_id=user_id,
-                    type=type,
-                    channel=channel,
-                    status=NotificationStatus.PENDING,
-                    priority=priority,
-                    title=title,
-                    message=message,
-                    data=data or {},
-                    scheduled_at=scheduled_at
-                )
+                # В БД колонки имеют тип enum, но модель использует String
+                # Унифицированный формат: все enum поля используют .value (lowercase строки)
+                # Это соответствует значениям enum в Python (SHIFT_STARTED = "shift_started")
+                # Используем raw SQL с CAST для явного приведения типов при записи в enum колонки
+                type_value = type.value if hasattr(type, 'value') else str(type)
+                channel_value = channel.value if hasattr(channel, 'value') else str(channel)
+                status_value = NotificationStatus.PENDING.value if hasattr(NotificationStatus.PENDING, 'value') else str(NotificationStatus.PENDING)
+                priority_value = priority.value if hasattr(priority, 'value') else str(priority)
                 
-                session.add(notification)
+                # Используем raw SQL для вставки с явным приведением типов (CAST) для enum колонок
+                insert_sql = """
+                    INSERT INTO notifications (user_id, type, channel, status, priority, title, message, data, scheduled_at)
+                    VALUES (:user_id, CAST(:type AS notificationtype), CAST(:channel AS notificationchannel),
+                            CAST(:status AS notificationstatus), CAST(:priority AS notificationpriority),
+                            :title, :message, CAST(:data AS jsonb), :scheduled_at)
+                    RETURNING id
+                """
+                
+                params = {
+                    "user_id": user_id,
+                    "type": type_value,  # lowercase значение (shift_started)
+                    "channel": channel_value,  # lowercase значение (telegram)
+                    "status": status_value,  # lowercase значение (pending)
+                    "priority": priority_value,  # lowercase значение (normal)
+                    "title": title,
+                    "message": message,
+                    "data": json.dumps(data) if data else None,
+                    "scheduled_at": scheduled_at
+                }
+                
+                result = await session.execute(text(insert_sql), params)
+                notification_id = result.scalar_one()
+                
+                # Загружаем созданное уведомление обратно через ORM
+                notification_query = select(Notification).where(Notification.id == notification_id)
+                notification_result = await session.execute(notification_query)
+                notification = notification_result.scalar_one()
+                
                 await session.commit()
-                await session.refresh(notification)
                 
                 # Инвалидируем кэш пользователя
                 await self._invalidate_user_cache(user_id)
@@ -128,37 +153,37 @@ class NotificationService:
                 
                 # Применяем фильтры
                 if status:
-                    # В БД хранятся имена enum (READ, SENT), а не значения
-                    # Используем cast для сравнения с именем enum
+                    # В БД хранятся значения enum в lowercase (read, sent, pending)
+                    # Используем cast для сравнения со значением enum
                     from sqlalchemy import cast, String
                     query = query.where(
-                        cast(Notification.status, String) == status.name
+                        cast(Notification.status, String) == status.value
                     )
                 
                 if type:
                     query = query.where(Notification.type == type)
                 
                 if channel:
-                    # В БД хранятся имена enum (IN_APP, TELEGRAM), а не значения
-                    # Используем cast для сравнения с именем enum
+                    # В БД хранятся значения enum в lowercase (in_app, telegram)
+                    # Используем cast для сравнения со значением enum
                     from sqlalchemy import cast, String
                     query = query.where(
-                        cast(Notification.channel, String) == channel.name
+                        cast(Notification.channel, String) == channel.value
                     )
                 
                 if not include_read:
-                    # Показываем все уведомления, кроме прочитанных (READ)
-                    # В БД хранятся имена enum (READ, SENT), а не значения
+                    # Показываем все уведомления, кроме прочитанных (read)
+                    # В БД хранятся значения enum в lowercase (read, sent, pending)
                     from sqlalchemy import cast, String
                     query = query.where(
-                        cast(Notification.status, String) != NotificationStatus.READ.name
+                        cast(Notification.status, String) != NotificationStatus.READ.value
                     )
                 
                 # Сортировка
                 # Используем cast для правильного сравнения статуса при сортировке
                 from sqlalchemy import case
                 status_is_unread = case(
-                    (cast(Notification.status, String) != NotificationStatus.READ.name, 1),
+                    (cast(Notification.status, String) != NotificationStatus.READ.value, 1),
                     else_=0
                 )
                 
@@ -209,14 +234,14 @@ class NotificationService:
                 from sqlalchemy import cast, String
                 conditions = [
                     Notification.user_id == user_id,
-                    # В БД хранятся имена enum (READ, SENT), а не значения
-                    cast(Notification.status, String) != NotificationStatus.READ.name
+                    # В БД хранятся значения enum в lowercase (read, sent, pending)
+                    cast(Notification.status, String) != NotificationStatus.READ.value
                 ]
                 
                 if channel:
-                    # В БД хранятся имена enum (IN_APP, TELEGRAM), а не значения
+                    # В БД хранятся значения enum в lowercase (in_app, telegram)
                     conditions.append(
-                        cast(Notification.channel, String) == channel.name
+                        cast(Notification.channel, String) == channel.value
                     )
                 
                 query = select(func.count(Notification.id)).where(and_(*conditions))
@@ -269,7 +294,7 @@ class NotificationService:
                     update(Notification)
                     .where(Notification.id == notification_id)
                     .values(
-                        status=NotificationStatus.READ.name,  # В БД хранятся имена enum
+                        status=NotificationStatus.READ.value,  # В БД хранятся значения enum в lowercase
                         read_at=now
                     )
                 )
@@ -306,24 +331,24 @@ class NotificationService:
                 from sqlalchemy import cast, String, func
                 conditions = [
                     Notification.user_id == user_id,
-                    # В БД хранятся имена enum (READ, SENT), а не значения
-                    cast(Notification.status, String) != NotificationStatus.READ.name
+                    # В БД хранятся значения enum в lowercase (read, sent, pending)
+                    cast(Notification.status, String) != NotificationStatus.READ.value
                 ]
                 
                 if channel:
-                    # В БД хранятся имена enum (IN_APP, TELEGRAM), а не значения
+                    # В БД хранятся значения enum в lowercase (in_app, telegram)
                     conditions.append(
-                        cast(Notification.channel, String) == channel.name
+                        cast(Notification.channel, String) == channel.value
                     )
                 
                 # Сначала проверим, сколько уведомлений найдено
                 count_query = select(func.count(Notification.id)).where(and_(*conditions))
                 count_result = await session.execute(count_query)
                 found_count = count_result.scalar_one()
-                logger.info(f"mark_all_as_read: found {found_count} notifications for user {user_id}, channel={channel.name if channel else None}")
+                logger.info(f"mark_all_as_read: found {found_count} notifications for user {user_id}, channel={channel.value if channel else None}")
                 
                 if found_count == 0:
-                    logger.warning(f"mark_all_as_read: no notifications found for user {user_id}, channel={channel.name if channel else None}")
+                    logger.warning(f"mark_all_as_read: no notifications found for user {user_id}, channel={channel.value if channel else None}")
                     return 0
                 
                 # Используем SQL UPDATE для массового обновления через text для надежности
@@ -339,13 +364,13 @@ class NotificationService:
                             read_at = :read_at
                         WHERE user_id = :user_id
                           AND CAST(channel AS VARCHAR) = :channel
-                          AND CAST(status AS VARCHAR) != 'READ'
+                          AND CAST(status AS VARCHAR) != 'read'
                     """)
                     params = {
-                        "status": NotificationStatus.READ.name,
+                        "status": NotificationStatus.READ.value,
                         "read_at": now,
                         "user_id": user_id,
-                        "channel": channel.name
+                        "channel": channel.value
                     }
                 else:
                     sql = text("""
@@ -353,10 +378,10 @@ class NotificationService:
                         SET status = CAST(:status AS notificationstatus), 
                             read_at = :read_at
                         WHERE user_id = :user_id
-                          AND CAST(status AS VARCHAR) != 'READ'
+                          AND CAST(status AS VARCHAR) != 'read'
                     """)
                     params = {
-                        "status": NotificationStatus.READ.name,
+                        "status": NotificationStatus.READ.value,
                         "read_at": now,
                         "user_id": user_id
                     }
@@ -366,7 +391,7 @@ class NotificationService:
                 
                 await session.commit()
                 
-                logger.info(f"mark_all_as_read: updated {count} notifications for user {user_id}, channel={channel.name if channel else None}")
+                logger.info(f"mark_all_as_read: updated {count} notifications for user {user_id}, channel={channel.value if channel else None}")
                 
                 # Инвалидируем кэш
                 await self._invalidate_user_cache(user_id)
@@ -438,11 +463,11 @@ class NotificationService:
             
             async with get_async_session() as session:
                 from sqlalchemy import cast, String
-                # В БД enum хранится как имя (PENDING), а не значение (pending)
+                # В БД enum хранится как значение в lowercase (pending)
                 # Используем cast для правильного сравнения enum с VARCHAR
                 query = select(Notification).where(
                     and_(
-                        cast(Notification.status, String) == NotificationStatus.PENDING.name,
+                        cast(Notification.status, String) == NotificationStatus.PENDING.value,
                         Notification.scheduled_at.isnot(None),
                         Notification.scheduled_at <= before
                     )
@@ -562,12 +587,12 @@ class NotificationService:
                 # Обновляем статус
                 # Используем SQL UPDATE с приведением типа для enum в БД
                 from sqlalchemy import text
-                status_name = status.name if isinstance(status, NotificationStatus) else status
+                status_value = status.value if isinstance(status, NotificationStatus) else status
                 now = datetime.now(timezone.utc)
                 
                 # Формируем SQL с правильным синтаксисом для asyncpg
                 sql = text(f"UPDATE notifications SET status = CAST(:status AS notificationstatus) WHERE id = :id")
-                await session.execute(sql, {"status": status_name, "id": notification_id})
+                await session.execute(sql, {"status": status_value, "id": notification_id})
                 
                 if status == NotificationStatus.SENT:
                     await session.execute(

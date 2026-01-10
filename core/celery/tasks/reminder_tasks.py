@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from core.celery.celery_app import celery_app
 from core.logging.logger import logger
 from core.database.session import get_async_session
+from core.utils.timezone_helper import timezone_helper
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.object import Object
 from domain.entities.shift import Shift
@@ -20,7 +21,6 @@ from domain.entities.notification import (
     NotificationStatus,
     NotificationType,
 )
-from shared.services.shift_notification_service import ShiftNotificationService
 
 
 class ReminderTask(Task):
@@ -211,8 +211,9 @@ async def _check_shifts_did_not_start_async() -> Dict[str, Any]:
                 now=now.isoformat()
             )
             
-            from shared.services.shift_notification_service import ShiftNotificationService
-            notification_service = ShiftNotificationService()
+            from shared.services.notification_service import NotificationService
+            from shared.templates.notifications.base_templates import NotificationTemplateManager
+            notification_service = NotificationService()
             
             for schedule in schedules:
                 try:
@@ -223,27 +224,105 @@ async def _check_shifts_did_not_start_async() -> Dict[str, Any]:
                         continue
                     
                     # Проверяем, не создано ли уже уведомление для этой смены
-                    # Проверяем существование уведомления
                     notification_exists = await _check_notification_exists(
                         session,
                         schedule.object.owner_id,
                         NotificationType.SHIFT_DID_NOT_START.value,
-                        {"shift_schedule_id": schedule.id}
+                        {"shift_schedule_id": str(schedule.id)}
                     )
                     
                     if notification_exists:
                         stats["skipped"] += 1
                         continue
                     
-                    # Создаем уведомление
-                    await notification_service.notify_shift_did_not_start(schedule.id)
+                    # Получаем настройки владельца
+                    owner = schedule.object.owner
+                    prefs = owner.notification_preferences or {}
+                    type_code = NotificationType.SHIFT_DID_NOT_START.value
+                    type_prefs = prefs.get(type_code, {})
+                    telegram_enabled = type_prefs.get("telegram", True) if type_code in prefs else True
+                    inapp_enabled = type_prefs.get("inapp", True) if type_code in prefs else True
+                    
+                    if not telegram_enabled and not inapp_enabled:
+                        stats["skipped"] += 1
+                        continue
+                    
+                    # Формируем данные для шаблона
+                    employee_name = f"{schedule.user.first_name} {schedule.user.last_name}".strip() if schedule.user else "Неизвестный сотрудник"
+                    shift_window = f"{timezone_helper.format_local_time(schedule.planned_start, schedule.object.timezone, '%d.%m.%Y %H:%M')} - {timezone_helper.format_local_time(schedule.planned_end, schedule.object.timezone, '%H:%M')}"
+                    
+                    template_vars = {
+                        "shift_schedule_id": str(schedule.id),
+                        "object_id": str(schedule.object_id),
+                        "object_name": schedule.object.name,
+                        "employee_id": str(schedule.user_id) if schedule.user else None,
+                        "employee_name": employee_name,
+                        "shift_time": shift_window,
+                    }
+                    
+                    # Создаем уведомления напрямую через существующую сессию
+                    if telegram_enabled:
+                        rendered_tg = NotificationTemplateManager.render(
+                            NotificationType.SHIFT_DID_NOT_START, 
+                            NotificationChannel.TELEGRAM, 
+                            template_vars
+                        )
+                        notification_tg = await notification_service.create_notification(
+                            user_id=owner.id,
+                            type=NotificationType.SHIFT_DID_NOT_START,
+                            channel=NotificationChannel.TELEGRAM,
+                            title=rendered_tg["title"],
+                            message=rendered_tg["message"],
+                            data=template_vars,
+                            priority=NotificationPriority.HIGH
+                        )
+                        
+                        # Отправляем Telegram уведомление через Celery
+                        if notification_tg and hasattr(notification_tg, 'id') and notification_tg.id:
+                            try:
+                                from core.celery.tasks.notification_tasks import send_notification_now
+                                send_notification_now.apply_async(
+                                    args=[notification_tg.id],
+                                    queue="notifications"
+                                )
+                                logger.debug(
+                                    "Enqueued shift_did_not_start Telegram notification for sending",
+                                    notification_id=notification_tg.id,
+                                    user_id=owner.id,
+                                    schedule_id=schedule.id,
+                                )
+                            except Exception as send_exc:
+                                logger.warning(
+                                    "Failed to enqueue shift_did_not_start Telegram notification",
+                                    notification_id=notification_tg.id if notification_tg else None,
+                                    error=str(send_exc),
+                                )
+                    
+                    if inapp_enabled:
+                        rendered_inapp = NotificationTemplateManager.render(
+                            NotificationType.SHIFT_DID_NOT_START, 
+                            NotificationChannel.IN_APP, 
+                            template_vars
+                        )
+                        await notification_service.create_notification(
+                            user_id=owner.id,
+                            type=NotificationType.SHIFT_DID_NOT_START,
+                            channel=NotificationChannel.IN_APP,
+                            title=rendered_inapp["title"],
+                            message=rendered_inapp["message"],
+                            data=template_vars,
+                            priority=NotificationPriority.HIGH
+                        )
+                    
+                    await session.commit()
                     stats["notifications_created"] += 1
                     
                 except Exception as e:
                     logger.error(
                         f"Error processing shift_schedule {schedule.id}: {e}",
                         schedule_id=schedule.id,
-                        error=str(e)
+                        error=str(e),
+                        exc_info=True
                     )
                     stats["errors"] += 1
                     continue
@@ -528,25 +607,26 @@ async def _check_object_openings_async() -> Dict[str, Any]:
 
 async def _check_notification_exists(session, user_id: int, notif_type_value: str, data_match: dict) -> bool:
     """Проверка существования уведомления с заданными параметрами."""
-    from sqlalchemy import func, cast, String, text
-    # Для JSONB полей используем правильный синтаксис PostgreSQL через raw SQL
-    conditions = [
-        Notification.user_id == user_id,
-        cast(Notification.type, String) == notif_type_value
-    ]
+    from sqlalchemy import text
     
-    # Добавляем условия для каждого ключа в data_match через JSONB оператор ->>
+    # Для JSONB полей используем полностью raw SQL запрос для правильной работы с параметрами
+    # Формируем SQL запрос с параметрами
+    conditions = ["user_id = :user_id", "CAST(type AS VARCHAR) = :type"]
+    params = {"user_id": user_id, "type": notif_type_value}
+    
+    # Для каждого ключа в data_match добавляем условие через JSONB оператор ->>
     for key, value in data_match.items():
-        # Используем JSONB оператор ->> для доступа к полю как тексту
-        conditions.append(
-            text(f"notifications.data->>'{key}' = :{key}")
-        )
+        param_name = f"data_{key}"
+        conditions.append(f"data->>'{key}' = :{param_name}")
+        params[param_name] = str(value)
     
-    # Формируем параметры для подстановки
-    params = {key: str(value) for key, value in data_match.items()}
+    # Формируем полный SQL запрос
+    sql_query = text(
+        f"SELECT COUNT(*) FROM notifications WHERE {' AND '.join(conditions)}"
+    )
     
-    query = select(func.count(Notification.id)).where(and_(*conditions))
-    result = await session.execute(query, params)
+    # Выполняем запрос с параметрами
+    result = await session.execute(sql_query, params)
     count = result.scalar_one()
     
     logger.debug(
@@ -604,16 +684,18 @@ async def _create_object_notification(
         # Используем ORM, как в notification_service.py
         notification_tg = Notification(
             user_id=current_owner.id,
-            type=notif_type.value,  # Значение enum (object_no_shifts_today) - модель Notification использует String
-            channel=NotificationChannel.TELEGRAM.value,  # Значение enum (telegram)
-            status=NotificationStatus.PENDING.value,  # Значение enum (pending)
-            priority=priority_enum.value,  # Значение enum (high или normal)
+            type=notif_type.value,  # Значение enum (object_no_shifts_today) - унифицированный формат: все .value
+            channel=NotificationChannel.TELEGRAM.value,  # Значение enum (telegram) - унифицированный формат
+            status=NotificationStatus.PENDING.value,  # Значение enum (pending) - унифицированный формат
+            priority=priority_enum.value,  # Значение enum (high или normal) - унифицированный формат
             title=rendered_tg["title"],
             message=rendered_tg["message"],
             data={**template_vars, "object_id": obj_id},
             scheduled_at=scheduled_at
         )
         session.add(notification_tg)
+        # Обновляем, чтобы получить ID уведомления
+        await session.flush()
     
     # Создать In-App уведомление
     if inapp_enabled:
@@ -621,10 +703,10 @@ async def _create_object_notification(
         # Используем ORM, как в notification_service.py
         notification_inapp = Notification(
             user_id=current_owner.id,
-            type=notif_type.value,  # Значение enum (object_no_shifts_today)
-            channel=NotificationChannel.IN_APP.value,  # Значение enum (in_app)
-            status=NotificationStatus.PENDING.value,  # Значение enum (pending)
-            priority=priority_enum.value,  # Значение enum (high или normal)
+            type=notif_type.value,  # Значение enum (object_no_shifts_today) - унифицированный формат: все .value
+            channel=NotificationChannel.IN_APP.value,  # Значение enum (in_app) - унифицированный формат
+            status=NotificationStatus.PENDING.value,  # Значение enum (pending) - унифицированный формат
+            priority=priority_enum.value,  # Значение enum (high или normal) - унифицированный формат
             title=rendered_inapp["title"],
             message=rendered_inapp["message"],
             data={**template_vars},  # Включаем object_id и date в data для проверки дубликатов
@@ -633,6 +715,29 @@ async def _create_object_notification(
         session.add(notification_inapp)
     
     await session.commit()
+    
+    # Отправляем Telegram уведомление через Celery после коммита
+    if telegram_enabled and notification_tg and notification_tg.id:
+        try:
+            from core.celery.tasks.notification_tasks import send_notification_now
+            send_notification_now.apply_async(
+                args=[notification_tg.id],
+                queue="notifications"
+            )
+            logger.debug(
+                "Enqueued object notification for sending",
+                notification_id=notification_tg.id,
+                user_id=current_owner.id,
+                notification_type=notif_type.value,
+                channel=NotificationChannel.TELEGRAM.value,
+            )
+        except Exception as send_exc:
+            # Не критично, если не удалось поставить в очередь - уведомление уже в БД
+            logger.warning(
+                "Failed to enqueue object notification for sending",
+                notification_id=notification_tg.id if notification_tg else None,
+                error=str(send_exc),
+            )
     
     logger.info(
         f"Created {notif_type.value} notification for owner {current_owner.id}",

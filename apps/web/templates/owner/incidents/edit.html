@@ -4,10 +4,10 @@
 <div class="container mt-4">
   <h3>Инцидент {{ incident.custom_number or ('#' ~ incident.id) }}</h3>
   
-  {% if incident.status in ['resolved', 'rejected'] %}
+  {% if incident.status in ['resolved', 'rejected', 'cancelled'] %}
   <div class="alert alert-warning" role="alert">
-    <i class="bi bi-exclamation-triangle"></i> Нельзя редактировать инцидент со статусом "{{ 'Решен' if incident.status == 'resolved' else 'Отклонен' }}".
-    <a href="/owner/incidents" class="alert-link">Вернуться к списку инцидентов</a>
+    <i class="bi bi-exclamation-triangle"></i> Нельзя редактировать инцидент со статусом "{{ 'Решен' if incident.status == 'resolved' else ('Отклонен' if incident.status == 'rejected' else 'Отменен') }}".
+    <a href="{{ back_url if back_url else '/owner/incidents' }}" class="alert-link" id="backToListLink">Вернуться к списку инцидентов</a>
   </div>
   {% else %}
   <form method="post" action="/owner/incidents/{{ incident.id }}/edit">
@@ -70,12 +70,107 @@
         <textarea name="notes" class="form-control" rows="3">{{ incident.notes or '' }}</textarea>
       </div>
     </div>
+    <input type="hidden" name="return_url" value="{{ back_url }}">
     <div class="mt-3">
-      <a href="/owner/incidents" class="btn btn-secondary">Отмена</a>
+      <a href="{{ back_url }}" class="btn btn-secondary" id="backToListBtn">Вернуться к списку</a>
+      {% if incident.status not in ['cancelled', 'resolved', 'rejected'] %}
+        <button type="button" class="btn btn-outline-danger" onclick="showCancelModal({{ incident.id }}, '{{ incident.custom_number or ('#' ~ incident.id) }}')">
+          <i class="bi bi-x-circle"></i> Отменить инцидент
+        </button>
+      {% endif %}
       <button type="submit" class="btn btn-primary">Сохранить</button>
     </div>
   </form>
   {% endif %}
+  
+  <!-- Модальное окно отмены инцидента -->
+  <div class="modal fade" id="cancelIncidentModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="post" id="cancelIncidentForm">
+          <input type="hidden" name="cancellation_reason" id="cancelReasonInput">
+          <input type="hidden" name="return_url" id="cancelReturnUrlInput">
+          <div class="modal-header bg-warning">
+            <h5 class="modal-title">Отменить инцидент <span id="cancelIncidentNumber"></span>?</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-3">Выберите причину отмены инцидента:</p>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="reason_radio" id="reason_duplicate" value="duplicate" checked>
+              <label class="form-check-label" for="reason_duplicate">
+                Ошибочно заведен (дубль)
+              </label>
+            </div>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="reason_radio" id="reason_not_confirmed" value="not_confirmed">
+              <label class="form-check-label" for="reason_not_confirmed">
+                Инцидент не подтвердился
+              </label>
+            </div>
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="radio" name="reason_radio" id="reason_owner_decision" value="owner_decision">
+              <label class="form-check-label" for="reason_owner_decision">
+                Решение владельца
+              </label>
+            </div>
+            <div class="mb-3">
+              <label for="cancelNotes" class="form-label">Комментарий (необязательно):</label>
+              <textarea class="form-control" id="cancelNotes" name="notes" rows="3" placeholder="Дополнительная информация об отмене"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+            <button type="submit" class="btn btn-warning">Отменить инцидент</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  function showCancelModal(incidentId, incidentNumber) {
+  document.getElementById('cancelIncidentNumber').textContent = incidentNumber;
+  const backBtn = document.getElementById('backToListBtn');
+  const backUrl = backBtn ? backBtn.href : '{{ back_url if back_url else "/owner/incidents" }}';
+  const cancelForm = document.getElementById('cancelIncidentForm');
+  cancelForm.action = `/owner/incidents/${incidentId}/cancel`;
+  document.getElementById('cancelReturnUrlInput').value = backUrl;
+  
+  // Сброс формы
+  document.getElementById('cancelNotes').value = '';
+  document.getElementById('reason_duplicate').checked = true;
+  document.getElementById('reason_not_confirmed').checked = false;
+  document.getElementById('reason_owner_decision').checked = false;
+  
+  // Обновление скрытого поля при изменении радиокнопок
+  document.querySelectorAll('input[name="reason_radio"]').forEach(radio => {
+    radio.removeEventListener('change', updateCancelReason);
+    radio.addEventListener('change', updateCancelReason);
+  });
+  document.getElementById('cancelReasonInput').value = 'duplicate';
+  
+  new bootstrap.Modal(document.getElementById('cancelIncidentModal')).show();
+}
+
+function updateCancelReason() {
+  const selectedReason = document.querySelector('input[name="reason_radio"]:checked');
+  if (selectedReason) {
+    document.getElementById('cancelReasonInput').value = selectedReason.value;
+  }
+}
+
+// Обработка отправки формы отмены
+document.getElementById('cancelIncidentForm')?.addEventListener('submit', function(e) {
+  const selectedReason = document.querySelector('input[name="reason_radio"]:checked');
+  if (!selectedReason) {
+    e.preventDefault();
+    alert('Пожалуйста, выберите причину отмены');
+    return false;
+  }
+  document.getElementById('cancelReasonInput').value = selectedReason.value;
+});
+  </script>
 
   <hr class="my-4">
   <h5>История изменений</h5>

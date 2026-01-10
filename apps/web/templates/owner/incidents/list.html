@@ -5,6 +5,19 @@
   <div class="d-flex justify-content-between mb-3 align-items-center">
     <h2>Инциденты</h2>
     <div class="d-flex gap-2">
+      <div class="btn-group">
+        <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-download"></i> Экспорт
+        </button>
+        <ul class="dropdown-menu">
+          <li><a class="dropdown-item" href="#" onclick="exportIncidents('excel'); return false;">
+            <i class="bi bi-file-earmark-spreadsheet"></i> Excel (.xlsx)
+          </a></li>
+          <li><a class="dropdown-item" href="#" onclick="exportIncidents('pdf'); return false;">
+            <i class="bi bi-file-earmark-pdf"></i> PDF (.pdf)
+          </a></li>
+        </ul>
+      </div>
       <a href="/owner/incidents/categories" class="btn btn-outline-secondary">
         <i class="bi bi-tags"></i> Категории
       </a>
@@ -15,25 +28,138 @@
   </div>
 
   <!-- Фильтры -->
-  <div class="mb-3">
-    <a href="/owner/incidents" class="btn btn-sm {{ 'btn-primary' if not status_filter else 'btn-outline-primary' }}">Все</a>
-    <a href="/owner/incidents?status=new" class="btn btn-sm {{ 'btn-primary' if status_filter == 'new' else 'btn-outline-primary' }}">Новые</a>
-    <a href="/owner/incidents?status=in_review" class="btn btn-sm {{ 'btn-primary' if status_filter == 'in_review' else 'btn-outline-primary' }}">На рассмотрении</a>
-    <a href="/owner/incidents?status=resolved" class="btn btn-sm {{ 'btn-primary' if status_filter == 'resolved' else 'btn-outline-primary' }}">Решённые</a>
-    <a href="/owner/incidents?status=rejected" class="btn btn-sm {{ 'btn-primary' if status_filter == 'rejected' else 'btn-outline-primary' }}">Отклонённые</a>
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-3" id="filtersForm">
+        <div class="col-md-12">
+          <label class="form-label fw-bold">Статус</label>
+          <div class="btn-group flex-wrap" role="group">
+            {% set statuses_list = (statuses_filter or '').split(',') if statuses_filter else [] %}
+            {% set has_status_filter = statuses_filter or status_filter %}
+            <input type="checkbox" class="btn-check" id="status_all" name="statuses" value="all" {% if not has_status_filter %}checked{% endif %} onchange="handleStatusAllChange()">
+            <label class="btn btn-sm {{ 'btn-primary' if not has_status_filter else 'btn-outline-primary' }}" for="status_all">Все</label>
+            
+            <input type="checkbox" class="btn-check" id="status_new" name="statuses" value="new" {% if 'new' in statuses_list or status_filter == 'new' %}checked{% endif %} onchange="handleStatusChange()">
+            <label class="btn btn-sm {{ 'btn-primary' if ('new' in statuses_list or status_filter == 'new') else 'btn-outline-primary' }}" for="status_new">Новые</label>
+            
+            <input type="checkbox" class="btn-check" id="status_in_review" name="statuses" value="in_review" {% if 'in_review' in statuses_list or status_filter == 'in_review' %}checked{% endif %} onchange="handleStatusChange()">
+            <label class="btn btn-sm {{ 'btn-primary' if ('in_review' in statuses_list or status_filter == 'in_review') else 'btn-outline-primary' }}" for="status_in_review">На рассмотрении</label>
+            
+            <input type="checkbox" class="btn-check" id="status_resolved" name="statuses" value="resolved" {% if 'resolved' in statuses_list or status_filter == 'resolved' %}checked{% endif %} onchange="handleStatusChange()">
+            <label class="btn btn-sm {{ 'btn-primary' if ('resolved' in statuses_list or status_filter == 'resolved') else 'btn-outline-primary' }}" for="status_resolved">Решённые</label>
+            
+            <input type="checkbox" class="btn-check" id="status_rejected" name="statuses" value="rejected" {% if 'rejected' in statuses_list or status_filter == 'rejected' %}checked{% endif %} onchange="handleStatusChange()">
+            <label class="btn btn-sm {{ 'btn-primary' if ('rejected' in statuses_list or status_filter == 'rejected') else 'btn-outline-primary' }}" for="status_rejected">Отклонённые</label>
+            
+            <input type="checkbox" class="btn-check" id="status_cancelled" name="statuses" value="cancelled" {% if 'cancelled' in statuses_list or status_filter == 'cancelled' %}checked{% endif %} onchange="handleStatusChange()">
+            <label class="btn btn-sm {{ 'btn-primary' if ('cancelled' in statuses_list or status_filter == 'cancelled') else 'btn-outline-primary' }}" for="status_cancelled">Отменённые</label>
+          </div>
+        </div>
+        
+        <div class="col-md-3">
+          <label class="form-label">Категория</label>
+          <select class="form-select form-select-sm" name="category" onchange="applyFilters()">
+            <option value="">Все категории</option>
+            {% for c in categories %}
+              <option value="{{ c.name }}" {% if category_filter == c.name %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="col-md-3">
+          <label class="form-label">Объект</label>
+          <select class="form-select form-select-sm" name="object_id" onchange="applyFilters()">
+            <option value="">Все объекты</option>
+            {% for o in objects %}
+              <option value="{{ o.id }}" {% if object_id_filter == o.id %}selected{% endif %}>{{ o.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="col-md-3">
+          <label class="form-label">Сотрудник</label>
+          <select class="form-select form-select-sm" name="employee_id" onchange="applyFilters()">
+            <option value="">Все сотрудники</option>
+            {% for e in employees %}
+              <option value="{{ e.id }}" {% if employee_id_filter == e.id %}selected{% endif %}>{{ e.last_name }} {{ e.first_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearFilters()">Очистить фильтры</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="text-muted small">
+      Показано {{ incidents|length }} из {{ total_count }}
+    </div>
+    <div>
+      <label class="form-label small me-2">На странице:</label>
+      <select class="form-select form-select-sm d-inline-block" style="width: auto;" onchange="changePerPage(this.value)">
+        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+      </select>
+    </div>
   </div>
   
   <table class="table table-sm table-hover">
     <thead>
       <tr>
-        <th>Номер</th>
-        <th>Дата</th>
-        <th>Категория</th>
-        <th>Критичность</th>
+        <th>
+          <a href="#" onclick="sortTable('number'); return false;" class="text-decoration-none text-dark">
+            Номер
+            {% if sort_by == 'number' %}
+              <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+            {% endif %}
+          </a>
+        </th>
+        <th>
+          <a href="#" onclick="sortTable('custom_date'); return false;" class="text-decoration-none text-dark">
+            Дата
+            {% if sort_by == 'custom_date' %}
+              <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+            {% endif %}
+          </a>
+        </th>
+        <th>
+          <a href="#" onclick="sortTable('category'); return false;" class="text-decoration-none text-dark">
+            Категория
+            {% if sort_by == 'category' %}
+              <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+            {% endif %}
+          </a>
+        </th>
+        <th>
+          <a href="#" onclick="sortTable('severity'); return false;" class="text-decoration-none text-dark">
+            Критичность
+            {% if sort_by == 'severity' %}
+              <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+            {% endif %}
+          </a>
+        </th>
         <th>Объект</th>
         <th>Сотрудник</th>
-        <th>Статус</th>
-        <th>Ущерб</th>
+        <th>
+          <a href="#" onclick="sortTable('status'); return false;" class="text-decoration-none text-dark">
+            Статус
+            {% if sort_by == 'status' %}
+              <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+            {% endif %}
+          </a>
+        </th>
+        <th>
+          <a href="#" onclick="sortTable('damage_amount'); return false;" class="text-decoration-none text-dark">
+            Ущерб
+            {% if sort_by == 'damage_amount' %}
+              <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+            {% endif %}
+          </a>
+        </th>
         <th>Создал</th>
         <th>Действия</th>
       </tr>
@@ -84,6 +210,8 @@
             <span class="badge bg-success">Решён</span>
           {% elif inc.status == 'rejected' %}
             <span class="badge bg-secondary">Отклонён</span>
+          {% elif inc.status == 'cancelled' %}
+            <span class="badge bg-dark">Отменён</span>
           {% endif %}
         </td>
         <td>{{ '{:,.2f}'.format(inc.damage_amount).replace(',', ' ') if inc.damage_amount is not none else '—' }}</td>
@@ -95,24 +223,24 @@
           {% endif %}
         </td>
         <td>
-          <a href="/owner/incidents/{{ inc.id }}/edit" class="btn btn-sm btn-outline-primary me-1" title="Редактировать">
+          <a href="/owner/incidents/{{ inc.id }}/edit?return_url={{ (request.url.path + '?' + request.url.query if request.url.query else request.url.path)|urlencode }}" class="btn btn-sm btn-outline-primary me-1" title="Редактировать">
             <i class="bi bi-pencil"></i>
           </a>
           {% if inc.status == 'new' %}
-            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline">
+            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline" onsubmit="addReturnUrl(this); return true;">
               <input type="hidden" name="new_status" value="in_review">
               <button type="submit" class="btn btn-sm btn-warning" title="Взять на рассмотрение">
                 <i class="fas fa-eye"></i>
               </button>
             </form>
           {% elif inc.status == 'in_review' %}
-            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline">
+            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline" onsubmit="addReturnUrl(this); return true;">
               <input type="hidden" name="new_status" value="resolved">
               <button type="submit" class="btn btn-sm btn-success" title="Решить">
                 <i class="fas fa-check"></i>
               </button>
             </form>
-            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline">
+            <form method="post" action="/owner/incidents/{{ inc.id }}/status" class="d-inline" onsubmit="addReturnUrl(this); return true;">
               <input type="hidden" name="new_status" value="rejected">
               <button type="submit" class="btn btn-sm btn-secondary" title="Отклонить">
                 <i class="fas fa-times"></i>
@@ -120,11 +248,16 @@
             </form>
           {% endif %}
           {% if inc.suggested_adjustments and inc.status != 'rejected' %}
-            <form method="post" action="/owner/incidents/{{ inc.id }}/apply-adjustments" class="d-inline" onsubmit="return confirm('Применить корректировки?')">
+            <form method="post" action="/owner/incidents/{{ inc.id }}/apply-adjustments" class="d-inline" onsubmit="addReturnUrl(this); return confirm('Применить корректировки?')">
               <button type="submit" class="btn btn-sm btn-info" title="Применить корректировки">
                 <i class="fas fa-coins"></i>
               </button>
             </form>
+          {% endif %}
+          {% if inc.status not in ['cancelled', 'resolved', 'rejected'] %}
+            <button type="button" class="btn btn-sm btn-outline-danger" title="Отменить инцидент" onclick="showCancelModal({{ inc.id }}, '{{ inc.custom_number or ('#' ~ inc.id) }}')">
+              <i class="bi bi-x-circle"></i>
+            </button>
           {% endif %}
         </td>
       </tr>
@@ -133,7 +266,380 @@
     {% endfor %}
     </tbody>
   </table>
+  
+  <!-- Пагинация -->
+  {% if total_pages > 1 %}
+  <nav aria-label="Пагинация инцидентов" class="mt-3">
+    <ul class="pagination justify-content-center">
+      <li class="page-item {% if page == 1 %}disabled{% endif %}">
+        <a class="page-link" href="#" onclick="goToPage(1); return false;">Первая</a>
+      </li>
+      <li class="page-item {% if page == 1 %}disabled{% endif %}">
+        <a class="page-link" href="#" onclick="goToPage({{ page - 1 }}); return false;">Назад</a>
+      </li>
+      <li class="page-item active">
+        <span class="page-link">{{ page }} / {{ total_pages }}</span>
+      </li>
+      <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+        <a class="page-link" href="#" onclick="goToPage({{ page + 1 }}); return false;">Вперед</a>
+      </li>
+      <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+        <a class="page-link" href="#" onclick="goToPage({{ total_pages }}); return false;">Последняя</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
 </div>
 
-<!-- Убрано модальное создание; используется отдельная страница -->
+<!-- Модальное окно отмены инцидента -->
+<div class="modal fade" id="cancelIncidentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" id="cancelIncidentForm">
+        <input type="hidden" name="cancellation_reason" id="cancelReasonInput">
+        <input type="hidden" name="return_url" id="cancelReturnUrlInput">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title">Отменить инцидент <span id="cancelIncidentNumber"></span>?</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-3">Выберите причину отмены инцидента:</p>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="reason_radio" id="reason_duplicate" value="duplicate" checked>
+            <label class="form-check-label" for="reason_duplicate">
+              Ошибочно заведен (дубль)
+            </label>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="reason_radio" id="reason_not_confirmed" value="not_confirmed">
+            <label class="form-check-label" for="reason_not_confirmed">
+              Инцидент не подтвердился
+            </label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="radio" name="reason_radio" id="reason_owner_decision" value="owner_decision">
+            <label class="form-check-label" for="reason_owner_decision">
+              Решение владельца
+            </label>
+          </div>
+          <div class="mb-3">
+            <label for="cancelNotes" class="form-label">Комментарий (необязательно):</label>
+            <textarea class="form-control" id="cancelNotes" name="notes" rows="3" placeholder="Дополнительная информация об отмене"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-warning">Отменить инцидент</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// Сохраняем текущее состояние фильтров для возврата
+const currentFilters = {
+  statuses: '{{ statuses_filter or "" }}',
+  status: '{{ status_filter or "" }}',
+  category: '{{ category_filter or "" }}',
+  object_id: '{{ object_id_filter or "" }}',
+  employee_id: '{{ employee_id_filter or "" }}',
+  sort_by: '{{ sort_by or "created_at" }}',
+  sort_order: '{{ sort_order or "desc" }}',
+  per_page: '{{ per_page or 25 }}',
+  page: '{{ page or 1 }}'
+};
+
+// Функции для работы с фильтрами и URL
+function getFilterParams(excludePage = false) {
+  const params = new URLSearchParams();
+  if (currentFilters.statuses) {
+    params.set('statuses', currentFilters.statuses);
+  } else if (currentFilters.status) {
+    params.set('status', currentFilters.status);
+  }
+  if (currentFilters.category) params.set('category', currentFilters.category);
+  if (currentFilters.object_id) params.set('object_id', currentFilters.object_id);
+  if (currentFilters.employee_id) params.set('employee_id', currentFilters.employee_id);
+  if (currentFilters.sort_by !== 'created_at') params.set('sort_by', currentFilters.sort_by);
+  if (currentFilters.sort_order !== 'desc') params.set('sort_order', currentFilters.sort_order);
+  if (currentFilters.per_page !== 25) params.set('per_page', currentFilters.per_page);
+  if (!excludePage && currentFilters.page !== 1) params.set('page', currentFilters.page);
+  return params.toString();
+}
+
+function sortTable(field) {
+  const params = new URLSearchParams(window.location.search);
+  const currentSort = params.get('sort_by') || 'created_at';
+  const currentOrder = params.get('sort_order') || 'desc';
+  
+  params.set('sort_by', field);
+  params.set('sort_order', currentSort === field && currentOrder === 'desc' ? 'asc' : 'desc');
+  params.set('page', '1'); // Сбрасываем на первую страницу при сортировке
+  
+  window.location.href = '/owner/incidents?' + params.toString();
+}
+
+function goToPage(pageNum) {
+  const params = new URLSearchParams(window.location.search);
+  params.set('page', pageNum.toString());
+  // Сохраняем все фильтры и сортировку
+  window.location.href = '/owner/incidents?' + params.toString();
+}
+
+function addReturnUrl(form) {
+  const currentUrl = window.location.pathname + (window.location.search || '');
+  const action = form.action;
+  form.action = action + (action.includes('?') ? '&' : '?') + 'return_url=' + encodeURIComponent(currentUrl);
+  return true;
+}
+
+function handleStatusAllChange() {
+  const allChecked = document.getElementById('status_all').checked;
+  if (allChecked) {
+    // Снимаем все остальные статусы
+    document.querySelectorAll('input[name="statuses"]:not(#status_all)').forEach(cb => {
+      cb.checked = false;
+      const label = document.querySelector(`label[for="${cb.id}"]`);
+      if (label) {
+        label.classList.remove('btn-primary');
+        label.classList.add('btn-outline-primary');
+      }
+    });
+    // Показываем все инциденты
+    updateStatusFilters();
+  }
+}
+
+function handleStatusChange() {
+  const allCheckbox = document.getElementById('status_all');
+  const specificStatuses = Array.from(document.querySelectorAll('input[name="statuses"]:not(#status_all):checked'));
+  
+  if (specificStatuses.length > 0) {
+    // Если выбраны конкретные статусы - снимаем "Все"
+    if (allCheckbox.checked) {
+      allCheckbox.checked = false;
+      const allLabel = document.querySelector('label[for="status_all"]');
+      if (allLabel) {
+        allLabel.classList.remove('btn-primary');
+        allLabel.classList.add('btn-outline-primary');
+      }
+    }
+  } else {
+    // Если ничего не выбрано - включаем "Все"
+    if (!allCheckbox.checked) {
+      allCheckbox.checked = true;
+      const allLabel = document.querySelector('label[for="status_all"]');
+      if (allLabel) {
+        allLabel.classList.remove('btn-outline-primary');
+        allLabel.classList.add('btn-primary');
+      }
+    }
+  }
+  
+  // Обновляем подсветку выбранных статусов
+  document.querySelectorAll('input[name="statuses"]:not(#status_all)').forEach(cb => {
+    const label = document.querySelector(`label[for="${cb.id}"]`);
+    if (label) {
+      if (cb.checked) {
+        label.classList.remove('btn-outline-primary');
+        label.classList.add('btn-primary');
+      } else {
+        label.classList.remove('btn-primary');
+        label.classList.add('btn-outline-primary');
+      }
+    }
+  });
+  
+  updateStatusFilters();
+}
+
+function updateStatusFilters() {
+  const checked = Array.from(document.querySelectorAll('input[name="statuses"]:checked'))
+    .map(cb => cb.value)
+    .filter(v => v !== 'all');
+  const allChecked = document.getElementById('status_all').checked;
+  
+  const params = new URLSearchParams(window.location.search);
+  
+  // Удаляем старые фильтры статусов
+  params.delete('status');
+  params.delete('statuses');
+  params.delete('page'); // Сбрасываем на первую страницу при изменении фильтров
+  
+  // Сохраняем остальные фильтры
+  {% if category_filter %}
+    params.set('category', '{{ category_filter }}');
+  {% endif %}
+  {% if object_id_filter %}
+    params.set('object_id', '{{ object_id_filter }}');
+  {% endif %}
+  {% if employee_id_filter %}
+    params.set('employee_id', '{{ employee_id_filter }}');
+  {% endif %}
+  {% if sort_by != 'created_at' %}
+    params.set('sort_by', '{{ sort_by }}');
+  {% endif %}
+  {% if sort_order != 'desc' %}
+    params.set('sort_order', '{{ sort_order }}');
+  {% endif %}
+  {% if per_page != 25 %}
+    params.set('per_page', '{{ per_page }}');
+  {% endif %}
+  
+  // Применяем новые фильтры статусов
+  if (!allChecked && checked.length > 0) {
+    params.set('statuses', checked.join(','));
+  }
+  
+  window.location.href = '/owner/incidents?' + params.toString();
+}
+
+function applyFilters() {
+  const form = document.getElementById('filtersForm');
+  const formData = new FormData(form);
+  const params = new URLSearchParams(window.location.search);
+  
+  // Удаляем старые фильтры
+  params.delete('status');
+  params.delete('statuses');
+  params.delete('page'); // Сбрасываем на первую страницу
+  
+  // Обрабатываем статусы
+  const statusCheckboxes = Array.from(form.querySelectorAll('input[name="statuses"]:checked'));
+  const statusValues = statusCheckboxes.map(cb => cb.value).filter(v => v !== 'all');
+  const allChecked = document.getElementById('status_all').checked;
+  if (!allChecked && statusValues.length > 0) {
+    params.set('statuses', statusValues.join(','));
+  }
+  
+  // Остальные фильтры
+  const category = formData.get('category');
+  if (category) params.set('category', category);
+  else params.delete('category');
+  
+  const objectId = formData.get('object_id');
+  if (objectId) params.set('object_id', objectId);
+  else params.delete('object_id');
+  
+  const employeeId = formData.get('employee_id');
+  if (employeeId) params.set('employee_id', employeeId);
+  else params.delete('employee_id');
+  
+  // Сохраняем сортировку и per_page (если не меняем их)
+  {% if sort_by != 'created_at' %}
+    if (!params.has('sort_by')) params.set('sort_by', '{{ sort_by }}');
+  {% endif %}
+  {% if sort_order != 'desc' %}
+    if (!params.has('sort_order')) params.set('sort_order', '{{ sort_order }}');
+  {% endif %}
+  {% if per_page != 25 %}
+    if (!params.has('per_page')) params.set('per_page', '{{ per_page }}');
+  {% endif %}
+  
+  window.location.href = '/owner/incidents?' + params.toString();
+}
+
+function clearFilters() {
+  window.location.href = '/owner/incidents';
+}
+
+function changePerPage(value) {
+  const params = new URLSearchParams(window.location.search);
+  params.set('per_page', value);
+  params.set('page', '1'); // Сбрасываем на первую страницу
+  window.location.href = '/owner/incidents?' + params.toString();
+}
+
+function showCancelModal(incidentId, incidentNumber) {
+  document.getElementById('cancelIncidentNumber').textContent = incidentNumber;
+  const returnUrl = window.location.href;
+  const cancelForm = document.getElementById('cancelIncidentForm');
+  cancelForm.action = `/owner/incidents/${incidentId}/cancel`;
+  document.getElementById('cancelReturnUrlInput').value = returnUrl;
+  
+  // Сброс формы
+  document.getElementById('cancelNotes').value = '';
+  document.getElementById('reason_duplicate').checked = true;
+  document.getElementById('reason_not_confirmed').checked = false;
+  document.getElementById('reason_owner_decision').checked = false;
+  
+  // Обновление скрытого поля при изменении радиокнопок
+  document.querySelectorAll('input[name="reason_radio"]').forEach(radio => {
+    radio.removeEventListener('change', updateCancelReasonList);
+    radio.addEventListener('change', updateCancelReasonList);
+  });
+  document.getElementById('cancelReasonInput').value = 'duplicate';
+  
+  new bootstrap.Modal(document.getElementById('cancelIncidentModal')).show();
+}
+
+function updateCancelReasonList() {
+  const selectedReason = document.querySelector('input[name="reason_radio"]:checked');
+  if (selectedReason) {
+    document.getElementById('cancelReasonInput').value = selectedReason.value;
+  }
+}
+
+// Обработка отправки формы отмены
+document.getElementById('cancelIncidentForm')?.addEventListener('submit', function(e) {
+  const selectedReason = document.querySelector('input[name="reason_radio"]:checked');
+  if (!selectedReason) {
+    e.preventDefault();
+    alert('Пожалуйста, выберите причину отмены');
+    return false;
+  }
+  document.getElementById('cancelReasonInput').value = selectedReason.value;
+});
+
+// Экспорт инцидентов
+function exportIncidents(format) {
+  const params = new URLSearchParams();
+  
+  // Добавляем все текущие фильтры
+  if (currentFilters.statuses) {
+    params.set('statuses', currentFilters.statuses);
+  } else if (currentFilters.status) {
+    params.set('status', currentFilters.status);
+  }
+  if (currentFilters.category) params.set('category', currentFilters.category);
+  if (currentFilters.object_id) params.set('object_id', currentFilters.object_id);
+  if (currentFilters.employee_id) params.set('employee_id', currentFilters.employee_id);
+  if (currentFilters.sort_by !== 'created_at') params.set('sort_by', currentFilters.sort_by);
+  if (currentFilters.sort_order !== 'desc') params.set('sort_order', currentFilters.sort_order);
+  
+  // Формируем URL для экспорта
+  const exportUrl = `/owner/incidents/export/${format}?${params.toString()}`;
+  
+  // Открываем ссылку для скачивания
+  window.location.href = exportUrl;
+}
+
+// Подсветка активных фильтров статусов
+document.addEventListener('DOMContentLoaded', function() {
+  const statusCheckboxes = document.querySelectorAll('input[name="statuses"]:checked');
+  statusCheckboxes.forEach(cb => {
+    const label = document.querySelector(`label[for="${cb.id}"]`);
+    if (label && !cb.id.includes('all')) {
+      label.classList.remove('btn-outline-primary');
+      label.classList.add('btn-primary');
+    }
+  });
+  
+  // Если выбраны конкретные статусы, снимаем "Все"
+  const specificStatuses = Array.from(statusCheckboxes).filter(cb => cb.value !== 'all' && cb.checked);
+  if (specificStatuses.length > 0) {
+    const allCheckbox = document.getElementById('status_all');
+    if (allCheckbox) {
+      allCheckbox.checked = false;
+      const allLabel = document.querySelector('label[for="status_all"]');
+      if (allLabel) {
+        allLabel.classList.remove('btn-primary');
+        allLabel.classList.add('btn-outline-primary');
+      }
+    }
+  }
+});
+</script>
+
 {% endblock %}
