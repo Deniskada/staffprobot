@@ -443,30 +443,34 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                     logger.info(f"Object {current_obj.id} ({current_obj.name}): {len(shifts_today)} shifts found, opening_time={current_obj.opening_time}, closing_time={current_obj.closing_time}")
                     
                     # Проверка 1: НЕТ СМЕН НА ОБЪЕКТЕ
-                    # Уведомление "нет активных смен" должно приходить только в рабочее время
+                    # Синхронизируем логику с дашбордом (owner.py): используем default_timezone
                     if not shifts_today and current_obj.opening_time and current_obj.closing_time:
-                        # Используем timezone объекта для проверки рабочего времени (как в дашборде)
-                        obj_timezone = current_obj.timezone or "Europe/Moscow"
-                        naive_expected_open_time = datetime.combine(today_local, current_obj.opening_time)
-                        naive_expected_close_time = datetime.combine(today_local, current_obj.closing_time)
-                        obj_tz = pytz.timezone(obj_timezone)
-                        expected_open_time = obj_tz.localize(naive_expected_open_time)
-                        expected_close_time = obj_tz.localize(naive_expected_close_time)
-                        now_local = timezone_helper.utc_to_local(now, timezone_str=obj_timezone)
+                        naive_expected_open = datetime.combine(today_local, current_obj.opening_time)
+                        naive_expected_close = datetime.combine(today_local, current_obj.closing_time)
+                        expected_open = timezone_helper.local_tz.localize(naive_expected_open)
+                        expected_close = timezone_helper.local_tz.localize(naive_expected_close)
+                        now_local = timezone_helper.utc_to_local(now)
                         
                         # Проверяем, что время открытия прошло и мы еще в рабочем времени
-                        if now_local >= expected_open_time and now_local <= expected_close_time:
-                            # НЕ проверяем существование - уведомление должно приходить каждый раз
-                            await _create_object_notification(
-                                session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
-                                {
-                                    "object_name": current_obj.name,
-                                    "object_address": current_obj.address or "",
-                                    "date": today_local.strftime("%d.%m.%Y")
-                                },
-                                now
+                        if now_local >= expected_open and now_local <= expected_close:
+                            # Проверяем существование уведомления по дате, чтобы не создавать дубликаты
+                            notification_exists = await _check_notification_exists(
+                                session, current_obj.owner_id,
+                                NotificationType.OBJECT_NO_SHIFTS_TODAY.value,
+                                {"object_id": current_obj.id, "date": str(today_local)}
                             )
-                            stats["no_shifts"] += 1
+                            
+                            if not notification_exists:
+                                await _create_object_notification(
+                                    session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
+                                    {
+                                        "object_name": current_obj.name,
+                                        "object_address": current_obj.address or "",
+                                        "date": today_local.strftime("%d.%m.%Y")
+                                    },
+                                    now
+                                )
+                                stats["no_shifts"] += 1
                         continue
                     
                     # Для объектов со сменами проверяем открытие/закрытие
@@ -478,15 +482,53 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                         logger.info(f"Object {current_obj.id}: first_shift={first_shift.id}, last_shift={last_shift.id}, last_status={last_shift.status}, last_end_time={last_shift.end_time}")
                         
                         # Проверка 2: ОТКРЫТИЕ ОБЪЕКТА (вовремя или с опозданием)
-                        if first_shift.actual_start:
-                            # Используем timezone объекта, а не default_timezone (как в дашборде)
-                            obj_timezone = current_obj.timezone or "Europe/Moscow"
-                            naive_expected_open = datetime.combine(today_local, current_obj.opening_time)
-                            obj_tz = pytz.timezone(obj_timezone)
-                            expected_open = obj_tz.localize(naive_expected_open)
-                            actual_open_local = timezone_helper.utc_to_local(first_shift.actual_start, timezone_str=obj_timezone)
+                        # Синхронизируем логику с дашбордом (owner.py): используем default_timezone и candidates_after
+                        # Ищем все смены, которые фактически открыли объект (actual_start или start_time >= expected_open)
+                        naive_expected_open = datetime.combine(today_local, current_obj.opening_time)
+                        expected_open = timezone_helper.local_tz.localize(naive_expected_open)
+                        
+                        candidates_after: list[tuple[datetime, Shift]] = []
+                        for s in shifts_today:
+                            start_local = None
+                            if s.actual_start:
+                                start_local = timezone_helper.utc_to_local(s.actual_start)
+                            elif s.start_time:
+                                start_local = timezone_helper.utc_to_local(s.start_time)
                             
-                            delay_minutes = int((actual_open_local - expected_open).total_seconds() / 60)
+                            if start_local and start_local >= expected_open:
+                                candidates_after.append((start_local, s))
+                        
+                        opener_shift = None
+                        delay_minutes = 0
+                        if candidates_after:
+                            # Берём первое фактическое открытие (минимальный start_local >= expected_open)
+                            earliest_open_local, opener_shift = min(candidates_after, key=lambda t: t[0])
+                            delay_minutes = int((earliest_open_local - expected_open).total_seconds() / 60)
+                        else:
+                            # Нет открытия после времени начала работы — берём первую смену дня как открывающую
+                            # Это может быть случай, когда смена началась до expected_open (раньше времени открытия объекта)
+                            first_shift_local = None
+                            for s in shifts_today:
+                                start_local = None
+                                if s.actual_start:
+                                    start_local = timezone_helper.utc_to_local(s.actual_start)
+                                elif s.start_time:
+                                    start_local = timezone_helper.utc_to_local(s.start_time)
+                                
+                                if start_local and (first_shift_local is None or start_local < first_shift_local[0]):
+                                    first_shift_local = (start_local, s)
+                            
+                            if first_shift_local:
+                                earliest_open_local, opener_shift = first_shift_local
+                                # Если смена началась до expected_open, считаем без опоздания (отрицательная задержка = 0)
+                                if earliest_open_local < expected_open:
+                                    delay_minutes = 0
+                                else:
+                                    delay_minutes = int((earliest_open_local - expected_open).total_seconds() / 60)
+                        
+                        # Создаем уведомление только если есть actual_start
+                        if opener_shift and opener_shift.actual_start:
+                            actual_open_local = timezone_helper.utc_to_local(opener_shift.actual_start)
                             
                             # Уже создавали уведомление для этого объекта на сегодня?
                             # Проверяем по дате, чтобы не создавать дубликаты при каждом запуске задачи
@@ -505,7 +547,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                             "object_id": current_obj.id,
                                             "date": str(today_local),
                                             "object_name": current_obj.name,
-                                            "employee_name": f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный",
+                                            "employee_name": f"{opener_shift.user.first_name} {opener_shift.user.last_name}" if opener_shift.user else "Неизвестный",
                                             "planned_time": expected_open.strftime("%H:%M"),
                                             "actual_time": actual_open_local.strftime("%H:%M"),
                                             "delay_minutes": str(delay_minutes)
@@ -520,7 +562,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                                             "object_id": current_obj.id,
                                             "date": str(today_local),
                                             "object_name": current_obj.name,
-                                            "employee_name": f"{first_shift.user.first_name} {first_shift.user.last_name}" if first_shift.user else "Неизвестный",
+                                            "employee_name": f"{opener_shift.user.first_name} {opener_shift.user.last_name}" if opener_shift.user else "Неизвестный",
                                             "open_time": actual_open_local.strftime("%H:%M")
                                         },
                                         now

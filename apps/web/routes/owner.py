@@ -444,7 +444,7 @@ async def owner_dashboard(request: Request):
                                     work_employee = opener_employee or "Неизвестный"
                             else:
                                 work_status = 'closed'
-                                # Используем сотрудника из last_shift, если он есть, иначе из opener_shift
+                                # Используем сотрудника из last_shift (для своевременного закрытия всегда показываем closer_employee)
                                 closer_employee = None
                                 if last_shift.user:
                                     closer_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
@@ -454,8 +454,7 @@ async def owner_dashboard(request: Request):
                                     if last_shift.user:
                                         closer_employee = f"{last_shift.user.last_name} {last_shift.user.first_name}".strip()
                                 
-                                # Если не удалось получить из last_shift, используем opener_employee
-                                # НЕ перезаписываем work_employee, если он уже установлен (для своевременного открытия/закрытия)
+                                # Для своевременного закрытия всегда используем closer_employee, если он есть
                                 if closer_employee:
                                     work_employee = closer_employee
                                 elif not work_employee:
