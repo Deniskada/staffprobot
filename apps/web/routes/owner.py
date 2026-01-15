@@ -401,7 +401,7 @@ async def owner_dashboard(request: Request):
                             early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
                             
                             # Проверка: если все смены завершены и прошло 10 минут после закрытия - статус "нет смен"
-                            # НО только если объект был закрыт в рабочее время или вскоре после него (не более чем через 2 часа после closing_time)
+                            # Только до времени закрытия объекта (closing_time)
                             all_shifts_completed = all(s.status in ('completed', 'closed') for s in shifts_today)
                             close_time_utc = last_shift.end_time
                             delay_minutes = 10
@@ -409,8 +409,8 @@ async def owner_dashboard(request: Request):
                             now_utc = datetime.now(timezone.utc)
                             now_local = timezone_helper.utc_to_local(now_utc, timezone_str=obj_timezone)
                             
-                            # Максимальное время для установки статуса "нет смен" - не более 2 часов после expected_close
-                            max_status_time = expected_close + timedelta(hours=2)
+                            # Максимальное время для установки статуса "нет смен" - до времени закрытия объекта
+                            max_status_time = expected_close
                             
                             if all_shifts_completed and now_utc >= notification_time_utc and now_local <= max_status_time:
                                 work_status = 'no_shifts_today'
