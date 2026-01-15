@@ -206,7 +206,8 @@ class ShiftService:
                     from datetime import date as date_type
                     
                     history_service = ContractHistoryService(session)
-                    shift_date = date_type.today()
+                    # Используем дату открытия смены, а не сегодняшнюю дату
+                    shift_date = current_time.date()
                     
                     try:
                         contract_snapshot = await history_service.get_contract_snapshot(

@@ -216,7 +216,7 @@ class ContractHistoryService:
         Returns:
             Словарь с полями договора и их значениями на указанную дату
         """
-        # Получаем текущее состояние договора
+        # Получаем текущее состояние договора (для проверки существования)
         contract_query = select(Contract).where(Contract.id == contract_id)
         contract_result = await self.session.execute(contract_query)
         contract = contract_result.scalar_one_or_none()
@@ -224,21 +224,7 @@ class ContractHistoryService:
         if not contract:
             raise ValueError(f"Contract {contract_id} not found")
         
-        # Начальное состояние (текущие значения)
-        snapshot = {
-            'hourly_rate': float(contract.hourly_rate) if contract.hourly_rate else None,
-            'use_contract_rate': contract.use_contract_rate,
-            'payment_schedule_id': contract.payment_schedule_id,
-            'inherit_payment_schedule': contract.inherit_payment_schedule,
-            'payment_system_id': contract.payment_system_id,
-            'use_contract_payment_system': contract.use_contract_payment_system,
-            'status': contract.status,
-            'allowed_objects': contract.allowed_objects,
-            'title': contract.title,
-            'template_id': contract.template_id,
-        }
-        
-        # Получаем все изменения до указанной даты
+        # Получаем все изменения до указанной даты (включительно)
         target_datetime = datetime.combine(target_date, datetime.min.time())
         history_query = select(ContractHistory).where(
             and_(
@@ -252,7 +238,21 @@ class ContractHistoryService:
         history_result = await self.session.execute(history_query)
         history_entries = list(history_result.scalars().all())
         
-        # Применяем изменения в хронологическом порядке
+        # Начальное состояние - берем из записи "created" или используем значения по умолчанию
+        snapshot = {
+            'hourly_rate': None,
+            'use_contract_rate': False,
+            'payment_schedule_id': None,
+            'inherit_payment_schedule': True,
+            'payment_system_id': None,
+            'use_contract_payment_system': False,
+            'status': 'draft',
+            'allowed_objects': [],
+            'title': None,
+            'template_id': None,
+        }
+        
+        # Применяем изменения в хронологическом порядке (начиная с "created")
         for entry in history_entries:
             if entry.field_name in snapshot:
                 # Десериализуем значение
