@@ -36,6 +36,36 @@
 - Перед коммитом: быстрый diff по `doc/vision_v1` и запуск автогенерации при необходимости.
 - При обнаружении несоответствий — завести задачу на коррекцию документации.
 
+## Недавние изменения (main, 15.01.2026)
+
+### Система протоколирования изменений договоров ✅
+
+**Статус:** Завершено (15.01.2026)
+- **Проблема:** При изменении договора (например, ставки с 350 на 250) система не сохраняла историю изменений, что приводило к невозможности просмотра истории и определения действующих параметров договора на конкретную дату для корректного расчета начислений.
+- **Решение:**
+  1. Создана модель `ContractHistory` для хранения истории изменений всех критичных полей договора
+  2. Реализован сервис `ContractHistoryService` с методами логирования, получения истории и создания снимков договора на дату
+  3. Интегрировано автоматическое протоколирование во все методы создания/обновления договоров
+  4. Обновлена логика открытия смены для использования исторических данных при определении ставки
+  5. Добавлена вкладка "История" на странице просмотра договора с таблицей всех изменений
+  6. Созданы API роуты для получения истории и снимков договора
+  7. Выполнен backfill начальной истории для всех существующих договоров
+- **Файлы:**
+  - `domain/entities/contract_history.py` - модель истории
+  - `shared/services/contract_history_service.py` - сервис протоколирования
+  - `apps/web/services/contract_service.py` - интеграция протоколирования
+  - `apps/bot/services/shift_service.py` - использование исторических данных при открытии смены
+  - `apps/web/routes/owner.py` - API роуты и вкладка истории
+  - `apps/web/templates/owner/employees/contract_detail.html` - вкладка "История"
+  - `migrations/versions/8fd436f68bd3_add_contract_history_table.py` - миграция таблицы
+  - `migrations/versions/7d8bbe751a44_change_contract_history_change_type_to_string.py` - изменение типа колонки
+  - `migrations/versions/119e369385ac_backfill_contract_history_initial_state.py` - backfill данных
+- **Отслеживаемые поля:** hourly_rate, use_contract_rate, payment_schedule_id, inherit_payment_schedule, payment_system_id, use_contract_payment_system, status, allowed_objects, title, template_id
+- **API:**
+  - `GET /owner/contracts/{contract_id}/history` - история изменений (JSON)
+  - `GET /owner/contracts/{contract_id}/snapshot?date=YYYY-MM-DD` - снимок договора на дату (JSON)
+- **Документация:** Обновлен `doc/vision_v1/entities/contract.md` с описанием системы протоколирования
+
 ## Недавние изменения (main, 11.01.2026)
 
 ### Исправление синхронизации логики уведомлений с дашбордом ✅

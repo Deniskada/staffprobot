@@ -23,6 +23,7 @@ from .organization_profile import OrganizationProfile
 from .system_feature import SystemFeature
 from .contract import Contract
 from .contract_termination import ContractTermination
+from .contract_history import ContractHistory, ContractChangeType
 from .manager_object_permission import ManagerObjectPermission
 from .application import Application, ApplicationStatus
 from .interview import Interview, InterviewType, InterviewStatus
@@ -68,6 +69,8 @@ __all__ = [
     "SystemFeature",
     "Contract",
     "ContractTermination",
+    "ContractHistory",
+    "ContractChangeType",
     "ManagerObjectPermission",
     "Application",
     "ApplicationStatus",

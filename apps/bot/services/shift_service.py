@@ -199,36 +199,73 @@ class ShiftService:
                     org_unit_id=obj.org_unit_id if hasattr(obj, 'org_unit_id') else None
                 )
                 
-                # Определяем финальную ставку с учетом приоритетов
+                # Определяем финальную ставку с учетом приоритетов и исторических данных
                 if active_contract:
-                    hourly_rate = active_contract.get_effective_hourly_rate(
-                        timeslot_rate=timeslot_rate,
-                        object_rate=float(obj.hourly_rate)
-                    )
+                    # Получаем снимок договора на дату смены для использования исторических данных
+                    from shared.services.contract_history_service import ContractHistoryService
+                    from datetime import date as date_type
                     
-                    if active_contract.use_contract_rate and active_contract.hourly_rate:
-                        rate_source = "contract"
-                        logger.info(
-                            "Final rate decision: contract (highest priority)",
-                            hourly_rate=hourly_rate,
+                    history_service = ContractHistoryService(session)
+                    shift_date = date_type.today()
+                    
+                    try:
+                        contract_snapshot = await history_service.get_contract_snapshot(
                             contract_id=active_contract.id,
-                            payment_system_id=active_contract.payment_system_id
+                            target_date=shift_date
                         )
-                    elif timeslot_rate:
-                        rate_source = "timeslot"
-                        logger.info(
-                            "Final rate decision: timeslot",
-                            hourly_rate=hourly_rate,
-                            timeslot_id=timeslot_id
+                        
+                        # Используем исторические данные для определения ставки
+                        if contract_snapshot.get('use_contract_rate') and contract_snapshot.get('hourly_rate'):
+                            # Используем ставку из исторического снимка договора
+                            contract_hourly_rate = contract_snapshot['hourly_rate']
+                        else:
+                            # Используем текущую ставку договора (fallback)
+                            contract_hourly_rate = active_contract.hourly_rate
+                        
+                        # Определяем финальную ставку с учетом приоритетов
+                        if contract_snapshot.get('use_contract_rate') and contract_hourly_rate:
+                            hourly_rate = float(contract_hourly_rate)
+                            rate_source = "contract_history"
+                            logger.info(
+                                "Final rate decision: contract history snapshot",
+                                hourly_rate=hourly_rate,
+                                contract_id=active_contract.id,
+                                snapshot_date=shift_date.isoformat(),
+                                use_contract_rate=contract_snapshot.get('use_contract_rate')
+                            )
+                        else:
+                            # Используем стандартную логику с приоритетами
+                            hourly_rate = active_contract.get_effective_hourly_rate(
+                                timeslot_rate=timeslot_rate,
+                                object_rate=float(obj.hourly_rate)
+                            )
+                            
+                            if active_contract.use_contract_rate and active_contract.hourly_rate:
+                                rate_source = "contract"
+                                logger.info(
+                                    "Final rate decision: contract (highest priority)",
+                                    hourly_rate=hourly_rate,
+                                    contract_id=active_contract.id,
+                                    payment_system_id=active_contract.payment_system_id
+                                )
+                            else:
+                                rate_source = "timeslot" if timeslot_rate else "object"
+                    except Exception as e:
+                        # Fallback на стандартную логику при ошибке получения снимка
+                        logger.warning(
+                            f"Failed to get contract snapshot, using current contract data: {e}",
+                            contract_id=active_contract.id,
+                            shift_date=shift_date.isoformat()
                         )
-                    else:
-                        rate_source = "object"
-                        logger.info(
-                            "Final rate decision: object",
-                            hourly_rate=hourly_rate,
-                            object_id=object_id,
-                            org_unit_id=obj.org_unit_id if hasattr(obj, 'org_unit_id') else None
+                        hourly_rate = active_contract.get_effective_hourly_rate(
+                            timeslot_rate=timeslot_rate,
+                            object_rate=float(obj.hourly_rate)
                         )
+                        
+                        if active_contract.use_contract_rate and active_contract.hourly_rate:
+                            rate_source = "contract"
+                        else:
+                            rate_source = "timeslot" if timeslot_rate else "object"
                 else:
                     # Нет активного договора - используем timeslot или object
                     hourly_rate = timeslot_rate if timeslot_rate else float(obj.hourly_rate)

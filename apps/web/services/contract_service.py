@@ -250,6 +250,41 @@ class ContractService:
             )
             
             session.add(contract)
+            await session.flush()  # Flush для получения ID договора
+            
+            # Протоколируем начальное состояние договора
+            from shared.services.contract_history_service import ContractHistoryService
+            from domain.entities.contract_history import ContractChangeType
+            
+            history_service = ContractHistoryService(session)
+            
+            # Список отслеживаемых полей
+            tracked_fields = {
+                'hourly_rate': contract.hourly_rate,
+                'use_contract_rate': contract.use_contract_rate,
+                'payment_schedule_id': contract.payment_schedule_id,
+                'inherit_payment_schedule': contract.inherit_payment_schedule,
+                'payment_system_id': contract.payment_system_id,
+                'use_contract_payment_system': contract.use_contract_payment_system,
+                'status': contract.status,
+                'allowed_objects': contract.allowed_objects,
+                'title': contract.title,
+                'template_id': contract.template_id,
+            }
+            
+            # Записываем начальное состояние всех полей
+            changes = {}
+            for field_name, field_value in tracked_fields.items():
+                changes[field_name] = {'old': None, 'new': field_value}
+            
+            if changes:
+                await history_service.log_contract_changes(
+                    contract_id=contract.id,
+                    changed_by=owner.id,
+                    change_type=ContractChangeType.CREATED,
+                    changes=changes
+                )
+            
             await session.commit()
             await session.refresh(contract)
             
@@ -1271,6 +1306,25 @@ class ContractService:
             if not contract:
                 return False
             
+            # Сохраняем старые значения отслеживаемых полей для протоколирования
+            from shared.services.contract_history_service import ContractHistoryService
+            from domain.entities.contract_history import ContractChangeType
+            
+            history_service = ContractHistoryService(session)
+            
+            old_values = {
+                'hourly_rate': contract.hourly_rate,
+                'use_contract_rate': contract.use_contract_rate,
+                'payment_schedule_id': contract.payment_schedule_id,
+                'inherit_payment_schedule': contract.inherit_payment_schedule,
+                'payment_system_id': contract.payment_system_id,
+                'use_contract_payment_system': contract.use_contract_payment_system,
+                'status': contract.status,
+                'allowed_objects': contract.allowed_objects.copy() if contract.allowed_objects else [],
+                'title': contract.title,
+                'template_id': contract.template_id,
+            }
+            
             # Обновляем поля договора
             if "title" in update_data:
                 contract.title = update_data["title"]
@@ -1290,6 +1344,55 @@ class ContractService:
                 contract.is_manager = update_data["is_manager"]
             if "manager_permissions" in update_data:
                 contract.manager_permissions = update_data["manager_permissions"]
+            if "use_contract_rate" in update_data:
+                contract.use_contract_rate = update_data["use_contract_rate"]
+            if "payment_schedule_id" in update_data:
+                contract.payment_schedule_id = update_data["payment_schedule_id"]
+            if "inherit_payment_schedule" in update_data:
+                contract.inherit_payment_schedule = update_data["inherit_payment_schedule"]
+            if "payment_system_id" in update_data:
+                contract.payment_system_id = update_data["payment_system_id"]
+            if "use_contract_payment_system" in update_data:
+                contract.use_contract_payment_system = update_data["use_contract_payment_system"]
+            if "template_id" in update_data:
+                contract.template_id = update_data["template_id"]
+            
+            # Собираем изменения для протоколирования
+            new_values = {
+                'hourly_rate': contract.hourly_rate,
+                'use_contract_rate': contract.use_contract_rate,
+                'payment_schedule_id': contract.payment_schedule_id,
+                'inherit_payment_schedule': contract.inherit_payment_schedule,
+                'payment_system_id': contract.payment_system_id,
+                'use_contract_payment_system': contract.use_contract_payment_system,
+                'status': contract.status,
+                'allowed_objects': contract.allowed_objects.copy() if contract.allowed_objects else [],
+                'title': contract.title,
+                'template_id': contract.template_id,
+            }
+            
+            # Определяем измененные поля
+            changes = {}
+            for field_name in old_values.keys():
+                old_val = old_values[field_name]
+                new_val = new_values[field_name]
+                
+                # Сравниваем значения (для списков используем сравнение по содержимому)
+                if isinstance(old_val, list) and isinstance(new_val, list):
+                    if set(old_val) != set(new_val):
+                        changes[field_name] = {'old': old_val, 'new': new_val}
+                elif old_val != new_val:
+                    changes[field_name] = {'old': old_val, 'new': new_val}
+            
+            # Протоколируем изменения
+            if changes:
+                change_type = ContractChangeType.STATUS_CHANGED if 'status' in changes else ContractChangeType.UPDATED
+                await history_service.log_contract_changes(
+                    contract_id=contract.id,
+                    changed_by=manager.id,
+                    change_type=change_type,
+                    changes=changes
+                )
             
             session.add(contract)
             await session.commit()
@@ -1353,6 +1456,25 @@ class ContractService:
             if not contract:
                 return False
             
+            # Сохраняем старые значения отслеживаемых полей для протоколирования
+            from shared.services.contract_history_service import ContractHistoryService
+            from domain.entities.contract_history import ContractChangeType
+            
+            history_service = ContractHistoryService(session)
+            
+            old_values = {
+                'hourly_rate': contract.hourly_rate,
+                'use_contract_rate': contract.use_contract_rate,
+                'payment_schedule_id': contract.payment_schedule_id,
+                'inherit_payment_schedule': contract.inherit_payment_schedule,
+                'payment_system_id': contract.payment_system_id,
+                'use_contract_payment_system': contract.use_contract_payment_system,
+                'status': contract.status,
+                'allowed_objects': contract.allowed_objects.copy() if contract.allowed_objects else [],
+                'title': contract.title,
+                'template_id': contract.template_id,
+            }
+            
             # Обновляем поля
             contract.title = contract_data["title"]
             contract.content = contract_data["content"]
@@ -1361,6 +1483,20 @@ class ContractService:
             contract.end_date = contract_data.get("end_date")
             contract.template_id = contract_data.get("template_id")
             contract.allowed_objects = contract_data.get("allowed_objects", [])
+            
+            # Обновляем дополнительные поля, если они переданы
+            if "use_contract_rate" in contract_data:
+                contract.use_contract_rate = contract_data["use_contract_rate"]
+            if "payment_schedule_id" in contract_data:
+                contract.payment_schedule_id = contract_data["payment_schedule_id"]
+            if "inherit_payment_schedule" in contract_data:
+                contract.inherit_payment_schedule = contract_data["inherit_payment_schedule"]
+            if "payment_system_id" in contract_data:
+                contract.payment_system_id = contract_data["payment_system_id"]
+            if "use_contract_payment_system" in contract_data:
+                contract.use_contract_payment_system = contract_data["use_contract_payment_system"]
+            if "status" in contract_data:
+                contract.status = contract_data["status"]
             
             # Обновляем поля управляющего, если они переданы
             if "is_manager" in contract_data:
@@ -1384,6 +1520,43 @@ class ContractService:
                             object_id, 
                             contract.manager_permissions
                         )
+            
+            # Собираем изменения для протоколирования
+            new_values = {
+                'hourly_rate': contract.hourly_rate,
+                'use_contract_rate': contract.use_contract_rate,
+                'payment_schedule_id': contract.payment_schedule_id,
+                'inherit_payment_schedule': contract.inherit_payment_schedule,
+                'payment_system_id': contract.payment_system_id,
+                'use_contract_payment_system': contract.use_contract_payment_system,
+                'status': contract.status,
+                'allowed_objects': contract.allowed_objects.copy() if contract.allowed_objects else [],
+                'title': contract.title,
+                'template_id': contract.template_id,
+            }
+            
+            # Определяем измененные поля
+            changes = {}
+            for field_name in old_values.keys():
+                old_val = old_values[field_name]
+                new_val = new_values[field_name]
+                
+                # Сравниваем значения (для списков используем сравнение по содержимому)
+                if isinstance(old_val, list) and isinstance(new_val, list):
+                    if set(old_val) != set(new_val):
+                        changes[field_name] = {'old': old_val, 'new': new_val}
+                elif old_val != new_val:
+                    changes[field_name] = {'old': old_val, 'new': new_val}
+            
+            # Протоколируем изменения
+            if changes:
+                change_type = ContractChangeType.STATUS_CHANGED if 'status' in changes else ContractChangeType.UPDATED
+                await history_service.log_contract_changes(
+                    contract_id=contract.id,
+                    changed_by=owner.id,
+                    change_type=change_type,
+                    changes=changes
+                )
             
             await session.commit()
             
@@ -1418,6 +1591,25 @@ class ContractService:
             old_status = contract.status
             old_is_active = contract.is_active
             old_is_manager = contract.is_manager
+            
+            # Сохраняем старые значения отслеживаемых полей для протоколирования
+            from shared.services.contract_history_service import ContractHistoryService
+            from domain.entities.contract_history import ContractChangeType
+            
+            history_service = ContractHistoryService(session)
+            
+            old_values = {
+                'hourly_rate': contract.hourly_rate,
+                'use_contract_rate': contract.use_contract_rate,
+                'payment_schedule_id': contract.payment_schedule_id,
+                'inherit_payment_schedule': contract.inherit_payment_schedule,
+                'payment_system_id': contract.payment_system_id,
+                'use_contract_payment_system': contract.use_contract_payment_system,
+                'status': contract.status,
+                'allowed_objects': contract.allowed_objects.copy() if contract.allowed_objects else [],
+                'title': contract.title,
+                'template_id': contract.template_id,
+            }
             
             # Валидация use_contract_rate + hourly_rate
             if "use_contract_rate" in contract_data:
@@ -1544,6 +1736,43 @@ class ContractService:
                 contract.inherit_payment_schedule = contract_data["inherit_payment_schedule"]
             if "payment_schedule_id" in contract_data:
                 contract.payment_schedule_id = contract_data["payment_schedule_id"]
+            
+            # Собираем изменения для протоколирования
+            new_values = {
+                'hourly_rate': contract.hourly_rate,
+                'use_contract_rate': contract.use_contract_rate,
+                'payment_schedule_id': contract.payment_schedule_id,
+                'inherit_payment_schedule': contract.inherit_payment_schedule,
+                'payment_system_id': contract.payment_system_id,
+                'use_contract_payment_system': contract.use_contract_payment_system,
+                'status': contract.status,
+                'allowed_objects': contract.allowed_objects.copy() if contract.allowed_objects else [],
+                'title': contract.title,
+                'template_id': contract.template_id,
+            }
+            
+            # Определяем измененные поля
+            changes = {}
+            for field_name in old_values.keys():
+                old_val = old_values[field_name]
+                new_val = new_values[field_name]
+                
+                # Сравниваем значения (для списков используем сравнение по содержимому)
+                if isinstance(old_val, list) and isinstance(new_val, list):
+                    if set(old_val) != set(new_val):
+                        changes[field_name] = {'old': old_val, 'new': new_val}
+                elif old_val != new_val:
+                    changes[field_name] = {'old': old_val, 'new': new_val}
+            
+            # Протоколируем изменения
+            if changes:
+                change_type = ContractChangeType.STATUS_CHANGED if 'status' in changes else ContractChangeType.UPDATED
+                await history_service.log_contract_changes(
+                    contract_id=contract.id,
+                    changed_by=owner_id,
+                    change_type=change_type,
+                    changes=changes
+                )
             
             contract.updated_at = datetime.now()
             await session.commit()

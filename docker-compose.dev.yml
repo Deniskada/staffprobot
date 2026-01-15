@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d staffprobot_dev"]
       interval: 10s

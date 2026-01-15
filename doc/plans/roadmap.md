@@ -27,6 +27,7 @@
 **Итерация 51 (Monthly Payment Schedules Period Calculation Fix):** ✅ Завершена (1/1 задача)  
 **Итерация 52 (Mobile Calendar Adaptation):** В работе (Фаза 1: 6/6 задач ✅)  
 **Итерация 53 (SSL Certificate Auto-Renewal Fix):** ✅ Завершена (1/1 задача)
+**Итерация 260115 (Contract History System):** В работе (0/15 задач)
 
 ## Итерация 37: Реорганизация системы уведомлений (Notification System Overhaul)
 

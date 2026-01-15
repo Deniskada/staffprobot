@@ -6712,11 +6712,32 @@ async def owner_contract_detail(
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(current_user["id"])
         
+        # Получаем историю изменений договора
+        from shared.services.contract_history_service import ContractHistoryService
+        from sqlalchemy import select
+        from domain.entities.contract import Contract
+        
+        # Получаем внутренний ID договора
+        contract_query = select(Contract).where(
+            Contract.id == contract_id
+        )
+        contract_result = await db.execute(contract_query)
+        contract_entity = contract_result.scalar_one_or_none()
+        
+        contract_history = []
+        if contract_entity:
+            history_service = ContractHistoryService(db)
+            contract_history = await history_service.get_contract_history(
+                contract_id=contract_entity.id,
+                limit=100
+            )
+        
         return templates.TemplateResponse(
             "owner/employees/contract_detail.html",
             {
                 "request": request,
                 "contract": contract,
+                "contract_history": contract_history,
                 "title": f"Договор {contract.get('title', 'Без названия')}",
                 "current_user": current_user,
                 "available_interfaces": available_interfaces
@@ -6727,6 +6748,138 @@ async def owner_contract_detail(
     except Exception as e:
         logger.error(f"Error loading contract detail: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки информации о договоре: {str(e)}")
+
+
+@router.get("/contracts/{contract_id}/history", response_class=JSONResponse)
+async def owner_contract_history_api(
+    contract_id: int,
+    field_name: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API для получения истории изменений договора."""
+    try:
+        from apps.web.services.contract_service import ContractService
+        from shared.services.contract_history_service import ContractHistoryService
+        from sqlalchemy import select
+        from domain.entities.contract import Contract
+        
+        # Проверяем права доступа
+        contract_service = ContractService()
+        contract = await contract_service.get_contract_by_telegram_id(contract_id, current_user["id"])
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Получаем внутренний ID договора
+        contract_query = select(Contract).where(Contract.id == contract_id)
+        contract_result = await db.execute(contract_query)
+        contract_entity = contract_result.scalar_one_or_none()
+        
+        if not contract_entity:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Получаем историю
+        history_service = ContractHistoryService(db)
+        history = await history_service.get_contract_history(
+            contract_id=contract_entity.id,
+            field_name=field_name,
+            limit=limit,
+            offset=offset
+        )
+        
+        # Сериализуем историю
+        history_data = []
+        for entry in history:
+            history_data.append({
+                "id": entry.id,
+                "contract_id": entry.contract_id,
+                "changed_at": entry.changed_at.isoformat() if entry.changed_at else None,
+                "changed_by": entry.changed_by,
+                "changed_by_user": {
+                    "id": entry.changed_by_user.id,
+                    "first_name": entry.changed_by_user.first_name,
+                    "last_name": entry.changed_by_user.last_name
+                } if entry.changed_by_user else None,
+                "change_type": entry.change_type,
+                "field_name": entry.field_name,
+                "old_value": entry.old_value,
+                "new_value": entry.new_value,
+                "change_reason": entry.change_reason,
+                "effective_from": entry.effective_from.isoformat() if entry.effective_from else None,
+            })
+        
+        return {
+            "contract_id": contract_entity.id,
+            "history": history_data,
+            "total": len(history_data),
+            "limit": limit,
+            "offset": offset
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading contract history: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки истории договора: {str(e)}")
+
+
+@router.get("/contracts/{contract_id}/snapshot", response_class=JSONResponse)
+async def owner_contract_snapshot_api(
+    contract_id: int,
+    date: str = Query(..., description="Дата в формате YYYY-MM-DD"),
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """API для получения снимка договора на конкретную дату."""
+    try:
+        from apps.web.services.contract_service import ContractService
+        from shared.services.contract_history_service import ContractHistoryService
+        from sqlalchemy import select
+        from domain.entities.contract import Contract
+        from datetime import date as date_type
+        
+        # Проверяем права доступа
+        contract_service = ContractService()
+        contract = await contract_service.get_contract_by_telegram_id(contract_id, current_user["id"])
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Получаем внутренний ID договора
+        contract_query = select(Contract).where(Contract.id == contract_id)
+        contract_result = await db.execute(contract_query)
+        contract_entity = contract_result.scalar_one_or_none()
+        
+        if not contract_entity:
+            raise HTTPException(status_code=404, detail="Договор не найден")
+        
+        # Парсим дату
+        try:
+            target_date = date_type.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат даты. Используйте YYYY-MM-DD")
+        
+        # Получаем снимок
+        history_service = ContractHistoryService(db)
+        snapshot = await history_service.get_contract_snapshot(
+            contract_id=contract_entity.id,
+            target_date=target_date
+        )
+        
+        return {
+            "contract_id": contract_entity.id,
+            "target_date": date,
+            "snapshot": snapshot
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error loading contract snapshot: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки снимка договора: {str(e)}")
 
 
 @router.get("/employees/contract/{contract_id}/edit", response_class=HTMLResponse)
