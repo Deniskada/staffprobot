@@ -199,6 +199,9 @@ class ShiftService:
                     org_unit_id=obj.org_unit_id if hasattr(obj, 'org_unit_id') else None
                 )
                 
+                # Определяем текущее время для использования в логике открытия смены
+                current_time = datetime.now()
+                
                 # Определяем финальную ставку с учетом приоритетов и исторических данных
                 if active_contract:
                     # Получаем снимок договора на дату смены для использования исторических данных
@@ -281,7 +284,6 @@ class ShiftService:
                 from datetime import date as date_class, time as time_class
                 from domain.entities.time_slot import TimeSlot
                 
-                current_time = datetime.now()
                 planned_start = None
                 
                 # Получить late_threshold_minutes из объекта или org_unit
