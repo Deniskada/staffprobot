@@ -56,9 +56,17 @@ class EmployeeObjectsService:
                 contracts_result = await session.execute(contracts_query)
                 contracts = contracts_result.scalars().all()
                 
+                logger.info(
+                    f"Contract query result for user {telegram_id} (user_id={user.id}): "
+                    f"found {len(contracts)} contracts"
+                )
+                
                 # Если нет договоров, но пользователь владелец - продолжаем (получим его объекты позже)
                 if not contracts and user_role != 'owner' and 'owner' not in user_roles:
-                    logger.info(f"No active contracts found for user {telegram_id}")
+                    logger.warning(
+                        f"No active contracts found for user {telegram_id} (user_id={user.id}). "
+                        f"Query filters: employee_id={user.id}, status=active, is_active=True"
+                    )
                     return []
                 
                 # Собираем ID объектов из всех договоров
