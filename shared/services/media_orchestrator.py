@@ -2,28 +2,42 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import Optional, List, Dict, Any
+from dataclasses import asdict, dataclass, field
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import json
 import redis.asyncio as redis
 from core.config.settings import settings
 from core.logging.logger import logger
+
+if TYPE_CHECKING:
+    from shared.services.media_storage.base import MediaFile
+
+
+def _folder_for_context(context_type: str, context_id: int) -> str:
+    if context_type == "cancellation_doc":
+        return f"cancellations/{context_id}"
+    if context_type in ("task_proof", "task_v2_proof"):
+        return f"tasks/{context_id}"
+    if context_type == "incident_evidence":
+        return f"incidents/{context_id}"
+    return f"misc/{context_id}"
 
 
 @dataclass
 class MediaFlowConfig:
     """Конфигурация медиа-потока для пользователя."""
     user_id: int
-    context_type: str  # cancellation_doc | task_proof | incident_evidence | shift_photo
+    context_type: str  # cancellation_doc | task_proof | incident_evidence | shift_photo | task_v2_proof
     context_id: int
     require_text: bool = False
     require_photo: bool = False
     max_photos: int = 1
     allow_skip: bool = True
     collected_text: Optional[str] = None
-    collected_photos: List[str] = None  # List of file_ids or paths
-    
-    def __post_init__(self):
+    collected_photos: List[str] = field(default_factory=list)  # file_ids
+    uploaded_media: Optional[List[Any]] = None  # List[MediaFile] после finish; не хранится в Redis
+
+    def __post_init__(self) -> None:
         if self.collected_photos is None:
             self.collected_photos = []
 
@@ -46,12 +60,19 @@ class MediaOrchestrator:
     def _make_key(self, user_id: int) -> str:
         return f"{self._key_prefix}{user_id}"
     
+    def _to_redis_dict(self, cfg: MediaFlowConfig) -> Dict[str, Any]:
+        d = asdict(cfg)
+        d.pop("uploaded_media", None)
+        return d
+
     async def begin_flow(self, cfg: MediaFlowConfig) -> None:
         """Начать новый медиа-поток для пользователя."""
         key = self._make_key(cfg.user_id)
-        data = asdict(cfg)
+        data = self._to_redis_dict(cfg)
         await self.redis.setex(key, self._ttl, json.dumps(data))
-        logger.info(f"Media flow started: user={cfg.user_id}, type={cfg.context_type}, context={cfg.context_id}")
+        logger.info(
+            f"Media flow started: user={cfg.user_id}, type={cfg.context_type}, context={cfg.context_id}"
+        )
     
     async def get_flow(self, user_id: int) -> Optional[MediaFlowConfig]:
         """Получить текущий медиа-поток пользователя."""
@@ -60,6 +81,7 @@ class MediaOrchestrator:
         if not data:
             return None
         cfg_dict = json.loads(data)
+        cfg_dict.pop("uploaded_media", None)
         return MediaFlowConfig(**cfg_dict)
     
     async def update_flow(self, user_id: int, updates: Dict[str, Any]) -> bool:
@@ -113,19 +135,46 @@ class MediaOrchestrator:
         cfg = await self.get_flow(user_id)
         if not cfg:
             return False
-        
-        text_ok = not cfg.require_text or cfg.collected_text
-        photos_ok = not cfg.require_photo or len(cfg.collected_photos) > 0
-        
-        return text_ok and photos_ok
+        text_ok = not cfg.require_text or bool(cfg.collected_text)
+        photos_ok = not cfg.require_photo or (len(cfg.collected_photos or []) > 0)
+        result: bool = bool(text_ok and photos_ok)
+        return result
     
-    async def finish(self, user_id: int) -> Optional[MediaFlowConfig]:
-        """Завершить поток и вернуть финальную конфигурацию."""
+    async def finish(
+        self,
+        user_id: int,
+        bot: Any = None,
+        media_types: Optional[Dict[str, str]] = None,
+    ) -> Optional[MediaFlowConfig]:
+        """
+        Завершить поток и вернуть финальную конфигурацию.
+        Если передан bot и есть collected_photos, загружает медиа в хранилище
+        (store_telegram_file) и заполняет cfg.uploaded_media.
+        """
         cfg = await self.get_flow(user_id)
-        if cfg:
-            key = self._make_key(user_id)
-            await self.redis.delete(key)
-            logger.info(f"Media flow finished: user={user_id}, type={cfg.context_type}")
+        if not cfg:
+            return None
+        key = self._make_key(user_id)
+        await self.redis.delete(key)
+        logger.info(f"Media flow finished: user={user_id}, type={cfg.context_type}")
+
+        if bot and cfg.collected_photos:
+            try:
+                from shared.services.media_storage import get_media_storage_client
+                storage = get_media_storage_client(bot=bot)
+                folder = _folder_for_context(cfg.context_type, cfg.context_id)
+                types_map = media_types or {}
+                uploaded: List[Any] = []
+                for fid in cfg.collected_photos:
+                    ftype = types_map.get(fid, "photo")
+                    m = await storage.store_telegram_file(fid, folder, ftype, bot)
+                    uploaded.append(m)
+                cfg.uploaded_media = uploaded
+            except Exception as e:
+                logger.warning(
+                    f"Media storage upload failed, continuing without uploaded_media: {e}"
+                )
+
         return cfg
     
     async def cancel(self, user_id: int) -> None:

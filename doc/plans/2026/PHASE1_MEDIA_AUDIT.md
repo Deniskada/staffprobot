@@ -103,3 +103,15 @@
 - `shared/services/task_service.py`
 - `domain/entities/task_entry.py`, `shift_cancellation.py`, `review.py`, `incident.py`
 - `shared/services/media_storage/` (фабрика), `core/config/settings.py` (медиа-настройки), `scripts/ensure_minio_bucket.sh`
+
+---
+
+## 8. Фаза 1.3 (сделано): MediaStorageClient, TG/S3, MediaOrchestrator
+
+- **ABC и типы:** `shared/services/media_storage/base.py` — `MediaFile`, `MediaStorageClient` (upload, get_url, delete, list_files, exists, store_telegram_file).
+- **TelegramMediaStorageClient:** `telegram_client.py` — `store_telegram_file` регистрирует file_id, возвращает MediaFile; get_url → `telegram:file_id`.
+- **S3MediaStorageClient:** `s3_client.py` — MinIO/Selectel, boto3, `asyncio.to_thread` для sync-вызовов; `store_telegram_file` скачивает через `download_to_memory` и загружает в S3.
+- **Фабрика:** `get_media_storage_client(bot=None)` возвращает TG-, MinIO- или Selectel-клиент.
+- **MediaOrchestrator:** `finish(user_id, bot=..., media_types=...)` при наличии `bot` и `collected_photos` вызывает `store_telegram_file`, заполняет `cfg.uploaded_media`. Redis не хранит `uploaded_media`.
+- **Handlers (Tasks v2):** в `finish` передают `bot` и `media_types`; `_finish_task_v2_media_upload` при `uploaded_media` пишет в `completion_media` из него, иначе из URL группы.
+- **Зависимость:** `boto3>=1.34.0` в `requirements.txt`; образ пересобрать для установки.

@@ -2521,28 +2521,30 @@ async def _finish_task_v2_media_upload(
         user_name = f"{from_user.first_name} {from_user.last_name or ''}".strip()
         caption = f"📋 Отчет (Tasks v2): {template.title}\n👤 {user_name}\n🏢 {object_name}"
         
-        # Отправляем все файлы в группу
+        # Отправляем все файлы в группу (для отчётов)
         try:
             media_urls = await _send_multiple_media_to_group(
                 bot, telegram_chat_id, file_ids, caption, media_types
             )
             if not media_urls:
-                logger.error(f"Failed to send media to group: no URLs returned")
+                logger.error("Failed to send media to group: no URLs returned")
                 raise Exception("Не удалось отправить медиа в группу")
-            logger.info(f"Media sent to group: {len(media_urls)} URLs created")
+            logger.info("Media sent to group: %s URLs created", len(media_urls))
         except Exception as e:
-            logger.exception(f"Error sending media to group: {e}")
+            logger.exception("Error sending media to group: %s", e)
             raise
-        
-        # Формируем completion_media для сохранения в БД
-        completion_media = [
-            {
-                'url': url,
-                'type': media_types[i],
-                'file_id': file_ids[i]
-            }
-            for i, url in enumerate(media_urls)
-        ]
+
+        # completion_media: из uploaded_media (хранилище), иначе из URL группы
+        if final_flow.uploaded_media:
+            completion_media = [
+                {"url": m.url, "type": m.type, "key": m.key}
+                for m in final_flow.uploaded_media
+            ]
+        else:
+            completion_media = [
+                {"url": url, "type": media_types[i], "file_id": file_ids[i]}
+                for i, url in enumerate(media_urls)
+            ]
         
         # Сохраняем результат в TaskEntryV2
         entry_query = select(TaskEntryV2).where(TaskEntryV2.id == entry_id)
@@ -2618,8 +2620,11 @@ async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.edit_message_text("❌ Ошибка: медиа-поток не найден")
             return
         
-        # Завершаем поток
-        final_flow = await orchestrator.finish(user_id)
+        user_state = await user_state_manager.get_state(user_id)
+        media_types = (user_state.data or {}).get("task_v2_media_types", {}) if user_state else {}
+        final_flow = await orchestrator.finish(
+            user_id, bot=context.bot, media_types=media_types
+        )
         await orchestrator.close()
         
         if not final_flow or not final_flow.collected_photos:
@@ -2881,7 +2886,10 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
                 return
             
             # Достигнут лимит - автоматически завершаем
-            final_flow = await orchestrator.finish(user_id)
+            media_types = (user_state.data or {}).get("task_v2_media_types", {}) if user_state else {}
+            final_flow = await orchestrator.finish(
+                user_id, bot=context.bot, media_types=media_types
+            )
             await orchestrator.close()
             await _finish_task_v2_media_upload(
                 context.bot,
