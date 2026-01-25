@@ -145,11 +145,12 @@ class MediaOrchestrator:
         user_id: int,
         bot: Any = None,
         media_types: Optional[Dict[str, str]] = None,
+        storage_mode: Optional[str] = None,
     ) -> Optional[MediaFlowConfig]:
         """
         Завершить поток и вернуть финальную конфигурацию.
-        Если передан bot и есть collected_photos, загружает медиа в хранилище
-        (store_telegram_file) и заполняет cfg.uploaded_media.
+        Если передан bot и есть collected_photos, загружает медиа в хранилище.
+        storage_mode: "telegram" | "storage" | "both" — из настроек владельца; иначе глобальный провайдер.
         """
         cfg = await self.get_flow(user_id)
         if not cfg:
@@ -160,8 +161,15 @@ class MediaOrchestrator:
 
         if bot and cfg.collected_photos:
             try:
+                from core.config.settings import settings
                 from shared.services.media_storage import get_media_storage_client
-                storage = get_media_storage_client(bot=bot)
+                override = None
+                if storage_mode == "telegram":
+                    override = "telegram"
+                elif storage_mode in ("storage", "both"):
+                    p = (settings.media_storage_provider or "minio").strip().lower()
+                    override = p if p in ("minio", "selectel") else "minio"
+                storage = get_media_storage_client(bot=bot, provider_override=override)
                 folder = _folder_for_context(cfg.context_type, cfg.context_id)
                 types_map = media_types or {}
                 uploaded: List[Any] = []

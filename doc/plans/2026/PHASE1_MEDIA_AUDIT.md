@@ -125,3 +125,15 @@
 - **Сервис:** `ShiftCancellationService.cancel_shift(..., media=...)` — создаёт записи `ShiftCancellationMedia` после создания отмены.
 - **Бот:** Поток отмены с фото: «Готово» / «Пропустить». Добавление фото не завершает отмену; по «Готово» — `finish(bot)`, `uploaded_media` → группа (если есть) и `_execute_shift_cancellation(media=...)`. По «Пропустить» — `orchestrator.cancel()`, отмена без медиа.
 - **Shared-форма:** `multipart/form-data`, поле `media_files` (multiple). При MinIO/Selectel — загрузка в хранилище, передача `media` в `cancel_shift`. Редиректы owner/manager/employee уже ведут на `/shared/cancellations/form`.
+
+---
+
+## 10. Фаза 1.5 (сделано): опция хранилища, настройки по owner
+
+- **Опция:** SystemFeature `secure_media_storage` («Использовать защищённое хранилище файлов»). Включение через профиль/функции; в тарифе должен быть ключ в `features`.
+- **Таблица:** `owner_media_storage_options` (owner_id, context, storage). Контексты: tasks, cancellations, incidents, contracts. storage: telegram | storage | both.
+- **Сервис:** `shared/services/owner_media_storage_service.py` — `is_secure_media_enabled`, `get_storage_mode`, `get_all_modes`, `set_storage_mode`, `set_all_modes`.
+- **Фабрика:** `get_media_storage_client(bot, provider_override)` — override «telegram» | «minio» | «selectel» для выбора хранилища по настройкам owner.
+- **Orchestrator:** `finish(..., storage_mode)` — при «telegram» использует TG; при «storage»/«both» — S3 (из settings).
+- **Handlers:** Tasks v2 (Готово, автолимит) и отмена (Готово с фото) определяют owner_id → `get_storage_mode(owner_id, context)` → передают в `finish`. Shared-форма отмены загружает в S3 только при `mode in (storage, both)`.
+- **UI:** `/owner/profile/media-storage` — страница настроек (контексты × режим). Ссылка с профиля. При выключенной опции — подсказка включить в профиле/функциях.

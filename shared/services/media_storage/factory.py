@@ -12,14 +12,18 @@ from .s3_client import S3MediaStorageClient
 from .telegram_client import TelegramMediaStorageClient
 
 
-def get_media_storage_client(bot: Optional[Any] = None) -> MediaStorageClient:
+def get_media_storage_client(
+    bot: Optional[Any] = None,
+    provider_override: Optional[str] = None,
+) -> MediaStorageClient:
     """
-    Возвращает клиент хранилища по MEDIA_STORAGE_PROVIDER.
+    Возвращает клиент хранилища.
 
-    Для provider=telegram при вызове store_telegram_file нужен bot;
-    можно передать здесь либо при первом store_telegram_file.
+    provider_override: "telegram" | "minio" | "selectel" — использовать вместо настроек.
+    Иначе берётся MEDIA_STORAGE_PROVIDER из settings.
     """
-    provider = (settings.media_storage_provider or "telegram").strip().lower()
+    base = (settings.media_storage_provider or "telegram").strip().lower()
+    provider = (provider_override or base).strip().lower()
     logger.debug(f"Media storage provider: {provider}")
 
     if provider == "telegram":

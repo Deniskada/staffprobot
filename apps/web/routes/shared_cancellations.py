@@ -427,8 +427,11 @@ async def submit_cancellation_form(
     media_list: List[Dict[str, Any]] = []
     try:
         from core.config.settings import settings
+        from shared.services.owner_media_storage_service import get_storage_mode
+        mode = await get_storage_mode(db, owner_id, "cancellations")
+        use_storage = mode in ("storage", "both")
         provider = (settings.media_storage_provider or "").strip().lower()
-        if provider in ("minio", "selectel") and media_files:
+        if use_storage and provider in ("minio", "selectel") and media_files:
             from shared.services.media_storage import get_media_storage_client
             storage = get_media_storage_client()
             folder = f"cancellations/{schedules[0].id}"

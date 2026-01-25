@@ -1,0 +1,74 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Настройки хранилища медиа — StaffProBot{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="bi bi-cloud-arrow-up text-primary"></i> Настройки хранилища медиа</h1>
+                <a href="/owner/profile" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Профиль</a>
+            </div>
+
+            {% if not enabled %}
+            <div class="alert alert-info">
+                Включите опцию <strong>«Использовать защищённое хранилище файлов»</strong> в
+                <a href="/owner/profile">профиле</a> или в <a href="/owner/features">функциях системы</a>, чтобы настроить, где хранить медиа по контекстам.
+            </div>
+            {% else %}
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Выберите для каждого контекста: только Telegram, только хранилище (S3) или оба.
+                    </p>
+                    <form id="mediaStorageForm">
+                        {% for ctx in context_labels %}
+                        <div class="mb-3">
+                            <label class="form-label">{{ ctx.label }}</label>
+                            <select class="form-select form-select-sm storage-mode" name="{{ ctx.value }}" data-context="{{ ctx.value }}">
+                                {% for opt in storage_labels %}
+                                <option value="{{ opt.value }}" {% if modes.get(ctx.value) == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                    </form>
+                    <div id="saveResult" class="mt-2"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    const form = document.getElementById('mediaStorageForm');
+    if (!form) return;
+    const result = document.getElementById('saveResult');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const modes = {};
+        form.querySelectorAll('.storage-mode').forEach(function(s) {
+            modes[s.dataset.context] = s.value;
+        });
+        try {
+            const r = await fetch('/owner/profile/media-storage/api/options', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ modes: modes })
+            });
+            const j = await r.json();
+            if (j.success) {
+                result.innerHTML = '<span class="text-success">Сохранено.</span>';
+            } else {
+                result.innerHTML = '<span class="text-danger">Ошибка: ' + (j.error || '') + '</span>';
+            }
+        } catch (err) {
+            result.innerHTML = '<span class="text-danger">Ошибка запроса</span>';
+        }
+    });
+})();
+</script>
+{% endblock %}

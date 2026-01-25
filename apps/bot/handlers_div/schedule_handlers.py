@@ -824,9 +824,24 @@ async def handle_cancellation_done_photo(update: Update, context: ContextTypes.D
 
     from shared.services.media_orchestrator import MediaOrchestrator
     from core.state.user_state_manager import user_state_manager
+    from core.database.session import get_async_session
+    from shared.services.owner_media_storage_service import get_storage_mode
 
     orchestrator = MediaOrchestrator()
-    flow = await orchestrator.finish(telegram_id, bot=context.bot, media_types=None)
+    storage_mode = "telegram"
+    async with get_async_session() as session:
+        shift_result = await session.execute(select(ShiftSchedule).where(ShiftSchedule.id == shift_id))
+        shift = shift_result.scalar_one_or_none()
+        obj = None
+        if shift:
+            obj_result = await session.execute(select(Object).where(Object.id == shift.object_id))
+            obj = obj_result.scalar_one_or_none()
+        if obj:
+            storage_mode = await get_storage_mode(session, obj.owner_id, "cancellations")
+
+    flow = await orchestrator.finish(
+        telegram_id, bot=context.bot, media_types=None, storage_mode=storage_mode
+    )
     await orchestrator.close()
     await user_state_manager.clear_state(telegram_id)
 
@@ -841,7 +856,6 @@ async def handle_cancellation_done_photo(update: Update, context: ContextTypes.D
     if report_chat_id and file_ids:
         try:
             from apps.bot.handlers_div.shift_handlers import _send_multiple_media_to_group
-            from core.database.session import get_async_session
             async with get_async_session() as session:
                 user_result = await session.execute(select(User).where(User.telegram_id == telegram_id))
                 user = user_result.scalar_one_or_none()

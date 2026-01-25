@@ -2622,82 +2622,73 @@ async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYP
         
         user_state = await user_state_manager.get_state(user_id)
         media_types = (user_state.data or {}).get("task_v2_media_types", {}) if user_state else {}
-        final_flow = await orchestrator.finish(
-            user_id, bot=context.bot, media_types=media_types
-        )
-        await orchestrator.close()
-        
-        if not final_flow or not final_flow.collected_photos:
-            await query.edit_message_text("❌ Нет загруженных файлов")
-            return
-        
+
         async with get_async_session() as session:
             from domain.entities.task_entry import TaskEntryV2
             from domain.entities.user import User
             from domain.entities.shift import Shift
             from domain.entities.object import Object
             from sqlalchemy.orm import selectinload
-            
-            # Получаем TaskEntry
-            entry_query = select(TaskEntryV2).where(
-                TaskEntryV2.id == entry_id
-            ).options(
-                selectinload(TaskEntryV2.template),
-                selectinload(TaskEntryV2.shift_schedule)
+            from shared.services.owner_media_storage_service import get_storage_mode
+
+            entry_result = await session.execute(
+                select(TaskEntryV2).where(TaskEntryV2.id == entry_id).options(
+                    selectinload(TaskEntryV2.template),
+                    selectinload(TaskEntryV2.shift_schedule),
+                )
             )
-            entry_result = await session.execute(entry_query)
             entry = entry_result.scalar_one_or_none()
-            
             if not entry or not entry.template:
+                await orchestrator.close()
                 await query.edit_message_text("❌ Задача не найдена")
                 return
-            
             template = entry.template
-            
-            # Получаем информацию для отправки в группу
-            db_user_query = select(User).where(User.telegram_id == user_id)
-            db_user_result = await session.execute(db_user_query)
+            db_user_result = await session.execute(select(User).where(User.telegram_id == user_id))
             db_user = db_user_result.scalar_one_or_none()
-            
             if not db_user:
+                await orchestrator.close()
                 await query.edit_message_text("❌ Пользователь не найден")
                 return
-            
-            # Получаем активную смену
-            shift_query = select(Shift).where(
-                and_(
-                    Shift.user_id == db_user.id,
-                    Shift.status == "active"
+            shift_result = await session.execute(
+                select(Shift).where(
+                    and_(Shift.user_id == db_user.id, Shift.status == "active")
                 )
             )
-            shift_result = await session.execute(shift_query)
             active_shift = shift_result.scalar_one_or_none()
-            
             if not active_shift:
+                await orchestrator.close()
                 await query.edit_message_text("❌ Активная смена не найдена")
                 return
-            
-            # Получаем объект
-            object_query = select(Object).where(Object.id == active_shift.object_id).options(
-                selectinload(Object.org_unit)
+            object_result = await session.execute(
+                select(Object).where(Object.id == active_shift.object_id).options(
+                    selectinload(Object.org_unit)
+                )
             )
-            object_result = await session.execute(object_query)
             obj = object_result.scalar_one_or_none()
-            
-            telegram_chat_id = None
-            object_name = "Объект"
-            
-            if obj:
-                object_name = obj.name
-                telegram_chat_id = obj.get_effective_report_chat_id()
-            
+            if not obj:
+                await orchestrator.close()
+                await query.edit_message_text("❌ Объект не найден")
+                return
+            owner_id = obj.owner_id
+            storage_mode = await get_storage_mode(session, owner_id, "tasks")
+            object_name = obj.name
+            telegram_chat_id = obj.get_effective_report_chat_id()
+
+            final_flow = await orchestrator.finish(
+                user_id, bot=context.bot, media_types=media_types, storage_mode=storage_mode
+            )
+            await orchestrator.close()
+
+            if not final_flow or not final_flow.collected_photos:
+                await query.edit_message_text("❌ Нет загруженных файлов")
+                return
+
             if not telegram_chat_id:
                 await query.edit_message_text(
-                    "❌ Telegram группа для отчетов не настроена.\n"
-                    "Обратитесь к администратору."
+                    "❌ Telegram группа для отчетов не настроена.\nОбратитесь к администратору."
                 )
                 return
-            
+
             # Проверяем, требуется ли геопозиция
             if template.requires_geolocation and not entry.completion_location:
                 # Получаем текущее состояние для сохранения данных
@@ -2886,9 +2877,11 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
                 return
             
             # Достигнут лимит - автоматически завершаем
+            from shared.services.owner_media_storage_service import get_storage_mode
+            storage_mode = await get_storage_mode(session, obj.owner_id, "tasks")
             media_types = (user_state.data or {}).get("task_v2_media_types", {}) if user_state else {}
             final_flow = await orchestrator.finish(
-                user_id, bot=context.bot, media_types=media_types
+                user_id, bot=context.bot, media_types=media_types, storage_mode=storage_mode
             )
             await orchestrator.close()
             await _finish_task_v2_media_upload(
