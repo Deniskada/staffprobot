@@ -28,8 +28,12 @@ from domain.entities.user_subscription import UserSubscription, SubscriptionStat
 from domain.entities.user import User
 from domain.entities.object import Object
 from domain.entities.contract import Contract
+from domain.entities.owner_profile import OwnerProfile
+from domain.entities.subscription_option_log import SubscriptionOptionLog
 from apps.web.services.payment_gateway.yookassa_service import YooKassaService
 from core.logging.logger import logger
+
+SECURE_MEDIA_STORAGE_FEATURE = "secure_media_storage"
 
 
 class BillingService:
@@ -37,6 +41,58 @@ class BillingService:
     
     def __init__(self, session: AsyncSession):
         self.session = session
+    
+    async def compute_subscription_amount(
+        self,
+        user_id: int,
+        subscription: UserSubscription,
+        tariff_plan: Any,
+    ) -> float:
+        """
+        Сумма к оплате: база тарифа + доплата за опцию «защищённое хранилище», если включена.
+        Учитываются только опции, доступные в тарифе и включённые у владельца.
+        """
+        base = float(tariff_plan.price or 0)
+        opt = float(tariff_plan.storage_option_price or 0)
+        if opt == 0:
+            return base
+        profile_result = await self.session.execute(
+            select(OwnerProfile).where(OwnerProfile.user_id == user_id)
+        )
+        profile = profile_result.scalar_one_or_none()
+        if not profile or not profile.enabled_features:
+            enabled = []
+        elif isinstance(profile.enabled_features, str):
+            try:
+                enabled = json.loads(profile.enabled_features)
+            except Exception:
+                enabled = []
+        else:
+            enabled = list(profile.enabled_features)
+        tariff_features = list(tariff_plan.features or [])
+        effective = [f for f in enabled if f in tariff_features]
+        if SECURE_MEDIA_STORAGE_FEATURE not in effective:
+            return base
+        return base + opt
+    
+    async def log_option_change(
+        self,
+        subscription_id: int,
+        options_enabled: Optional[List[str]] = None,
+        options_disabled: Optional[List[str]] = None,
+    ) -> None:
+        """Записать в лог изменение опций по подписке."""
+        enabled = options_enabled or []
+        disabled = options_disabled or []
+        if not enabled and not disabled:
+            return
+        row = SubscriptionOptionLog(
+            subscription_id=subscription_id,
+            options_enabled=enabled,
+            options_disabled=disabled,
+        )
+        self.session.add(row)
+        await self.session.commit()
     
     # === Транзакции ===
     
@@ -582,7 +638,12 @@ class BillingService:
         )
         subscription = subscription_result.scalar_one_or_none()
         
-        if not subscription or subscription.tariff_plan.price == 0:
+        if not subscription:
+            return None, None
+        amount = await self.compute_subscription_amount(
+            user_id, subscription, subscription.tariff_plan
+        )
+        if amount == 0:
             return None, None
         
         # Если return_url передан, создаем платеж через YooKassa
@@ -591,7 +652,7 @@ class BillingService:
                 transaction, payment_url = await self.create_payment_transaction(
                     user_id=user_id,
                     subscription_id=subscription.id,
-                    amount=float(subscription.tariff_plan.price),
+                    amount=amount,
                     currency=subscription.tariff_plan.currency,
                     description=f"Автоматическое продление подписки на тариф '{subscription.tariff_plan.name}'",
                     return_url=return_url
@@ -629,7 +690,7 @@ class BillingService:
             user_id=user_id,
             subscription_id=subscription.id,
             transaction_type=TransactionType.PAYMENT,
-            amount=float(subscription.tariff_plan.price),
+            amount=amount,
             currency=subscription.tariff_plan.currency,
             payment_method=PaymentMethod.MANUAL,
             description=f"Автоматическое продление подписки на тариф '{subscription.tariff_plan.name}' (требует обработки)",

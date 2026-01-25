@@ -137,3 +137,13 @@
 - **Orchestrator:** `finish(..., storage_mode)` — при «telegram» использует TG; при «storage»/«both» — S3 (из settings).
 - **Handlers:** Tasks v2 (Готово, автолимит) и отмена (Готово с фото) определяют owner_id → `get_storage_mode(owner_id, context)` → передают в `finish`. Shared-форма отмены загружает в S3 только при `mode in (storage, both)`.
 - **UI:** `/owner/profile/media-storage` — страница настроек (контексты × режим). Ссылка с профиля. При выключенной опции — подсказка включить в профиле/функциях.
+
+---
+
+## 11. Фаза 1.6 (сделано): цены хранения, лог тарифов, учёт в подписке
+
+- **Тариф:** в `tariff_plans` добавлены `storage_price_telegram`, `storage_price_object_storage`, `storage_option_price` (Numeric, default 0).
+- **Лог:** таблица `subscription_option_log` (subscription_id, changed_at, old_tariff_id, new_tariff_id, options_enabled, options_disabled). Фиксирует включение/выключение опций (в т.ч. `secure_media_storage`) по подписке.
+- **Сервис:** `BillingService.compute_subscription_amount(user_id, subscription, tariff_plan)` — база тарифа + `storage_option_price`, если опция включена у владельца и есть в тарифе. `log_option_change(subscription_id, options_enabled, options_disabled)` — запись в лог.
+- **Хук:** при toggle `secure_media_storage` в owner_features вызывается `_handle_secure_media_storage_toggle` → лог в `subscription_option_log`.
+- **Биллинг:** при создании платежа (смена тарифа, админ-назначение, автопродление) используется `compute_subscription_amount`. Итоговая сумма к оплате = база + доплата за опцию при включении.

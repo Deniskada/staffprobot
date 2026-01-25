@@ -80,6 +80,8 @@ async def toggle_feature(
         # Хуки при включении/отключении функций
         if feature_key == 'rules_engine':
             await _handle_rules_engine_toggle(session, user_id, enabled)
+        if feature_key == 'secure_media_storage':
+            await _handle_secure_media_storage_toggle(session, user_id, enabled)
         
         # Автоотключение зависимых фич при отключении родительской
         disabled_features = []
@@ -192,6 +194,27 @@ async def _handle_rules_engine_toggle(session: AsyncSession, user_id: int, enabl
         logger.error(f"Error handling rules_engine toggle: {e}", exc_info=True)
         await session.rollback()
         raise
+
+
+async def _handle_secure_media_storage_toggle(
+    session: AsyncSession, user_id: int, enabled: bool
+) -> None:
+    """Лог включения/выключения опции «защищённое хранилище» (restruct1 Фаза 1.6)."""
+    from apps.web.services.tariff_service import TariffService
+    from apps.web.services.billing_service import BillingService
+
+    try:
+        tariff_svc = TariffService(session)
+        sub = await tariff_svc.get_user_subscription(user_id)
+        if not sub:
+            return
+        billing_svc = BillingService(session)
+        if enabled:
+            await billing_svc.log_option_change(sub.id, options_enabled=["secure_media_storage"])
+        else:
+            await billing_svc.log_option_change(sub.id, options_disabled=["secure_media_storage"])
+    except Exception as e:
+        logger.error(f"Error logging secure_media_storage toggle: {e}", exc_info=True)
 
 
 async def _disable_dependent_features(session: AsyncSession, user_id: int, parent_key: str, service) -> list:

@@ -7747,8 +7747,9 @@ async def owner_change_tariff_post(
             
             # Создаем транзакцию и платеж через YooKassa
             billing_service = BillingService(db)
-            
-            # Формируем return_url
+            amount = await billing_service.compute_subscription_amount(
+                user_id, new_subscription, tariff_plan
+            )
             return_url = await URLHelper.build_url("/owner/subscription/payment_success")
             
             logger.info(
@@ -7762,7 +7763,7 @@ async def owner_change_tariff_post(
                 transaction, payment_url = await billing_service.create_payment_transaction(
                     user_id=user_id,
                     subscription_id=new_subscription.id,
-                    amount=float(tariff_plan.price),
+                    amount=amount,
                     currency=tariff_plan.currency or "RUB",
                     description=f"Оплата подписки на тариф '{tariff_plan.name}'",
                     return_url=return_url

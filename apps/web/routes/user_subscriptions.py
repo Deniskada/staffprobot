@@ -274,21 +274,24 @@ async def assign_subscription(
                 payment_method=payment_method,
                 notes=notes or "Назначена админом"
             )
-            
-            # Создаем транзакцию
+            subscription.tariff_plan = tariff_plan
+
             from apps.web.services.billing_service import BillingService
             billing_service = BillingService(session)
-            
+            amount = await billing_service.compute_subscription_amount(
+                user_id, subscription, tariff_plan
+            )
+
             # Обрабатываем чекбокс is_paid (может быть строкой "true" или отсутствовать)
             is_paid_bool = is_paid == "true" or is_paid is True
-            
+
             if is_paid_bool:
                 # Админ отметил как оплаченную - создаем транзакцию со статусом COMPLETED
                 transaction = await billing_service.create_transaction(
                     user_id=user_id,
                     subscription_id=subscription.id,
                     transaction_type=TransactionType.PAYMENT,
-                    amount=float(tariff_plan.price),
+                    amount=amount,
                     currency=tariff_plan.currency or "RUB",
                     payment_method=BillingPaymentMethod.MANUAL,
                     description=f"Оплата подписки на тариф '{tariff_plan.name}' (оплачено админом)",
@@ -319,7 +322,7 @@ async def assign_subscription(
                     user_id=user_id,
                     subscription_id=subscription.id,
                     transaction_type=TransactionType.PAYMENT,
-                    amount=float(tariff_plan.price),
+                    amount=amount,
                     currency=tariff_plan.currency or "RUB",
                     payment_method=BillingPaymentMethod.MANUAL,
                     description=f"Оплата подписки на тариф '{tariff_plan.name}' (требует оплаты)",

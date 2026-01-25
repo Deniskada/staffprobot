@@ -50,6 +50,7 @@ from .payroll_statement_log import PayrollStatementLog
 from .shift_cancellation import ShiftCancellation
 from .shift_cancellation_media import ShiftCancellationMedia
 from .owner_media_storage_option import OwnerMediaStorageOption
+from .subscription_option_log import SubscriptionOptionLog
 
 __all__ = [
     "Base",
@@ -110,4 +111,5 @@ __all__ = [
     "ShiftCancellation",
     "ShiftCancellationMedia",
     "OwnerMediaStorageOption",
+    "SubscriptionOptionLog",
 ]
