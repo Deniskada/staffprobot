@@ -351,6 +351,19 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
         
         object_id = schedule_data.get('object_id')
         
+        # Проверяем доступ к объекту через договор
+        from apps.bot.services.employee_objects_service import EmployeeObjectsService
+        employee_objects_service = EmployeeObjectsService()
+        has_access = await employee_objects_service.has_access_to_object(user_id, object_id)
+        
+        if not has_access:
+            await query.edit_message_text(
+                text="❌ <b>Доступ запрещен</b>\n\n"
+                     "У вас должен быть активный договор с владельцем объекта.",
+                parse_mode='HTML'
+            )
+            return
+        
         # Проверяем: объект открыт?
         async with get_async_session() as session:
             from shared.services.object_opening_service import ObjectOpeningService
@@ -848,6 +861,22 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
                 text="❌ Запланированная смена не найдена или недоступна.",
                 parse_mode='HTML'
             )
+            return
+        
+        object_id = shift_data.get('object_id')
+        
+        # Проверяем доступ к объекту через договор
+        from apps.bot.services.employee_objects_service import EmployeeObjectsService
+        employee_objects_service = EmployeeObjectsService()
+        has_access = await employee_objects_service.has_access_to_object(user_id, object_id)
+        
+        if not has_access:
+            await query.edit_message_text(
+                text="❌ <b>Доступ запрещен</b>\n\n"
+                     "У вас должен быть активный договор с владельцем объекта.",
+                parse_mode='HTML'
+            )
+            await user_state_manager.clear_state(user_id)
             return
         
         # Обновляем состояние
