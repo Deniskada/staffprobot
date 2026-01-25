@@ -66,6 +66,22 @@ services:
     networks:
       - staffprobot_dev_network
 
+  minio:
+    image: minio/minio:latest
+    container_name: staffprobot_minio_dev
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_dev_data:/data
+    networks:
+      - staffprobot_dev_network
+
   bot:
     build:
       context: .
@@ -85,6 +101,12 @@ services:
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
       - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
+      - MEDIA_STORAGE_PROVIDER=${MEDIA_STORAGE_PROVIDER:-telegram}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=staffprobot-media
+      - MINIO_USE_SSL=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,6 +142,12 @@ services:
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
       - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
+      - MEDIA_STORAGE_PROVIDER=${MEDIA_STORAGE_PROVIDER:-telegram}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=staffprobot-media
+      - MINIO_USE_SSL=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -151,6 +179,12 @@ services:
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
       - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
+      - MEDIA_STORAGE_PROVIDER=${MEDIA_STORAGE_PROVIDER:-telegram}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=staffprobot-media
+      - MINIO_USE_SSL=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -188,6 +222,12 @@ services:
       - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
       - YANDEX_MAPS_API_KEY=${YANDEX_MAPS_API_KEY}
+      - MEDIA_STORAGE_PROVIDER=${MEDIA_STORAGE_PROVIDER:-telegram}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=staffprobot-media
+      - MINIO_USE_SSL=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -215,6 +255,8 @@ volumes:
   rabbitmq_dev_data:
     driver: local
   celery_beat_dev_data:
+    driver: local
+  minio_dev_data:
     driver: local
 
 networks:

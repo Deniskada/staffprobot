@@ -84,7 +84,16 @@
 
 ---
 
-## 6. Связанные файлы
+## 6. Фаза 1.2 (сделано): MinIO, .env, фабрика
+
+- **MinIO:** сервис в `docker-compose.dev.yml`, порты 9000 (API) и 9001 (Console). Том `minio_dev_data`.
+- **Переменные:** `MEDIA_STORAGE_PROVIDER` (telegram | minio | selectel), `MINIO_*`, `SELECTEL_*`, `MEDIA_PRESIGNED_EXPIRES_SECONDS`. В `core.config.settings` и в env web/bot/celery.
+- **Фабрика:** `shared/services/media_storage/factory.get_media_storage_client()`. Реализации клиентов — Фаза 1.3; пока вызов поднимает `NotImplementedError`.
+- **Бакет:** `scripts/ensure_minio_bucket.sh` создаёт `staffprobot-media` в MinIO (mc в one-off контейнере). Запускать после `docker compose up`.
+
+---
+
+## 7. Связанные файлы
 
 - `shared/services/media_orchestrator.py`
 - `apps/bot/handlers_div/shift_handlers.py` (Tasks v2, отмена)
@@ -93,3 +102,4 @@
 - `shared/services/shift_cancellation_service.py`
 - `shared/services/task_service.py`
 - `domain/entities/task_entry.py`, `shift_cancellation.py`, `review.py`, `incident.py`
+- `shared/services/media_storage/` (фабрика), `core/config/settings.py` (медиа-настройки), `scripts/ensure_minio_bucket.sh`
