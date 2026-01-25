@@ -1,6 +1,6 @@
 """Сервис для работы с отменой смен."""
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy import select, and_
@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload, joinedload
 
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.shift_cancellation import ShiftCancellation
+from domain.entities.shift_cancellation_media import ShiftCancellationMedia
 from domain.entities.object import Object
 from domain.entities.payroll_adjustment import PayrollAdjustment
 from domain.entities.user import User
@@ -38,6 +39,7 @@ class ShiftCancellationService:
         actor_role: Optional[str] = None,
         source: str = "web",
         extra_payload: Optional[Dict[str, Any]] = None,
+        media: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Отменить запланированную смену.
@@ -138,6 +140,17 @@ class ShiftCancellationService:
 
             self.session.add(cancellation)
             await self.session.flush()
+
+            for m in media or []:
+                self.session.add(
+                    ShiftCancellationMedia(
+                        cancellation_id=cancellation.id,
+                        file_type=m.get("type", "photo"),
+                        storage_key=str(m.get("key", "")),
+                        file_size=int(m.get("size", 0)),
+                        mime_type=m.get("mime_type", "application/octet-stream"),
+                    )
+                )
 
             # Если причина уважительная — уходим на модерацию без мгновенных штрафов
             history_service = ShiftHistoryService(self.session)

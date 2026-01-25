@@ -47,6 +47,8 @@ from .deployment import Deployment
 from .faq_entry import FAQEntry
 from .shift_history import ShiftHistory
 from .payroll_statement_log import PayrollStatementLog
+from .shift_cancellation import ShiftCancellation
+from .shift_cancellation_media import ShiftCancellationMedia
 
 __all__ = [
     "Base",
@@ -104,4 +106,6 @@ __all__ = [
     "FAQEntry",
     "ShiftHistory",
     "PayrollStatementLog",
+    "ShiftCancellation",
+    "ShiftCancellationMedia",
 ]

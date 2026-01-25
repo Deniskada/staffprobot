@@ -5,15 +5,8 @@ from __future__ import annotations
 from typing import List, Dict, Optional, Tuple, Iterable, Any
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-from fastapi import (
-    APIRouter,
-    Request,
-    Depends,
-    HTTPException,
-    Query,
-    Form,
-)
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -379,6 +372,7 @@ async def submit_cancellation_form(
     document_description: Optional[str] = Form(None),
     return_to: Optional[str] = Form(None),
     caller: Optional[str] = Form(None),
+    media_files: Optional[List[UploadFile]] = File(None),
     current_user: dict = Depends(require_any_role(ALLOWED_ROLES)),
     db: AsyncSession = Depends(get_db_session),
 ):
@@ -430,6 +424,30 @@ async def submit_cancellation_form(
     if reason_obj.requires_document and not document_description:
         raise HTTPException(status_code=400, detail="Для выбранной причины требуется описание документа")
 
+    media_list: List[Dict[str, Any]] = []
+    try:
+        from core.config.settings import settings
+        provider = (settings.media_storage_provider or "").strip().lower()
+        if provider in ("minio", "selectel") and media_files:
+            from shared.services.media_storage import get_media_storage_client
+            storage = get_media_storage_client()
+            folder = f"cancellations/{schedules[0].id}"
+            for uf in media_files:
+                if not uf.filename:
+                    continue
+                raw = await uf.read()
+                content_type = uf.content_type or "application/octet-stream"
+                m = await storage.upload(raw, uf.filename, content_type, folder)
+                media_list.append({
+                    "key": m.key,
+                    "url": m.url,
+                    "type": m.type,
+                    "size": m.size,
+                    "mime_type": m.mime_type,
+                })
+    except Exception as e:
+        logger.warning(f"Shared cancellation media upload failed: {e}")
+
     cancellation_service = ShiftCancellationService(db)
     success_ids: List[int] = []
     error_messages: List[str] = []
@@ -448,6 +466,7 @@ async def submit_cancellation_form(
                 "caller": caller,
                 "interface": "shared_cancellation_form",
             },
+            media=media_list if media_list else None,
         )
         if result.get("success"):
             success_ids.append(schedule.id)

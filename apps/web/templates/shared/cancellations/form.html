@@ -63,7 +63,7 @@
                         {% endfor %}
                     </div>
 
-                    <form method="post" action="/shared/cancellations/submit" class="needs-validation" novalidate>
+                    <form method="post" action="/shared/cancellations/submit" class="needs-validation" novalidate enctype="multipart/form-data">
                         <input type="hidden" name="shift_type" value="{{ shift_type }}">
                         <input type="hidden" name="shift_ids" value="{{ shift_ids }}">
                         <input type="hidden" name="return_to" value="{{ return_to }}">
@@ -111,6 +111,12 @@
                             <div class="form-text">
                                 Опишите документ или приложите ссылку. Укажите, как передадите подтверждение.
                             </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="mediaFiles" class="form-label">Фото/документы (необязательно)</label>
+                            <input type="file" class="form-control" id="mediaFiles" name="media_files" multiple accept="image/*,.pdf">
+                            <div class="form-text">При использовании MinIO/Selectel можно приложить файлы. Фото до 5 МБ, документы до 100 МБ.</div>
                         </div>
 
                         <div class="d-flex justify-content-between align-items-center">

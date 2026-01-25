@@ -115,3 +115,13 @@
 - **MediaOrchestrator:** `finish(user_id, bot=..., media_types=...)` при наличии `bot` и `collected_photos` вызывает `store_telegram_file`, заполняет `cfg.uploaded_media`. Redis не хранит `uploaded_media`.
 - **Handlers (Tasks v2):** в `finish` передают `bot` и `media_types`; `_finish_task_v2_media_upload` при `uploaded_media` пишет в `completion_media` из него, иначе из URL группы.
 - **Зависимость:** `boto3>=1.34.0` в `requirements.txt`; образ пересобрать для установки.
+
+---
+
+## 9. Фаза 1.4 (сделано): shift_cancellation_media, shared-страница, бот
+
+- **Таблица:** `shift_cancellation_media` (cancellation_id, file_type, storage_key, file_size, mime_type). Миграция `a1b2c3d4e5f7`.
+- **Сущность:** `domain/entities/shift_cancellation_media.py`, связь с `ShiftCancellation.media_files`.
+- **Сервис:** `ShiftCancellationService.cancel_shift(..., media=...)` — создаёт записи `ShiftCancellationMedia` после создания отмены.
+- **Бот:** Поток отмены с фото: «Готово» / «Пропустить». Добавление фото не завершает отмену; по «Готово» — `finish(bot)`, `uploaded_media` → группа (если есть) и `_execute_shift_cancellation(media=...)`. По «Пропустить» — `orchestrator.cancel()`, отмена без медиа.
+- **Shared-форма:** `multipart/form-data`, поле `media_files` (multiple). При MinIO/Selectel — загрузка в хранилище, передача `media` в `cancel_shift`. Редиректы owner/manager/employee уже ведут на `/shared/cancellations/form`.
