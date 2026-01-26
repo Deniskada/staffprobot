@@ -177,7 +177,7 @@ class MediaOrchestrator:
                 if storage_mode == "both":
                     # Загружаем в оба хранилища: сначала в S3, затем сохраняем telegram file_id
                     p = (settings.media_storage_provider or "minio").strip().lower()
-                    s3_override = p if p in ("minio", "selectel") else "minio"
+                    s3_override = p if p in ("minio", "s3") else "minio"
                     
                     logger.info(
                         "Getting S3 storage client for 'both' mode",
@@ -254,7 +254,7 @@ class MediaOrchestrator:
                         )
                 elif storage_mode == "storage":
                     p = (settings.media_storage_provider or "minio").strip().lower()
-                    override = p if p in ("minio", "selectel") else "minio"
+                    override = p if p in ("minio", "s3") else "minio"
                     logger.info(
                         "Getting S3 storage client",
                         user_id=user_id,

@@ -471,9 +471,9 @@ async def submit_cancellation_form(
                     "Shared cancellation: skip S3 upload (use_storage=False)",
                     mode=mode,
                 )
-            elif provider not in ("minio", "selectel"):
+            elif provider not in ("minio", "s3"):
                 logger.info(
-                    "Shared cancellation: skip S3 upload (provider not minio/selectel)",
+                    "Shared cancellation: skip S3 upload (provider not minio/s3)",
                     provider=provider,
                 )
             elif not file_count:

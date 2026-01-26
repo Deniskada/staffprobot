@@ -1,4 +1,4 @@
-"""S3-совместимый клиент медиа-хранилища (MinIO, Selectel)."""
+"""S3-совместимый клиент медиа-хранилища (MinIO, reg.ru, Cloud.ru, AWS и т.д.)."""
 
 from __future__ import annotations
 
@@ -37,23 +37,26 @@ def _s3_client(provider: str):
             config=BotoConfig(signature_version="s3v4"),
             region_name="us-east-1",
         )
-    if provider == "selectel":
+    if provider == "s3":
         if not all(
             [
-                settings.selectel_endpoint,
-                settings.selectel_access_key,
-                settings.selectel_secret_key,
-                settings.selectel_bucket,
+                settings.s3_endpoint,
+                settings.s3_access_key,
+                settings.s3_secret_key,
+                settings.s3_bucket,
             ]
         ):
-            raise ValueError("Selectel storage config incomplete")
+            raise ValueError(
+                "S3 storage config incomplete: set S3_ENDPOINT, S3_ACCESS_KEY, "
+                "S3_SECRET_KEY, S3_BUCKET (reg.ru, Cloud.ru, AWS и т.д.)"
+            )
         return boto3.client(
             "s3",
-            endpoint_url=settings.selectel_endpoint,
-            aws_access_key_id=settings.selectel_access_key,
-            aws_secret_access_key=settings.selectel_secret_key,
+            endpoint_url=settings.s3_endpoint,
+            aws_access_key_id=settings.s3_access_key,
+            aws_secret_access_key=settings.s3_secret_key,
             config=BotoConfig(signature_version="s3v4"),
-            region_name=settings.selectel_region or "ru-1",
+            region_name=settings.s3_region or "us-east-1",
         )
     raise ValueError(f"Unknown S3 provider: {provider}")
 
@@ -61,7 +64,7 @@ def _s3_client(provider: str):
 def _bucket(provider: str) -> str:
     if provider == "minio":
         return settings.minio_bucket
-    return settings.selectel_bucket or ""
+    return settings.s3_bucket or ""
 
 
 def _run_sync(fn, *args, **kwargs):
@@ -69,11 +72,11 @@ def _run_sync(fn, *args, **kwargs):
 
 
 class S3MediaStorageClient(MediaStorageClient):
-    """Хранилище в S3-совместимом бакете (MinIO, Selectel)."""
+    """Хранилище в S3-совместимом бакете (MinIO, reg.ru, Cloud.ru, AWS и т.д.)."""
 
     def __init__(self, provider: str = "minio") -> None:
-        if provider not in ("minio", "selectel"):
-            raise ValueError(f"provider must be minio|selectel, got {provider}")
+        if provider not in ("minio", "s3"):
+            raise ValueError(f"provider must be minio|s3, got {provider}")
         self._provider = provider
         self._client = _s3_client(provider)
         self._bucket = _bucket(provider)

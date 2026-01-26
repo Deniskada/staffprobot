@@ -252,7 +252,7 @@ async def owner_cancellations_list(
         from core.config.settings import settings
         
         storage_client = None
-        if settings.media_storage_provider in ("minio", "selectel"):
+        if settings.media_storage_provider in ("minio", "s3"):
             try:
                 storage_client = get_media_storage_client()
             except Exception as e:

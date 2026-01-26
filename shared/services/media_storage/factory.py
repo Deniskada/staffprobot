@@ -19,8 +19,9 @@ def get_media_storage_client(
     """
     Возвращает клиент хранилища.
 
-    provider_override: "telegram" | "minio" | "selectel" — использовать вместо настроек.
+    provider_override: "telegram" | "minio" | "s3" — использовать вместо настроек.
     Иначе берётся MEDIA_STORAGE_PROVIDER из settings.
+    s3 — любой S3-совместимый провайдер (reg.ru, Cloud.ru, AWS и т.д.).
     """
     base = (settings.media_storage_provider or "telegram").strip().lower()
     provider = (provider_override or base).strip().lower()
@@ -30,7 +31,7 @@ def get_media_storage_client(
         return TelegramMediaStorageClient(bot=bot)
     if provider == "minio":
         return S3MediaStorageClient(provider="minio")
-    if provider == "selectel":
-        return S3MediaStorageClient(provider="selectel")
+    if provider == "s3":
+        return S3MediaStorageClient(provider="s3")
 
     raise ValueError(f"Unknown media storage provider: {provider}")

@@ -32,7 +32,7 @@ async def proxy_media(
         
         # Проверяем, что файл существует и получаем его
         # Для S3 используем get_object, для Telegram - другой метод
-        if settings.media_storage_provider in ("minio", "selectel"):
+        if settings.media_storage_provider in ("minio", "s3"):
             # S3-совместимое хранилище
             from shared.services.media_storage.s3_client import S3MediaStorageClient
             from botocore.exceptions import ClientError
