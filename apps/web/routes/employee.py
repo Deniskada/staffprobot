@@ -3,7 +3,7 @@
 """
 
 from fastapi import APIRouter, Request, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
@@ -2133,6 +2133,85 @@ async def employee_profile_update(
     except Exception as e:
         logger.error(f"Error updating profile: {e}")
         raise HTTPException(status_code=500, detail="Ошибка обновления профиля")
+
+
+@router.post("/api/profile/avatar")
+async def employee_upload_avatar(
+    request: Request,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Загрузка фото профиля сотрудника."""
+    try:
+        if isinstance(current_user, RedirectResponse):
+            raise HTTPException(status_code=401, detail="Пользователь не авторизован")
+        
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем файл из формы
+        form = await request.form()
+        avatar_file = form.get("avatar")
+        
+        if not avatar_file:
+            raise HTTPException(status_code=400, detail="Файл не предоставлен")
+        
+        # Проверяем тип файла
+        if not hasattr(avatar_file, 'content_type') or not avatar_file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Файл должен быть изображением")
+        
+        # Проверяем размер (максимум 5MB)
+        file_content = await avatar_file.read()
+        if len(file_content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Размер файла не должен превышать 5MB")
+        
+        # Получаем пользователя
+        user_query = select(User).where(User.id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Загружаем файл в хранилище
+        from shared.services.media_storage import get_media_storage_client
+        storage_client = get_media_storage_client()
+        
+        # Определяем имя файла
+        file_name = avatar_file.filename or f"avatar_{user_id}.jpg"
+        folder = f"profiles/{user_id}"
+        
+        # Загружаем
+        media_file = await storage_client.upload(
+            file_content=file_content,
+            file_name=file_name,
+            content_type=avatar_file.content_type,
+            folder=folder,
+            metadata={"user_id": user_id, "type": "avatar"}
+        )
+        
+        # Получаем URL
+        avatar_url = await storage_client.get_url(media_file.key, expires_in=31536000)  # 1 год
+        
+        # Сохраняем URL в профиле
+        user.avatar_url = avatar_url
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.info(f"Avatar uploaded: user_id={user_id}, avatar_url={avatar_url}, storage_key={media_file.key}")
+        
+        return JSONResponse(content={
+            "success": True,
+            "avatar_url": avatar_url,
+            "message": "Фото профиля успешно загружено"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error uploading avatar: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки фото: {str(e)}")
 
 
 @router.get("/history", response_class=HTMLResponse)

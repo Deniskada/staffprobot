@@ -377,6 +377,13 @@ async def submit_cancellation_form(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Обработка формы отмены смен."""
+    logger.info(
+        "Shared cancellation POST received",
+        shift_type=shift_type,
+        shift_ids=shift_ids,
+        has_media=bool(media_files),
+    )
+    
     if isinstance(current_user, RedirectResponse):
         return current_user
 
@@ -424,32 +431,91 @@ async def submit_cancellation_form(
     if reason_obj.requires_document and not document_description:
         raise HTTPException(status_code=400, detail="Для выбранной причины требуется описание документа")
 
+    logger.info(
+        "Shared cancellation submit started",
+        owner_id=owner_id,
+        schedule_ids=schedule_ids,
+        has_media=bool(media_files),
+    )
+
     media_list: List[Dict[str, Any]] = []
     try:
-        from core.config.settings import settings
-        from shared.services.owner_media_storage_service import get_storage_mode
-        mode = await get_storage_mode(db, owner_id, "cancellations")
-        use_storage = mode in ("storage", "both")
-        provider = (settings.media_storage_provider or "").strip().lower()
-        if use_storage and provider in ("minio", "selectel") and media_files:
-            from shared.services.media_storage import get_media_storage_client
-            storage = get_media_storage_client()
-            folder = f"cancellations/{schedules[0].id}"
-            for uf in media_files:
-                if not uf.filename:
-                    continue
-                raw = await uf.read()
-                content_type = uf.content_type or "application/octet-stream"
-                m = await storage.upload(raw, uf.filename, content_type, folder)
-                media_list.append({
-                    "key": m.key,
-                    "url": m.url,
-                    "type": m.type,
-                    "size": m.size,
-                    "mime_type": m.mime_type,
-                })
+        if not owner_id:
+            logger.warning(
+                "Shared cancellation: owner_id is None, skipping media upload",
+                schedule_ids=schedule_ids,
+            )
+        else:
+            from core.config.settings import settings
+            from shared.services.owner_media_storage_service import get_storage_mode
+
+            mode = await get_storage_mode(db, owner_id, "cancellations")
+            use_storage = mode in ("storage", "both")
+            provider = (settings.media_storage_provider or "").strip().lower()
+            files_list: List[UploadFile] = (
+                list(media_files) if isinstance(media_files, (list, tuple)) else ([media_files] if media_files else [])
+            )
+            file_count = sum(1 for uf in files_list if getattr(uf, "filename", None))
+
+            logger.info(
+                "Shared cancellation media check",
+                owner_id=owner_id,
+                mode=mode,
+                provider=provider,
+                use_storage=use_storage,
+                file_count=file_count,
+            )
+
+            if not use_storage:
+                logger.info(
+                    "Shared cancellation: skip S3 upload (use_storage=False)",
+                    mode=mode,
+                )
+            elif provider not in ("minio", "selectel"):
+                logger.info(
+                    "Shared cancellation: skip S3 upload (provider not minio/selectel)",
+                    provider=provider,
+                )
+            elif not file_count:
+                logger.info("Shared cancellation: skip S3 upload (no media_files)")
+            else:
+                from shared.services.media_storage import get_media_storage_client
+
+                storage = get_media_storage_client()
+                folder = f"cancellations/{schedules[0].id}"
+                for uf in files_list:
+                    filename = getattr(uf, "filename", None)
+                    if not filename:
+                        continue
+                    # Важно: файл может быть уже прочитан, нужно проверить позицию
+                    try:
+                        uf.file.seek(0)  # Перематываем на начало
+                    except (AttributeError, OSError):
+                        pass  # Если нет метода seek, продолжаем
+                    raw = await uf.read()
+                    if not raw:
+                        logger.warning("Shared cancellation: skipping empty file", filename=filename)
+                        continue
+                    content_type = getattr(uf, "content_type", None) or "application/octet-stream"
+                    m = await storage.upload(raw, uf.filename, content_type, folder)
+                    media_list.append({
+                        "key": m.key,
+                        "url": m.url,
+                        "type": m.type,
+                        "size": m.size,
+                        "mime_type": m.mime_type,
+                    })
+                    logger.info(
+                        "Shared cancellation: uploaded to S3",
+                        key=m.key,
+                        folder=folder,
+                    )
     except Exception as e:
-        logger.warning(f"Shared cancellation media upload failed: {e}")
+        logger.exception(
+            "Shared cancellation media upload failed",
+            error=str(e),
+            owner_id=owner_id,
+        )
 
     cancellation_service = ShiftCancellationService(db)
     success_ids: List[int] = []

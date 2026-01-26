@@ -123,6 +123,40 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Цены хранения медиа (restruct1 Фаза 1.6) -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h5 class="mb-3">💾 Цены хранения медиа</h5>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="storage_price_telegram" class="form-label">Цена хранения в Telegram (₽/мес)</label>
+                                <input type="number" class="form-control" id="storage_price_telegram" name="storage_price_telegram" 
+                                       value="{{ tariff_plan.storage_price_telegram if tariff_plan and tariff_plan.storage_price_telegram else '0' }}" 
+                                       step="0.01" min="0">
+                                <small class="form-text text-muted">Стоимость хранения медиа в Telegram</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="storage_price_object_storage" class="form-label">Цена хранения в S3 (₽/мес)</label>
+                                <input type="number" class="form-control" id="storage_price_object_storage" name="storage_price_object_storage" 
+                                       value="{{ tariff_plan.storage_price_object_storage if tariff_plan and tariff_plan.storage_price_object_storage else '0' }}" 
+                                       step="0.01" min="0">
+                                <small class="form-text text-muted">Стоимость хранения медиа в Object Storage (MinIO/Selectel)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="storage_option_price" class="form-label">Цена опции "Защищённое хранилище" (₽/мес)</label>
+                                <input type="number" class="form-control" id="storage_option_price" name="storage_option_price" 
+                                       value="{{ tariff_plan.storage_option_price if tariff_plan and tariff_plan.storage_option_price else '0' }}" 
+                                       step="0.01" min="0">
+                                <small class="form-text text-muted">Дополнительная плата за включение опции защищённого хранилища</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Лимиты -->

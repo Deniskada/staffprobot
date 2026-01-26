@@ -209,27 +209,61 @@ class EmployeeProfileManager {
                 body: formData
             });
 
+            // Сначала читаем текст ответа (можно вызвать только один раз)
+            const responseText = await response.text();
+            
             if (response.ok) {
-                const result = await response.json();
-                this.showNotification('Фото профиля успешно обновлено!', 'success');
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (jsonError) {
+                    console.error('Ошибка парсинга JSON:', jsonError);
+                    console.error('Ответ сервера (текст):', responseText);
+                    console.error('Content-Type:', response.headers.get('content-type'));
+                    this.showNotification('Ошибка при обработке ответа сервера', 'error');
+                    return;
+                }
                 
-                // Обновляем аватар на странице
-                document.getElementById('profile-avatar').src = result.avatar_url;
-                
-                // Закрываем модальное окно
-                const modal = bootstrap.Modal.getInstance(document.getElementById('avatarModal'));
-                modal.hide();
-                
-                // Очищаем форму
-                document.getElementById('avatar-form').reset();
-                document.getElementById('avatar-preview').style.display = 'none';
+                if (result && result.avatar_url) {
+                    this.showNotification('Фото профиля успешно обновлено!', 'success');
+                    
+                    // Обновляем аватар на странице
+                    document.getElementById('profile-avatar').src = result.avatar_url;
+                    
+                    // Закрываем модальное окно
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('avatarModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    // Очищаем форму
+                    const avatarForm = document.getElementById('avatar-form');
+                    if (avatarForm) {
+                        avatarForm.reset();
+                    }
+                    const preview = document.getElementById('avatar-preview');
+                    if (preview) {
+                        preview.style.display = 'none';
+                    }
+                } else {
+                    console.error('Неожиданный формат ответа:', result);
+                    this.showNotification('Ошибка: неверный формат ответа сервера', 'error');
+                }
             } else {
-                const error = await response.json();
-                this.showNotification(error.detail || 'Ошибка при загрузке фото', 'error');
+                let error;
+                try {
+                    error = JSON.parse(responseText);
+                } catch (jsonError) {
+                    console.error('Ошибка сервера (текст):', responseText);
+                    console.error('Status:', response.status, response.statusText);
+                    this.showNotification(`Ошибка ${response.status}: ${response.statusText}`, 'error');
+                    return;
+                }
+                this.showNotification(error.detail || error.message || 'Ошибка при загрузке фото', 'error');
             }
         } catch (error) {
-            console.error('Ошибка:', error);
-            this.showNotification('Ошибка при загрузке фото', 'error');
+            console.error('Ошибка при загрузке фото:', error);
+            this.showNotification('Ошибка при загрузке фото: ' + error.message, 'error');
         }
     }
 

@@ -70,6 +70,9 @@ async def create_tariff(
     is_active: bool = Form(True),
     is_popular: bool = Form(False),
     grace_period_days: Optional[int] = Form(0),
+    storage_price_telegram: Optional[float] = Form(0),
+    storage_price_object_storage: Optional[float] = Form(0),
+    storage_option_price: Optional[float] = Form(0),
     current_user: dict = Depends(require_superadmin)
 ):
     """Создание тарифного плана."""
@@ -95,7 +98,10 @@ async def create_tariff(
             "features": features_list,
             "is_active": is_active,
             "is_popular": is_popular,
-            "grace_period_days": grace_period_days or 0
+            "grace_period_days": grace_period_days or 0,
+            "storage_price_telegram": storage_price_telegram or 0,
+            "storage_price_object_storage": storage_price_object_storage or 0,
+            "storage_option_price": storage_option_price or 0,
         }
         
         async with get_async_session() as session:
@@ -163,6 +169,9 @@ async def edit_tariff(
     is_active: bool = Form(True),
     is_popular: bool = Form(False),
     grace_period_days: Optional[int] = Form(0),
+    storage_price_telegram: Optional[float] = Form(0),
+    storage_price_object_storage: Optional[float] = Form(0),
+    storage_option_price: Optional[float] = Form(0),
     current_user: dict = Depends(require_superadmin)
 ):
     """Редактирование тарифного плана."""
@@ -188,7 +197,10 @@ async def edit_tariff(
             "features": features_list,
             "is_active": is_active,
             "is_popular": is_popular,
-            "grace_period_days": grace_period_days or 0
+            "grace_period_days": grace_period_days or 0,
+            "storage_price_telegram": storage_price_telegram or 0,
+            "storage_price_object_storage": storage_price_object_storage or 0,
+            "storage_option_price": storage_option_price or 0,
         }
         
         async with get_async_session() as session:

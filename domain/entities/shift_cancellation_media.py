@@ -21,6 +21,7 @@ class ShiftCancellationMedia(Base):
     )
     file_type = Column(String(20), nullable=False)  # 'photo' | 'video' | 'document'
     storage_key = Column(String(500), nullable=False)  # key в хранилище (S3 path / telegram file_id)
+    telegram_file_id = Column(String(200), nullable=True)  # Telegram file_id (если медиа есть и в Telegram)
     file_size = Column(Integer, nullable=False)
     mime_type = Column(String(100), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

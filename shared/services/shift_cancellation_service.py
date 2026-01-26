@@ -142,11 +142,16 @@ class ShiftCancellationService:
             await self.session.flush()
 
             for m in media or []:
+                # Извлекаем telegram_file_id из metadata, если есть
+                metadata = m.get("metadata", {}) if isinstance(m.get("metadata"), dict) else {}
+                telegram_file_id = metadata.get("telegram_file_id") if metadata else None
+                
                 self.session.add(
                     ShiftCancellationMedia(
                         cancellation_id=cancellation.id,
                         file_type=m.get("type", "photo"),
                         storage_key=str(m.get("key", "")),
+                        telegram_file_id=telegram_file_id,
                         file_size=int(m.get("size", 0)),
                         mime_type=m.get("mime_type", "application/octet-stream"),
                     )

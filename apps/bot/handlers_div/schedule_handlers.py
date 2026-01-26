@@ -757,13 +757,43 @@ async def handle_cancellation_photo_upload(update: Update, context: ContextTypes
     if not photo:
         return
 
-    from shared.services.media_orchestrator import MediaOrchestrator
+    from shared.services.media_orchestrator import MediaOrchestrator, MediaFlowConfig
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
     orchestrator = MediaOrchestrator()
+    
+    # Проверяем, есть ли активный поток, если нет - создаем
+    flow = await orchestrator.get_flow(telegram_id)
+    if not flow:
+        logger.info("No media flow found, creating new one", telegram_id=telegram_id, shift_id=shift_id)
+        flow_cfg = MediaFlowConfig(
+            user_id=telegram_id,
+            context_type="cancellation_doc",
+            context_id=shift_id,
+            collected_photos=[],
+        )
+        await orchestrator.begin_flow(flow_cfg)
+        logger.info("Created media flow for cancellation", telegram_id=telegram_id, shift_id=shift_id)
+    else:
+        logger.info("Using existing media flow", telegram_id=telegram_id, shift_id=shift_id, photos_count=len(flow.collected_photos) if flow.collected_photos else 0)
+    
     await orchestrator.add_photo(telegram_id, photo.file_id)
     n = await orchestrator.get_collected_count(telegram_id)
     can_add = await orchestrator.can_add_more(telegram_id)
+    
+    logger.info(
+        "Photo added to cancellation flow",
+        telegram_id=telegram_id,
+        shift_id=shift_id,
+        photo_count=n,
+        can_add_more=can_add,
+    )
+    
+    # Сохраняем фото в контекст на случай, если поток потеряется
+    if "cancellation_photos" not in context.user_data:
+        context.user_data["cancellation_photos"] = []
+    context.user_data["cancellation_photos"].append(photo.file_id)
+    
     await orchestrator.close()
 
     keyboard = [
@@ -822,37 +852,125 @@ async def handle_cancellation_done_photo(update: Update, context: ContextTypes.D
         await query.edit_message_text("❌ Ошибка: данные отмены не найдены.")
         return
 
-    from shared.services.media_orchestrator import MediaOrchestrator
+    from shared.services.media_orchestrator import MediaOrchestrator, MediaFlowConfig
     from core.state.user_state_manager import user_state_manager
     from core.database.session import get_async_session
     from shared.services.owner_media_storage_service import get_storage_mode
 
     orchestrator = MediaOrchestrator()
+    
+    # Проверяем, есть ли активный поток медиа
+    flow = await orchestrator.get_flow(telegram_id)
+    logger.info(
+        "Cancellation done photo: checking flow",
+        telegram_id=telegram_id,
+        shift_id=shift_id,
+        has_flow=flow is not None,
+        flow_collected_photos=len(flow.collected_photos) if flow and flow.collected_photos else 0,
+        context_photos=len(context.user_data.get("cancellation_photos", [])),
+    )
+    
+    if not flow:
+        # Если потока нет, но есть фото в контексте, создаем поток
+        collected_photos = context.user_data.get("cancellation_photos", [])
+        if collected_photos:
+            logger.info("Creating media flow from context photos", telegram_id=telegram_id, shift_id=shift_id, photos_count=len(collected_photos))
+            # Создаем временный поток для загрузки медиа
+            flow_cfg = MediaFlowConfig(
+                user_id=telegram_id,
+                context_type="cancellation_doc",
+                context_id=shift_id,
+                collected_photos=collected_photos,
+            )
+            await orchestrator.begin_flow(flow_cfg)
+            flow = flow_cfg
+        else:
+            logger.warning("No media flow and no photos in context for cancellation", telegram_id=telegram_id, shift_id=shift_id)
+    
     storage_mode = "telegram"
     async with get_async_session() as session:
         shift_result = await session.execute(select(ShiftSchedule).where(ShiftSchedule.id == shift_id))
         shift = shift_result.scalar_one_or_none()
         obj = None
         if shift:
-            obj_result = await session.execute(select(Object).where(Object.id == shift.object_id))
+            # Получаем объект с eager loading org_unit для определения report_chat_id
+            from sqlalchemy.orm import joinedload
+            object_query = select(Object).where(Object.id == shift.object_id).options(
+                joinedload(Object.org_unit).joinedload('parent').joinedload('parent').joinedload('parent').joinedload('parent')
+            )
+            obj_result = await session.execute(object_query)
             obj = obj_result.scalar_one_or_none()
+        
         if obj:
             storage_mode = await get_storage_mode(session, obj.owner_id, "cancellations")
+            # Определяем report_chat_id, если его нет в контексте
+            if not report_chat_id:
+                report_chat_id = obj.get_effective_report_chat_id() if obj else None
+                if report_chat_id:
+                    context.user_data['report_chat_id'] = report_chat_id
+                    logger.info("Determined report_chat_id from object", shift_id=shift_id, report_chat_id=report_chat_id)
 
+    # Завершаем поток и загружаем медиа
+    logger.info(
+        "Finishing media flow",
+        telegram_id=telegram_id,
+        shift_id=shift_id,
+        storage_mode=storage_mode,
+        has_flow=flow is not None,
+        flow_photos=len(flow.collected_photos) if flow and flow.collected_photos else 0,
+    )
+    
     flow = await orchestrator.finish(
         telegram_id, bot=context.bot, media_types=None, storage_mode=storage_mode
     )
     await orchestrator.close()
     await user_state_manager.clear_state(telegram_id)
 
+    logger.info(
+        "Media flow finished",
+        telegram_id=telegram_id,
+        shift_id=shift_id,
+        has_flow=flow is not None,
+        uploaded_count=len(flow.uploaded_media) if flow and flow.uploaded_media else 0,
+        collected_count=len(flow.collected_photos) if flow and flow.collected_photos else 0,
+    )
+
     media_list = None
     if flow and flow.uploaded_media:
-        media_list = [
-            {"key": m.key, "url": m.url, "type": m.type, "size": m.size, "mime_type": m.mime_type}
-            for m in flow.uploaded_media
-        ]
+        media_list = []
+        for m in flow.uploaded_media:
+            media_dict = {
+                "key": m.key,
+                "url": m.url,
+                "type": m.type,
+                "size": m.size,
+                "mime_type": m.mime_type,
+            }
+            # Добавляем telegram_file_id в metadata, если есть
+            if hasattr(m, "metadata") and m.metadata and "telegram_file_id" in m.metadata:
+                media_dict["metadata"] = {"telegram_file_id": m.metadata["telegram_file_id"]}
+            media_list.append(media_dict)
+        logger.info("Cancellation media uploaded", shift_id=shift_id, media_count=len(media_list))
+    elif flow and flow.collected_photos:
+        logger.warning(
+            "Cancellation has collected photos but no uploaded_media",
+            shift_id=shift_id,
+            photos_count=len(flow.collected_photos),
+            storage_mode=storage_mode,
+        )
+    else:
+        logger.warning("No media in flow after finish", shift_id=shift_id, has_flow=flow is not None)
 
     file_ids = (flow.collected_photos or []) if flow else []
+    
+    logger.info(
+        "Checking conditions for sending to group",
+        shift_id=shift_id,
+        report_chat_id=report_chat_id,
+        file_ids_count=len(file_ids),
+        will_send=bool(report_chat_id and file_ids),
+    )
+    
     if report_chat_id and file_ids:
         try:
             from apps.bot.handlers_div.shift_handlers import _send_multiple_media_to_group
@@ -888,11 +1006,23 @@ async def handle_cancellation_done_photo(update: Update, context: ContextTypes.D
                 if reason_notes:
                     caption += f"✍️ Объяснение: {reason_notes}\n"
                 types_list = ["photo"] * len(file_ids)
+                logger.info(
+                    "Sending cancellation media to group",
+                    shift_id=shift_id,
+                    report_chat_id=report_chat_id,
+                    file_ids_count=len(file_ids),
+                )
                 await _send_multiple_media_to_group(
                     context.bot, str(report_chat_id), file_ids, caption, types_list
                 )
+                logger.info("Cancellation media sent to group successfully", shift_id=shift_id, report_chat_id=report_chat_id)
         except Exception as e:
-            logger.error(f"Error sending cancellation media to group: {e}")
+            logger.exception(
+                "Error sending cancellation media to group",
+                shift_id=shift_id,
+                report_chat_id=report_chat_id,
+                error=str(e),
+            )
 
     await _execute_shift_cancellation(
         shift_id=shift_id,

@@ -39,6 +39,8 @@ class TariffService:
     
     async def create_tariff_plan(self, data: Dict[str, Any]) -> TariffPlan:
         """Создание нового тарифного плана."""
+        from decimal import Decimal
+        
         tariff_plan = TariffPlan(
             name=data["name"],
             description=data.get("description"),
@@ -50,7 +52,10 @@ class TariffService:
             max_managers=data.get("max_managers", 0),
             features=data.get("features", []),
             is_active=data.get("is_active", True),
-            is_popular=data.get("is_popular", False)
+            is_popular=data.get("is_popular", False),
+            storage_price_telegram=Decimal(str(data.get("storage_price_telegram", 0))),
+            storage_price_object_storage=Decimal(str(data.get("storage_price_object_storage", 0))),
+            storage_option_price=Decimal(str(data.get("storage_option_price", 0))),
         )
         
         self.session.add(tariff_plan)
@@ -62,9 +67,17 @@ class TariffService:
     
     async def update_tariff_plan(self, tariff_id: int, data: Dict[str, Any]) -> Optional[TariffPlan]:
         """Обновление тарифного плана."""
+        from decimal import Decimal
+        
         tariff_plan = await self.get_tariff_plan_by_id(tariff_id)
         if not tariff_plan:
             return None
+        
+        # Конвертируем цены хранения в Decimal
+        storage_fields = ["storage_price_telegram", "storage_price_object_storage", "storage_option_price"]
+        for field in storage_fields:
+            if field in data:
+                data[field] = Decimal(str(data[field] or 0))
         
         for key, value in data.items():
             if hasattr(tariff_plan, key):

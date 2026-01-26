@@ -8,9 +8,7 @@ import json
 import redis.asyncio as redis
 from core.config.settings import settings
 from core.logging.logger import logger
-
-if TYPE_CHECKING:
-    from shared.services.media_storage.base import MediaFile
+from shared.services.media_storage.base import MediaFile
 
 
 def _folder_for_context(context_type: str, context_id: int) -> str:
@@ -160,28 +158,148 @@ class MediaOrchestrator:
         logger.info(f"Media flow finished: user={user_id}, type={cfg.context_type}")
 
         if bot and cfg.collected_photos:
+            logger.info(
+                "Starting media upload in finish",
+                user_id=user_id,
+                context_type=cfg.context_type,
+                context_id=cfg.context_id,
+                photos_count=len(cfg.collected_photos),
+                storage_mode=storage_mode,
+            )
             try:
                 from core.config.settings import settings
                 from shared.services.media_storage import get_media_storage_client
                 override = None
-                if storage_mode == "telegram":
-                    override = "telegram"
-                elif storage_mode in ("storage", "both"):
-                    p = (settings.media_storage_provider or "minio").strip().lower()
-                    override = p if p in ("minio", "selectel") else "minio"
-                storage = get_media_storage_client(bot=bot, provider_override=override)
+                uploaded: List[Any] = []
                 folder = _folder_for_context(cfg.context_type, cfg.context_id)
                 types_map = media_types or {}
-                uploaded: List[Any] = []
-                for fid in cfg.collected_photos:
-                    ftype = types_map.get(fid, "photo")
-                    m = await storage.store_telegram_file(fid, folder, ftype, bot)
-                    uploaded.append(m)
+                
+                if storage_mode == "both":
+                    # Загружаем в оба хранилища: сначала в S3, затем сохраняем telegram file_id
+                    p = (settings.media_storage_provider or "minio").strip().lower()
+                    s3_override = p if p in ("minio", "selectel") else "minio"
+                    
+                    logger.info(
+                        "Getting S3 storage client for 'both' mode",
+                        user_id=user_id,
+                        provider_override=s3_override,
+                    )
+                    
+                    s3_storage = get_media_storage_client(bot=bot, provider_override=s3_override)
+                    telegram_storage = get_media_storage_client(bot=bot, provider_override="telegram")
+                    
+                    for idx, fid in enumerate(cfg.collected_photos):
+                        ftype = types_map.get(fid, "photo")
+                        logger.info(
+                            "Uploading to S3 (both mode)",
+                            user_id=user_id,
+                            file_index=idx + 1,
+                            total=len(cfg.collected_photos),
+                            folder=folder,
+                            file_type=ftype,
+                        )
+                        # Загружаем в S3
+                        s3_media = await s3_storage.store_telegram_file(fid, folder, ftype, bot)
+                        # Получаем telegram file_id
+                        tg_media = await telegram_storage.store_telegram_file(fid, folder, ftype, bot)
+                        
+                        # Создаем MediaFile с информацией о обоих хранилищах
+                        # Используем S3 key как основной, но сохраняем telegram_file_id в metadata
+                        m = MediaFile(
+                            key=s3_media.key,
+                            url=s3_media.url,
+                            type=ftype,
+                            size=s3_media.size,
+                            mime_type=s3_media.mime_type,
+                            uploaded_at=s3_media.uploaded_at,
+                            metadata={
+                                **(s3_media.metadata or {}),
+                                "telegram_file_id": tg_media.key,  # Сохраняем telegram file_id в metadata
+                            },
+                        )
+                        uploaded.append(m)
+                        logger.info(
+                            "File uploaded to both storages",
+                            user_id=user_id,
+                            file_index=idx + 1,
+                            s3_key=s3_media.key,
+                            telegram_file_id=tg_media.key,
+                        )
+                elif storage_mode == "telegram":
+                    override = "telegram"
+                    logger.info(
+                        "Getting Telegram storage client",
+                        user_id=user_id,
+                        storage_mode=storage_mode,
+                    )
+                    storage = get_media_storage_client(bot=bot, provider_override=override)
+                    for idx, fid in enumerate(cfg.collected_photos):
+                        ftype = types_map.get(fid, "photo")
+                        logger.info(
+                            "Uploading telegram file",
+                            user_id=user_id,
+                            file_index=idx + 1,
+                            total=len(cfg.collected_photos),
+                            folder=folder,
+                            file_type=ftype,
+                        )
+                        m = await storage.store_telegram_file(fid, folder, ftype, bot)
+                        uploaded.append(m)
+                        logger.info(
+                            "File uploaded successfully",
+                            user_id=user_id,
+                            file_index=idx + 1,
+                            key=m.key,
+                            url=m.url,
+                        )
+                elif storage_mode == "storage":
+                    p = (settings.media_storage_provider or "minio").strip().lower()
+                    override = p if p in ("minio", "selectel") else "minio"
+                    logger.info(
+                        "Getting S3 storage client",
+                        user_id=user_id,
+                        storage_mode=storage_mode,
+                        provider_override=override,
+                    )
+                    storage = get_media_storage_client(bot=bot, provider_override=override)
+                    for idx, fid in enumerate(cfg.collected_photos):
+                        ftype = types_map.get(fid, "photo")
+                        logger.info(
+                            "Uploading to S3",
+                            user_id=user_id,
+                            file_index=idx + 1,
+                            total=len(cfg.collected_photos),
+                            folder=folder,
+                            file_type=ftype,
+                        )
+                        m = await storage.store_telegram_file(fid, folder, ftype, bot)
+                        uploaded.append(m)
+                        logger.info(
+                            "File uploaded successfully",
+                            user_id=user_id,
+                            file_index=idx + 1,
+                            key=m.key,
+                            url=m.url,
+                        )
+                
                 cfg.uploaded_media = uploaded
-            except Exception as e:
-                logger.warning(
-                    f"Media storage upload failed, continuing without uploaded_media: {e}"
+                logger.info(
+                    "All media uploaded successfully",
+                    user_id=user_id,
+                    uploaded_count=len(uploaded),
                 )
+            except Exception as e:
+                logger.exception(
+                    "Media storage upload failed, continuing without uploaded_media",
+                    user_id=user_id,
+                    context_type=cfg.context_type,
+                    context_id=cfg.context_id,
+                    error=str(e),
+                )
+        elif not bot:
+            logger.warning("No bot provided for media upload", user_id=user_id)
+        elif not cfg.collected_photos:
+            logger.warning("No collected photos to upload", user_id=user_id)
 
         return cfg
     

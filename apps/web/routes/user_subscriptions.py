@@ -467,3 +467,104 @@ async def api_user_subscription(
             "success": False,
             "error": str(e)
         }
+
+
+@router.get("/{subscription_id}/logs", response_class=HTMLResponse, name="subscription_logs")
+async def subscription_logs(
+    request: Request,
+    subscription_id: int,
+    current_user: dict = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Просмотр логов изменений тарифа и опций подписки."""
+    try:
+        from sqlalchemy import select, desc
+        from sqlalchemy.orm import selectinload
+        from domain.entities.user_subscription import UserSubscription
+        from domain.entities.subscription_option_log import SubscriptionOptionLog
+        from domain.entities.tariff_plan import TariffPlan
+        
+        # Получаем подписку
+        subscription_result = await session.execute(
+            select(UserSubscription)
+            .options(
+                selectinload(UserSubscription.user),
+                selectinload(UserSubscription.tariff_plan)
+            )
+            .where(UserSubscription.id == subscription_id)
+        )
+        subscription = subscription_result.scalar_one_or_none()
+        
+        if not subscription:
+            raise HTTPException(status_code=404, detail="Подписка не найдена")
+        
+        # Получаем логи изменений
+        logs_result = await session.execute(
+            select(SubscriptionOptionLog)
+            .where(SubscriptionOptionLog.subscription_id == subscription_id)
+            .order_by(desc(SubscriptionOptionLog.changed_at))
+        )
+        logs = list(logs_result.scalars().all())
+        
+        # Получаем информацию о тарифах для отображения
+        tariff_ids = set()
+        for log in logs:
+            if log.old_tariff_id:
+                tariff_ids.add(log.old_tariff_id)
+            if log.new_tariff_id:
+                tariff_ids.add(log.new_tariff_id)
+        
+        tariffs_map = {}
+        if tariff_ids:
+            tariffs_result = await session.execute(
+                select(TariffPlan).where(TariffPlan.id.in_(tariff_ids))
+            )
+            for tariff in tariffs_result.scalars().all():
+                tariffs_map[tariff.id] = tariff
+        
+        # Получаем маппинг названий опций
+        from core.config.features import SYSTEM_FEATURES_REGISTRY
+        
+        # Формируем данные для шаблона
+        logs_data = []
+        for log in logs:
+            # Преобразуем ключи опций в человекочитаемые названия
+            options_enabled_names = []
+            for option_key in (log.options_enabled or []):
+                feature = SYSTEM_FEATURES_REGISTRY.get(option_key)
+                options_enabled_names.append({
+                    "key": option_key,
+                    "name": feature.get("name", option_key) if feature else option_key
+                })
+            
+            options_disabled_names = []
+            for option_key in (log.options_disabled or []):
+                feature = SYSTEM_FEATURES_REGISTRY.get(option_key)
+                options_disabled_names.append({
+                    "key": option_key,
+                    "name": feature.get("name", option_key) if feature else option_key
+                })
+            
+            log_data = {
+                "id": log.id,
+                "changed_at": log.changed_at,
+                "old_tariff": tariffs_map.get(log.old_tariff_id) if log.old_tariff_id else None,
+                "new_tariff": tariffs_map.get(log.new_tariff_id) if log.new_tariff_id else None,
+                "options_enabled": options_enabled_names,
+                "options_disabled": options_disabled_names,
+            }
+            logs_data.append(log_data)
+        
+        return templates.TemplateResponse("admin/subscription_logs.html", {
+            "request": request,
+            "current_user": current_user,
+            "title": f"Логи подписки #{subscription.id}",
+            "subscription": subscription,
+            "logs": logs_data,
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading subscription logs: {e}", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки логов: {str(e)}")

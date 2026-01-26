@@ -120,13 +120,33 @@ class S3MediaStorageClient(MediaStorageClient):
         return m
 
     async def get_url(self, key: str, expires_in: int = 3600) -> str:
-        url = await _run_sync(
-            self._client.generate_presigned_url,
-            "get_object",
-            Params={"Bucket": self._bucket, "Key": key},
-            ExpiresIn=expires_in,
-        )
-        return url or ""
+        """
+        Получить URL для доступа к файлу.
+        
+        Для S3-хранилищ возвращает URL веб-приложения (прокси),
+        чтобы избежать проблем с внутренними адресами Docker.
+        """
+        # Используем settings.environment для определения окружения
+        # На dev всегда используем settings.domain, на prod - через URLHelper (из БД)
+        if settings.environment == "development":
+            # На dev используем настройки из .env напрямую
+            protocol = "https" if settings.use_https else "http"
+            base_url = f"{protocol}://{settings.domain}"
+        else:
+            # На prod используем URLHelper (берет домен из БД)
+            from core.utils.url_helper import URLHelper
+            try:
+                base_url = await URLHelper.get_web_url()
+            except Exception as e:
+                # Fallback на настройки из settings, если URLHelper не инициализирован
+                logger.warning("URLHelper not initialized, using settings.domain", error=str(e))
+                protocol = "https" if settings.use_https else "http"
+                base_url = f"{protocol}://{settings.domain}"
+        
+        # URL-кодируем ключ для безопасной передачи в пути
+        import urllib.parse
+        encoded_key = urllib.parse.quote(key, safe="")
+        return f"{base_url}/api/media/{encoded_key}"
 
     async def delete(self, key: str) -> bool:
         try:

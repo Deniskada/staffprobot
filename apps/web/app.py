@@ -16,7 +16,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, shared_cancellations, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll, manager_payroll_adjustments, owner_payroll_adjustments, cancellations, admin_notifications, organization_profiles, owner_features, owner_media_storage, owner_cancellation_reasons, owner_rules, owner_tasks, owner_incidents, manager_tasks, employee_tasks, webhooks, owner_subscription, support
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, shared_cancellations, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll, manager_payroll_adjustments, owner_payroll_adjustments, cancellations, admin_notifications, organization_profiles, owner_features, owner_media_storage, owner_cancellation_reasons, owner_rules, owner_tasks, owner_incidents, manager_tasks, employee_tasks, webhooks, owner_subscription, support, media_proxy
 from routes.shared.calendar_api import router as calendar_api_router
 from apps.web.routes.system_settings_api import router as system_settings_router
 from core.database.session import get_db_session
@@ -119,6 +119,16 @@ app.add_middleware(FeaturesMiddleware)
 # Middleware для принудительного HTTPS
 @app.middleware("http")
 async def force_https(request: Request, call_next):
+    from core.logging.logger import logger
+    
+    # Логируем POST запросы к /shared/cancellations
+    if request.method == "POST" and "/shared/cancellations" in request.url.path:
+        logger.info(
+            "HTTP middleware: POST to shared/cancellations",
+            path=request.url.path,
+            client=request.client.host if request.client else None,
+        )
+    
     # Проверяем заголовки от прокси (Nginx)
     forwarded_proto = request.headers.get("x-forwarded-proto")
     forwarded_host = request.headers.get("x-forwarded-host")
@@ -261,6 +271,7 @@ app.include_router(admin_reports.router, prefix="/admin/reports", tags=["Адм�
 app.include_router(owner_timeslots.router, prefix="/owner/timeslots", tags=["Владелец - Тайм-слоты (новые)"])
 app.include_router(owner_shifts.router, prefix="/owner/shifts", tags=["Владелец - Смены"])
 app.include_router(cancellations.router, tags=["Отмена смен"])
+app.include_router(media_proxy.router, tags=["Прокси медиа"])
 app.include_router(owner_cancellation_reasons.router, tags=["Владелец - Причины отмен"])
 app.include_router(owner_rules.router, tags=["Владелец - Правила"])
 app.include_router(owner_tasks.router, tags=["Владелец - Задачи v2"])

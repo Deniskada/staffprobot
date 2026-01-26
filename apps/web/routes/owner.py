@@ -5827,6 +5827,73 @@ async def owner_profile_autosave(
         return {"success": False, "error": str(e)}
 
 
+@router.post("/profile/api/photo")
+async def owner_upload_photo(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Загрузка фото для профиля владельца."""
+    try:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем файл из формы
+        form = await request.form()
+        photo_file = form.get("photo")
+        
+        if not photo_file:
+            raise HTTPException(status_code=400, detail="Файл не предоставлен")
+        
+        # Проверяем тип файла
+        if not hasattr(photo_file, 'content_type') or not photo_file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Файл должен быть изображением")
+        
+        # Проверяем размер (максимум 5MB)
+        file_content = await photo_file.read()
+        if len(file_content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Размер файла не должен превышать 5MB")
+        
+        # Загружаем файл в хранилище
+        from shared.services.media_storage import get_media_storage_client
+        import uuid
+        storage_client = get_media_storage_client()
+        
+        # Определяем имя файла
+        file_name = photo_file.filename or f"photo_{user_id}_{uuid.uuid4().hex[:8]}.jpg"
+        folder = f"profiles/{user_id}/photos"
+        
+        # Убеждаемся, что folder не содержит двойных слешей
+        folder = folder.replace('//', '/')
+        
+        # Загружаем
+        media_file = await storage_client.upload(
+            file_content=file_content,
+            file_name=file_name,
+            content_type=photo_file.content_type,
+            folder=folder,
+            metadata={"user_id": user_id, "type": "profile_photo"}
+        )
+        
+        # Получаем URL
+        photo_url = await storage_client.get_url(media_file.key, expires_in=31536000)  # 1 год
+        
+        logger.info(f"Profile photo uploaded: user_id={user_id}, photo_url={photo_url}, storage_key={media_file.key}")
+        
+        return JSONResponse(content={
+            "success": True,
+            "photo_url": photo_url,
+            "message": "Фото успешно загружено"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error uploading photo: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки фото: {str(e)}")
+
+
 @router.get("/profile/tags/{category}")
 async def owner_profile_tags_category(
     request: Request,
@@ -7894,7 +7961,7 @@ async def owner_change_tariff_post(
             }
         )
     except Exception as e:
-        logger.error(f"Error changing tariff: {e}", error=str(e), exc_info=True)
+        logger.exception(f"Error changing tariff: {e}")
         return JSONResponse(
             status_code=500,
             content={

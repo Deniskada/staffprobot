@@ -604,9 +604,54 @@ function addPhotoFromUrl() {
     input.value = '';
 }
 
-function uploadPhoto(input) {
-    // TODO: реализовать загрузку файла на сервер
-    alert('Функция загрузки файлов будет реализована позже');
+async function uploadPhoto(input) {
+    const file = input.files[0];
+    if (!file) {
+        return;
+    }
+    
+    // Проверяем размер (максимум 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Размер файла не должен превышать 5MB');
+        return;
+    }
+    
+    // Проверяем тип файла
+    if (!file.type.startsWith('image/')) {
+        alert('Выберите изображение');
+        return;
+    }
+    
+    if (photosData.length >= 5) {
+        alert('Максимум 5 фотографий');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('photo', file);
+    
+    try {
+        const response = await fetch('/owner/profile/api/photo', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            photosData.push(result.photo_url);
+            updatePhotosDisplay();
+            input.value = ''; // Очищаем input
+            
+            // Автоматически сохраняем фото в профиль
+            await savePhotosToProfile();
+        } else {
+            const error = await response.json();
+            alert(error.detail || 'Ошибка при загрузке фото');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка при загрузке фото');
+    }
 }
 
 function deletePhoto(index) {
@@ -1227,6 +1272,18 @@ let autosaveTimer = null;
 function scheduleAutosave(payload) {
     if (autosaveTimer) clearTimeout(autosaveTimer);
     autosaveTimer = setTimeout(() => doAutosave(payload), 600);
+}
+
+async function savePhotosToProfile() {
+    // Сохраняем массив фото в профиль через autosave
+    const payload = { photos: photosData };
+    await doAutosave(payload);
+}
+
+async function savePhotosToProfile() {
+    // Сохраняем массив фото в профиль через autosave
+    const payload = { photos: photosData };
+    await doAutosave(payload);
 }
 
 async function doAutosave(extra) {
