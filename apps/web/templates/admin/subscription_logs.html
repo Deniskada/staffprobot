@@ -1,0 +1,180 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.log-entry {
+    border-left: 4px solid #007bff;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+}
+
+.log-entry:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.tariff-change {
+    border-left-color: #28a745;
+}
+
+.option-enabled {
+    border-left-color: #17a2b8;
+}
+
+.option-disabled {
+    border-left-color: #dc3545;
+}
+
+.option-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    margin: 2px;
+}
+
+.option-enabled-badge {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.option-disabled-badge {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Заголовок и навигация -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>{{ title }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="/admin">Админ панель</a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="/admin/subscriptions/">Подписки</a>
+                    </li>
+                    <li class="breadcrumb-item active">Логи</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="/admin/subscriptions/" class="btn btn-secondary">
+                ← К списку подписок
+            </a>
+        </div>
+    </div>
+
+    <!-- Информация о подписке -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Информация о подписке</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>ID подписки:</strong> #{{ subscription.id }}</p>
+                    <p><strong>Пользователь:</strong> 
+                        <a href="/admin/subscriptions/?user_id={{ subscription.user_id }}" class="text-decoration-none">
+                            {{ subscription.user.first_name }} {{ subscription.user.last_name }}
+                        </a>
+                        <small class="text-muted">(ID: {{ subscription.user_id }})</small>
+                    </p>
+                    <p><strong>Текущий тариф:</strong> {{ subscription.tariff_plan.name }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Статус:</strong> 
+                        <span class="badge bg-{% if subscription.status.value == 'active' %}success{% elif subscription.status.value == 'expired' %}danger{% elif subscription.status.value == 'suspended' %}warning{% else %}secondary{% endif %}">
+                            {{ subscription.status.value | title }}
+                        </span>
+                    </p>
+                    <p><strong>Создана:</strong> {{ subscription.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                    {% if subscription.expires_at %}
+                    <p><strong>Истекает:</strong> {{ subscription.expires_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Логи изменений -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">История изменений</h5>
+        </div>
+        <div class="card-body">
+            {% if logs %}
+                {% for log in logs %}
+                <div class="card log-entry {% if log.old_tariff or log.new_tariff %}tariff-change{% elif log.options_enabled %}option-enabled{% elif log.options_disabled %}option-disabled{% endif %}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="mb-1">
+                                    <i class="bi bi-clock"></i> 
+                                    {{ log.changed_at.strftime('%d.%m.%Y %H:%M:%S') }}
+                                </h6>
+                            </div>
+                        </div>
+                        
+                        <!-- Изменение тарифа -->
+                        {% if log.old_tariff or log.new_tariff %}
+                        <div class="mb-2">
+                            <strong>Изменение тарифа:</strong>
+                            <div class="mt-1">
+                                {% if log.old_tariff %}
+                                <span class="badge bg-secondary">{{ log.old_tariff.name }}</span>
+                                <i class="bi bi-arrow-right"></i>
+                                {% endif %}
+                                {% if log.new_tariff %}
+                                <span class="badge bg-success">{{ log.new_tariff.name }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Включенные опции -->
+                        {% if log.options_enabled %}
+                        <div class="mb-2">
+                            <strong>Включенные опции:</strong>
+                            <div class="mt-1">
+                                {% for option in log.options_enabled %}
+                                <span class="option-badge option-enabled-badge" title="{{ option.key }}">
+                                    <i class="bi bi-check-circle"></i> {{ option.name }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Выключенные опции -->
+                        {% if log.options_disabled %}
+                        <div class="mb-2">
+                            <strong>Выключенные опции:</strong>
+                            <div class="mt-1">
+                                {% for option in log.options_disabled %}
+                                <span class="option-badge option-disabled-badge" title="{{ option.key }}">
+                                    <i class="bi bi-x-circle"></i> {{ option.name }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info text-center">
+                    <h5>📋 Нет записей в логе</h5>
+                    <p>Для этой подписки пока нет записей об изменениях тарифа или опций.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

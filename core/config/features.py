@@ -97,6 +97,13 @@ SYSTEM_FEATURES_REGISTRY: Dict[str, FeatureDefinition] = {
         'menu_items': ['analytics'],
         'form_elements': [],
         'sort_order': 10
+    },
+    'secure_media_storage': {
+        'name': 'Использовать защищённое хранилище файлов',
+        'description': 'Object Storage (S3/Selectel) для медиа: задачи, отмены смен, инциденты, договоры. Настройки «что и где» хранить — по каждому контексту.',
+        'menu_items': [],
+        'form_elements': [],
+        'sort_order': 11
     }
 }
 

@@ -41,6 +41,7 @@ class User(Base):
     preferred_work_types = Column(JSONB, nullable=True)  # Предпочитаемые типы работы
     min_salary = Column(Integer, nullable=True)
     availability_notes = Column(String(1000), nullable=True)
+    avatar_url = Column(String(500), nullable=True)  # URL фото профиля
     role = Column(String(50), nullable=False)  # Оставляем для обратной совместимости
     roles = Column(JSONB, nullable=False)  # Новое поле для множественных ролей
     is_active = Column(Boolean, default=True)

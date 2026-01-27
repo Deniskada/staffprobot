@@ -165,10 +165,18 @@ class StaffProBot:
         self.application.add_handler(CallbackQueryHandler(_handle_select_object_to_open, pattern="^select_object_to_open:.*$"))
         
         # Обработка отмены смен (включаем явные хендлеры)
-        from .handlers_div.schedule_handlers import handle_cancel_shift, handle_cancel_reason_selection, handle_cancellation_skip_photo, handle_cancellation_document_input, handle_cancellation_photo_upload
+        from .handlers_div.schedule_handlers import (
+            handle_cancel_shift,
+            handle_cancel_reason_selection,
+            handle_cancellation_skip_photo,
+            handle_cancellation_done_photo,
+            handle_cancellation_document_input,
+            handle_cancellation_photo_upload,
+        )
         self.application.add_handler(CallbackQueryHandler(handle_cancel_shift, pattern="^cancel_shift_.*$"))
         self.application.add_handler(CallbackQueryHandler(handle_cancel_reason_selection, pattern="^cancel_reason_.*$"))
         self.application.add_handler(CallbackQueryHandler(handle_cancellation_skip_photo, pattern="^cancel_skip_photo$"))
+        self.application.add_handler(CallbackQueryHandler(handle_cancellation_done_photo, pattern="^cancel_done_photo$"))
         
         # Обработка ввода документа для отмены смены
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_cancellation_document_input))

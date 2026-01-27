@@ -835,6 +835,14 @@
       DOM.confirmBtn.disabled = true;
       DOM.confirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Обработка...';
     }
+    if (window.showGlobalLoader) {
+      const roleLabel = settings.role === 'manager'
+        ? 'Планируем смены менеджера...'
+        : settings.role === 'employee'
+          ? 'Планируем ваши смены...'
+          : 'Планируем смены...';
+      showGlobalLoader(roleLabel);
+    }
 
     let planSuccess = 0;
     let planErrors = 0;
@@ -910,6 +918,9 @@
       if (DOM.confirmBtn) {
         DOM.confirmBtn.disabled = false;
         DOM.confirmBtn.innerHTML = '<i class="bi bi-calendar-check"></i> Запланировать смены';
+      }
+      if (window.hideGlobalLoader) {
+        hideGlobalLoader();
       }
     }
 

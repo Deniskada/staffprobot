@@ -104,15 +104,14 @@ def check_expiring_subscriptions():
                     session.add(notification)
                     notifications_created += 1
                     
-                    # Если включено автопродление и тариф платный, создаем платеж
-                    if subscription.auto_renewal and subscription.tariff_plan.price and float(subscription.tariff_plan.price) > 0:
+                    # Если включено автопродление, создаем платеж (сумма = база + опции, 0 при бесплатном)
+                    if subscription.auto_renewal:
                         try:
                             return_url = await URLHelper.build_url("/owner/subscription/payment_success")
                             result = await billing_service.process_auto_renewal(
                                 subscription.user_id,
                                 return_url=return_url
                             )
-                            
                             if result and len(result) == 2:
                                 transaction, payment_url = result
                                 if transaction:
@@ -166,22 +165,23 @@ def check_expiring_subscriptions():
                     session.add(notification)
                     notifications_created += 1
                     
-                    # Если включено автопродление и тариф платный, создаем платеж
-                    if subscription.auto_renewal and subscription.tariff_plan.price and float(subscription.tariff_plan.price) > 0:
+                    # Если включено автопродление, создаем платеж (сумма = база + опции)
+                    if subscription.auto_renewal:
                         try:
                             return_url = await URLHelper.build_url("/owner/subscription/payment_success")
-                            transaction, payment_url = await billing_service.process_auto_renewal(
+                            result = await billing_service.process_auto_renewal(
                                 subscription.user_id,
                                 return_url=return_url
                             )
-                            
-                            if transaction and payment_url:
-                                payments_created += 1
-                                logger.info(
-                                    f"Created urgent auto renewal payment for subscription {subscription.id}",
-                                    subscription_id=subscription.id,
-                                    transaction_id=transaction.id
-                                )
+                            if result and len(result) == 2:
+                                transaction, payment_url = result
+                                if transaction and payment_url:
+                                    payments_created += 1
+                                    logger.info(
+                                        f"Created urgent auto renewal payment for subscription {subscription.id}",
+                                        subscription_id=subscription.id,
+                                        transaction_id=transaction.id
+                                    )
                         except Exception as e:
                             logger.error(
                                 f"Error creating urgent auto renewal payment for subscription {subscription.id}: {e}",

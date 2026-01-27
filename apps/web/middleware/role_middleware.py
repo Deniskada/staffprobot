@@ -36,11 +36,19 @@ async def get_user_id_from_current_user(current_user, session: AsyncSession) -> 
 def require_any_role(roles: List[UserRole]):
     """Декоратор для проверки наличия любой из указанных ролей."""
     async def role_checker(request: Request, current_user = Depends(get_current_user_dependency())):
+        logger.debug(
+            "require_any_role check",
+            path=request.url.path,
+            method=request.method,
+            has_user=current_user is not None,
+        )
+        
         if isinstance(current_user, RedirectResponse):
             return current_user
         
         # Если пользователь не аутентифицирован
         if current_user is None:
+            logger.debug("require_any_role: user not authenticated, redirecting to login")
             return RedirectResponse(url="/auth/login", status_code=302)
         
         from core.database.session import get_async_session

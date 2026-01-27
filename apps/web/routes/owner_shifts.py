@@ -21,6 +21,7 @@ from shared.services.shift_history_service import ShiftHistoryService
 from shared.services.cancellation_policy_service import CancellationPolicyService
 from shared.services.shift_cancellation_service import ShiftCancellationService
 from shared.services.shift_status_sync_service import ShiftStatusSyncService
+from domain.entities.shift_cancellation import ShiftCancellation
 from core.cache.redis_cache import cache
 from core.logging.logger import logger
 
@@ -600,6 +601,87 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
             actor_names=actor_names,
             reason_titles=reason_titles,
         )
+        
+        # Загружаем отмену смены и её медиа (restruct1 Фаза 1.4)
+        cancellation_with_media = None
+        if shift_type == "schedule":
+            cancellation_query = (
+                select(ShiftCancellation)
+                .where(ShiftCancellation.shift_schedule_id == shift.id)
+                .options(selectinload(ShiftCancellation.media_files))
+                .order_by(ShiftCancellation.created_at.desc())
+                .limit(1)
+            )
+            cancellation_result = await session.execute(cancellation_query)
+            cancellation = cancellation_result.scalar_one_or_none()
+            
+            if cancellation:
+                # Генерируем URL для медиа
+                from shared.services.media_storage import get_media_storage_client
+                from core.config.settings import settings
+                
+                media_urls = []
+                if cancellation.media_files:
+                    storage_client = None
+                    try:
+                        storage_client = get_media_storage_client()
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to get storage client for cancellation media",
+                            cancellation_id=cancellation.id,
+                            error=str(e),
+                        )
+                    
+                    for media_file in cancellation.media_files:
+                        media_item = {
+                            "file_type": media_file.file_type,
+                            "mime_type": media_file.mime_type,
+                            "file_size": media_file.file_size,
+                        }
+                        
+                        # Определяем, является ли storage_key S3 ключом или Telegram file_id
+                        is_s3_key = "/" in media_file.storage_key
+                        has_telegram_file_id = media_file.telegram_file_id is not None
+                        
+                        # Если есть S3 ключ (и storage_client доступен) - генерируем S3 URL
+                        if is_s3_key and storage_client:
+                            try:
+                                s3_url = await storage_client.get_url(media_file.storage_key, expires_in=3600)
+                                media_item["s3_url"] = s3_url
+                                logger.debug(
+                                    "Generated S3 URL for cancellation media",
+                                    cancellation_id=cancellation.id,
+                                    media_id=media_file.id,
+                                    storage_key=media_file.storage_key,
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    "Failed to get S3 URL for cancellation media",
+                                    cancellation_id=cancellation.id,
+                                    media_id=media_file.id,
+                                    error=str(e),
+                                )
+                        
+                        # Если есть telegram_file_id - добавляем информацию для отображения ссылки на Telegram
+                        if has_telegram_file_id:
+                            media_item["telegram_file_id"] = media_file.telegram_file_id
+                        elif not is_s3_key:
+                            # Если storage_key не S3 ключ, значит это Telegram file_id
+                            media_item["telegram_file_id"] = media_file.storage_key
+                        
+                        media_urls.append(media_item)
+                
+                logger.debug(
+                    "Cancellation with media prepared",
+                    cancellation_id=cancellation.id,
+                    media_count=len(cancellation.media_files),
+                    media_urls_count=len(media_urls),
+                )
+                
+                cancellation_with_media = {
+                    "cancellation": cancellation,
+                    "media_urls": media_urls,
+                }
 
         return templates.TemplateResponse("owner/shifts/detail.html", {
             "request": request,
@@ -610,6 +692,7 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
             "shift_tasks": shift_tasks,
             "web_timezone_helper": web_timezone_helper,
             "history_items": history_items,
+            "cancellation_with_media": cancellation_with_media,
         })
 
 

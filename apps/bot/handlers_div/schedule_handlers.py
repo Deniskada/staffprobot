@@ -714,17 +714,19 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
                 step=UserStep.INPUT_PHOTO
             )
             
-            # Создаем кнопку "Пропустить"
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            keyboard = [[InlineKeyboardButton("⏩ Пропустить", callback_data="cancel_skip_photo")]]
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ Готово", callback_data="cancel_done_photo"),
+                    InlineKeyboardButton("⏩ Пропустить", callback_data="cancel_skip_photo"),
+                ]
+            ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
             await update.message.reply_text(
                 "📸 **Фото подтверждения** (опционально)\n\n"
-                "Отправьте фото документа или подтверждения.\n"
-                "Или нажмите '⏩ Пропустить', если фото нет.",
-                parse_mode='Markdown',
-                reply_markup=reply_markup
+                "Отправьте фото документа или нажмите **Готово** / **Пропустить**.",
+                parse_mode="Markdown",
+                reply_markup=reply_markup,
             )
         else:
             # Нет группы для отчетов - сразу выполняем отмену
@@ -743,128 +745,294 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
 
 
 async def handle_cancellation_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработка загрузки фото для подтверждения отмены через Media Orchestrator."""
+    """Добавить фото в поток отмены. Готово/Пропустить — в callback."""
     telegram_id = update.effective_user.id
-    
-    shift_id = context.user_data.get('cancelling_shift_id')
-    reason = context.user_data.get('cancel_reason')
-    report_chat_id = context.user_data.get('report_chat_id')
-    
+    shift_id = context.user_data.get("cancelling_shift_id")
+    reason = context.user_data.get("cancel_reason")
     if not shift_id or not reason:
         await update.message.reply_text("❌ Ошибка: данные отмены не найдены.")
         return
-    
-    # Получаем фото
+
     photo = update.message.photo[-1] if update.message.photo else None
+    if not photo:
+        return
+
+    from shared.services.media_orchestrator import MediaOrchestrator, MediaFlowConfig
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    orchestrator = MediaOrchestrator()
     
-    # Добавляем в Media Orchestrator
-    if photo:
-        from shared.services.media_orchestrator import MediaOrchestrator
-        orchestrator = MediaOrchestrator()
-        await orchestrator.add_photo(telegram_id, photo.file_id)
-        await orchestrator.close()
+    # Проверяем, есть ли активный поток, если нет - создаем
+    flow = await orchestrator.get_flow(telegram_id)
+    if not flow:
+        logger.info("No media flow found, creating new one", telegram_id=telegram_id, shift_id=shift_id)
+        flow_cfg = MediaFlowConfig(
+            user_id=telegram_id,
+            context_type="cancellation_doc",
+            context_id=shift_id,
+            collected_photos=[],
+        )
+        await orchestrator.begin_flow(flow_cfg)
+        logger.info("Created media flow for cancellation", telegram_id=telegram_id, shift_id=shift_id)
+    else:
+        logger.info("Using existing media flow", telegram_id=telegram_id, shift_id=shift_id, photos_count=len(flow.collected_photos) if flow.collected_photos else 0)
     
-    # Если есть фото и группа - отправляем в группу
-    if photo and report_chat_id:
+    await orchestrator.add_photo(telegram_id, photo.file_id)
+    n = await orchestrator.get_collected_count(telegram_id)
+    can_add = await orchestrator.can_add_more(telegram_id)
+    
+    logger.info(
+        "Photo added to cancellation flow",
+        telegram_id=telegram_id,
+        shift_id=shift_id,
+        photo_count=n,
+        can_add_more=can_add,
+    )
+    
+    # Сохраняем фото в контекст на случай, если поток потеряется
+    if "cancellation_photos" not in context.user_data:
+        context.user_data["cancellation_photos"] = []
+    context.user_data["cancellation_photos"].append(photo.file_id)
+    
+    await orchestrator.close()
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Готово", callback_data="cancel_done_photo"),
+            InlineKeyboardButton("⏩ Пропустить", callback_data="cancel_skip_photo"),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    text = f"📸 Добавлено фото ({n}). Отправьте ещё или нажмите **Готово** / **Пропустить**."
+    if not can_add:
+        text = f"📸 Добавлено фото ({n}). Лимит достигнут. Нажмите **Готово**."
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+
+
+async def handle_cancellation_skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Пропустить фото → отмена потока, выполнить отмену смены без медиа."""
+    query = update.callback_query
+    await query.answer()
+    telegram_id = update.effective_user.id
+    shift_id = context.user_data.get("cancelling_shift_id")
+    reason = context.user_data.get("cancel_reason")
+    if not shift_id or not reason:
+        await query.edit_message_text("❌ Ошибка: данные отмены не найдены.")
+        return
+
+    from shared.services.media_orchestrator import MediaOrchestrator
+    from core.state.user_state_manager import user_state_manager
+
+    orchestrator = MediaOrchestrator()
+    await orchestrator.cancel(telegram_id)
+    await orchestrator.close()
+    await user_state_manager.clear_state(telegram_id)
+
+    await _execute_shift_cancellation(
+        shift_id=shift_id,
+        telegram_id=telegram_id,
+        reason=reason,
+        reason_notes=context.user_data.get("cancel_reason_notes"),
+        document_description=context.user_data.get("cancel_document_description"),
+        context=context,
+        query=query,
+        media=None,
+    )
+
+
+async def handle_cancellation_done_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Готово с фото: finish → upload → опционально в группу → отмена смены с медиа."""
+    query = update.callback_query
+    await query.answer()
+    telegram_id = update.effective_user.id
+    shift_id = context.user_data.get("cancelling_shift_id")
+    reason = context.user_data.get("cancel_reason")
+    report_chat_id = context.user_data.get("report_chat_id")
+    if not shift_id or not reason:
+        await query.edit_message_text("❌ Ошибка: данные отмены не найдены.")
+        return
+
+    from shared.services.media_orchestrator import MediaOrchestrator, MediaFlowConfig
+    from core.state.user_state_manager import user_state_manager
+    from core.database.session import get_async_session
+    from shared.services.owner_media_storage_service import get_storage_mode
+
+    orchestrator = MediaOrchestrator()
+    
+    # Проверяем, есть ли активный поток медиа
+    flow = await orchestrator.get_flow(telegram_id)
+    logger.info(
+        "Cancellation done photo: checking flow",
+        telegram_id=telegram_id,
+        shift_id=shift_id,
+        has_flow=flow is not None,
+        flow_collected_photos=len(flow.collected_photos) if flow and flow.collected_photos else 0,
+        context_photos=len(context.user_data.get("cancellation_photos", [])),
+    )
+    
+    if not flow:
+        # Если потока нет, но есть фото в контексте, создаем поток
+        collected_photos = context.user_data.get("cancellation_photos", [])
+        if collected_photos:
+            logger.info("Creating media flow from context photos", telegram_id=telegram_id, shift_id=shift_id, photos_count=len(collected_photos))
+            # Создаем временный поток для загрузки медиа
+            flow_cfg = MediaFlowConfig(
+                user_id=telegram_id,
+                context_type="cancellation_doc",
+                context_id=shift_id,
+                collected_photos=collected_photos,
+            )
+            await orchestrator.begin_flow(flow_cfg)
+            flow = flow_cfg
+        else:
+            logger.warning("No media flow and no photos in context for cancellation", telegram_id=telegram_id, shift_id=shift_id)
+    
+    storage_mode = "telegram"
+    async with get_async_session() as session:
+        shift_result = await session.execute(select(ShiftSchedule).where(ShiftSchedule.id == shift_id))
+        shift = shift_result.scalar_one_or_none()
+        obj = None
+        if shift:
+            # Получаем объект с eager loading org_unit для определения report_chat_id
+            from sqlalchemy.orm import joinedload
+            object_query = select(Object).where(Object.id == shift.object_id).options(
+                joinedload(Object.org_unit).joinedload('parent').joinedload('parent').joinedload('parent').joinedload('parent')
+            )
+            obj_result = await session.execute(object_query)
+            obj = obj_result.scalar_one_or_none()
+        
+        if obj:
+            storage_mode = await get_storage_mode(session, obj.owner_id, "cancellations")
+            # Определяем report_chat_id, если его нет в контексте
+            if not report_chat_id:
+                report_chat_id = obj.get_effective_report_chat_id() if obj else None
+                if report_chat_id:
+                    context.user_data['report_chat_id'] = report_chat_id
+                    logger.info("Determined report_chat_id from object", shift_id=shift_id, report_chat_id=report_chat_id)
+
+    # Завершаем поток и загружаем медиа
+    logger.info(
+        "Finishing media flow",
+        telegram_id=telegram_id,
+        shift_id=shift_id,
+        storage_mode=storage_mode,
+        has_flow=flow is not None,
+        flow_photos=len(flow.collected_photos) if flow and flow.collected_photos else 0,
+    )
+    
+    flow = await orchestrator.finish(
+        telegram_id, bot=context.bot, media_types=None, storage_mode=storage_mode
+    )
+    await orchestrator.close()
+    await user_state_manager.clear_state(telegram_id)
+
+    logger.info(
+        "Media flow finished",
+        telegram_id=telegram_id,
+        shift_id=shift_id,
+        has_flow=flow is not None,
+        uploaded_count=len(flow.uploaded_media) if flow and flow.uploaded_media else 0,
+        collected_count=len(flow.collected_photos) if flow and flow.collected_photos else 0,
+    )
+
+    media_list = None
+    if flow and flow.uploaded_media:
+        media_list = []
+        for m in flow.uploaded_media:
+            media_dict = {
+                "key": m.key,
+                "url": m.url,
+                "type": m.type,
+                "size": m.size,
+                "mime_type": m.mime_type,
+            }
+            # Добавляем telegram_file_id в metadata, если есть
+            if hasattr(m, "metadata") and m.metadata and "telegram_file_id" in m.metadata:
+                media_dict["metadata"] = {"telegram_file_id": m.metadata["telegram_file_id"]}
+            media_list.append(media_dict)
+        logger.info("Cancellation media uploaded", shift_id=shift_id, media_count=len(media_list))
+    elif flow and flow.collected_photos:
+        logger.warning(
+            "Cancellation has collected photos but no uploaded_media",
+            shift_id=shift_id,
+            photos_count=len(flow.collected_photos),
+            storage_mode=storage_mode,
+        )
+    else:
+        logger.warning("No media in flow after finish", shift_id=shift_id, has_flow=flow is not None)
+
+    file_ids = (flow.collected_photos or []) if flow else []
+    
+    logger.info(
+        "Checking conditions for sending to group",
+        shift_id=shift_id,
+        report_chat_id=report_chat_id,
+        file_ids_count=len(file_ids),
+        will_send=bool(report_chat_id and file_ids),
+    )
+    
+    if report_chat_id and file_ids:
         try:
-            from core.database.session import get_async_session
+            from apps.bot.handlers_div.shift_handlers import _send_multiple_media_to_group
             async with get_async_session() as session:
-                # Получаем данные для сообщения
-                user_query = select(User).where(User.telegram_id == telegram_id)
-                user_result = await session.execute(user_query)
+                user_result = await session.execute(select(User).where(User.telegram_id == telegram_id))
                 user = user_result.scalar_one_or_none()
-                
-                shift_query = select(ShiftSchedule).where(ShiftSchedule.id == shift_id)
-                shift_result = await session.execute(shift_query)
+                shift_result = await session.execute(select(ShiftSchedule).where(ShiftSchedule.id == shift_id))
                 shift = shift_result.scalar_one_or_none()
-                
-                object_query = select(Object).where(Object.id == shift.object_id)
-                object_result = await session.execute(object_query)
-                obj = object_result.scalar_one_or_none()
-                
-                # Формируем сообщение для группы
+                obj = None
+                if shift:
+                    obj_result = await session.execute(select(Object).where(Object.id == shift.object_id))
+                    obj = obj_result.scalar_one_or_none()
                 from core.utils.timezone_helper import get_user_timezone, convert_utc_to_local
                 user_tz = get_user_timezone(user)
-                local_start = convert_utc_to_local(shift.planned_start, user_tz)
-                
+                local_start = convert_utc_to_local(shift.planned_start, user_tz) if shift else None
                 reason_labels = {
-                    'medical_cert': '🏥 Медицинская справка',
-                    'emergency_cert': '🚨 Справка от МЧС',
-                    'police_cert': '👮 Справка от полиции',
-                    'other': '❓ Другая причина'
+                    "medical_cert": "🏥 Медицинская справка",
+                    "emergency_cert": "🚨 Справка от МЧС",
+                    "police_cert": "👮 Справка от полиции",
+                    "other": "❓ Другая причина",
                 }
-                
                 caption = (
                     f"❌ **Отмена смены**\n\n"
                     f"👤 Сотрудник: {user.full_name if user else 'Неизвестно'}\n"
                     f"🏢 Объект: {obj.name if obj else 'Неизвестно'}\n"
-                    f"📅 Дата: {local_start.strftime('%d.%m.%Y %H:%M')}\n"
+                    f"📅 Дата: {local_start.strftime('%d.%m.%Y %H:%M') if local_start else '—'}\n"
                     f"📋 Причина: {reason_labels.get(reason, reason)}\n"
                 )
-                
-                # Добавляем описание/объяснение
-                doc_desc = context.user_data.get('cancel_document_description')
-                reason_notes = context.user_data.get('cancel_reason_notes')
+                doc_desc = context.user_data.get("cancel_document_description")
+                reason_notes = context.user_data.get("cancel_reason_notes")
                 if doc_desc:
                     caption += f"📄 Документ: {doc_desc}\n"
                 if reason_notes:
                     caption += f"✍️ Объяснение: {reason_notes}\n"
-                
-                # Отправляем фото в группу
-                await context.bot.send_photo(
-                    chat_id=report_chat_id,
-                    photo=photo.file_id,
-                    caption=caption,
-                    parse_mode='Markdown'
+                types_list = ["photo"] * len(file_ids)
+                logger.info(
+                    "Sending cancellation media to group",
+                    shift_id=shift_id,
+                    report_chat_id=report_chat_id,
+                    file_ids_count=len(file_ids),
                 )
-                
-                logger.info(f"Cancellation photo sent to chat {report_chat_id}")
-                
+                await _send_multiple_media_to_group(
+                    context.bot, str(report_chat_id), file_ids, caption, types_list
+                )
+                logger.info("Cancellation media sent to group successfully", shift_id=shift_id, report_chat_id=report_chat_id)
         except Exception as e:
-            logger.error(f"Error sending cancellation photo: {e}")
-    
-    # Очищаем состояние
-    from core.state.user_state_manager import user_state_manager
-    await user_state_manager.clear_state(telegram_id)
-    
-    # Выполняем отмену
+            logger.exception(
+                "Error sending cancellation media to group",
+                shift_id=shift_id,
+                report_chat_id=report_chat_id,
+                error=str(e),
+            )
+
     await _execute_shift_cancellation(
         shift_id=shift_id,
         telegram_id=telegram_id,
         reason=reason,
-        reason_notes=context.user_data.get('cancel_reason_notes'),
-        document_description=context.user_data.get('cancel_document_description'),
+        reason_notes=context.user_data.get("cancel_reason_notes"),
+        document_description=context.user_data.get("cancel_document_description"),
         context=context,
-        message=update.message
-    )
-
-
-async def handle_cancellation_skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработка нажатия кнопки 'Пропустить фото'."""
-    query = update.callback_query
-    await query.answer()
-    
-    telegram_id = update.effective_user.id
-    shift_id = context.user_data.get('cancelling_shift_id')
-    reason = context.user_data.get('cancel_reason')
-    
-    if not shift_id or not reason:
-        await query.edit_message_text("❌ Ошибка: данные отмены не найдены.")
-        return
-    
-    # Очищаем состояние
-    from core.state.user_state_manager import user_state_manager
-    await user_state_manager.clear_state(telegram_id)
-    
-    # Выполняем отмену без фото
-    await _execute_shift_cancellation(
-        shift_id=shift_id,
-        telegram_id=telegram_id,
-        reason=reason,
-        reason_notes=context.user_data.get('cancel_reason_notes'),
-        document_description=context.user_data.get('cancel_document_description'),
-        context=context,
-        query=query
+        query=query,
+        media=media_list,
     )
 
 
@@ -876,7 +1044,8 @@ async def _execute_shift_cancellation(
     document_description: Optional[str],
     context: ContextTypes.DEFAULT_TYPE,
     query: Optional[Any] = None,
-    message: Optional[Any] = None
+    message: Optional[Any] = None,
+    media: Optional[list] = None,
 ) -> bool:
     """Выполнить отмену смены с использованием сервиса."""
     logger.info(f"Starting shift cancellation: shift_id={shift_id}, telegram_id={telegram_id}, reason={reason}")
@@ -911,15 +1080,14 @@ async def _execute_shift_cancellation(
             result = await cancellation_service.cancel_shift(
                 shift_schedule_id=shift_id,
                 cancelled_by_user_id=user.id,
-                cancelled_by_type='employee',
+                cancelled_by_type="employee",
                 cancellation_reason=reason,
                 reason_notes=reason_notes,
                 document_description=document_description,
-                actor_role='employee',
-                source='bot',
-                extra_payload={
-                    "bot_flow": True,
-                },
+                actor_role="employee",
+                source="bot",
+                extra_payload={"bot_flow": True},
+                media=media,
             )
             
             if result['success']:

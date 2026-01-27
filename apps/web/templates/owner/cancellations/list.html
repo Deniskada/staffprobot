@@ -33,7 +33,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for cancellation in cancellations %}
+                        {% for item in cancellations %}
+                        {% set cancellation = item.cancellation %}
+                        {% set media_urls = item.media_urls %}
                         <tr id="cancellation-row-{{ cancellation.id }}">
                             <td>
                                 <strong>{{ cancellation.employee.first_name }} {{ cancellation.employee.last_name|default('', true) }}</strong><br>
@@ -49,6 +51,24 @@
                                     <small>{{ cancellation.document_description }}</small>
                                 {% else %}
                                     <small class="text-muted">Нет описания</small>
+                                {% endif %}
+                                {% if media_urls %}
+                                    <div class="mt-2">
+                                        {% for media in media_urls %}
+                                        <div class="d-inline-block me-2 mb-1">
+                                            {% if media.s3_url %}
+                                            <a href="{{ media.s3_url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Открыть в S3 ({{ media.file_type }})">
+                                                <i class="bi bi-cloud-arrow-down"></i> S3
+                                            </a>
+                                            {% endif %}
+                                            {% if media.telegram_file_id %}
+                                            <span class="btn btn-sm btn-outline-info" title="Медиа доступно в Telegram ({{ media.file_type }})">
+                                                <i class="bi bi-telegram"></i> Telegram
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
                                 {% endif %}
                             </td>
                             <td>

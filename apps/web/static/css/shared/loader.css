@@ -1,0 +1,40 @@
+/* Глобальный полупрозрачный лоадер для долгих операций */
+
+.global-loader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1050; /* выше модалок Bootstrap (по умолчанию 1050, но мы перекроем основной контент) */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.global-loader-overlay.show {
+  display: flex;
+}
+
+.global-loader-dialog {
+  background: #1f2937;
+  color: #f9fafb;
+  padding: 1.75rem 2.25rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  max-width: 320px;
+  width: 90%;
+}
+
+.global-loader-dialog .spinner-border {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.global-loader-text {
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+  opacity: 0.95;
+}
+

@@ -97,6 +97,23 @@ class Settings(BaseSettings):
     enable_tasks_v2: bool = True  # Новая система задач (TaskTemplateV2)
     enable_incidents: bool = True  # Инциденты (нарушения)
     enable_media_orchestrator: bool = False  # Единый поток медиа (в разработке)
+
+    # Медиа-хранилище (restruct1 Фаза 1): telegram | minio | s3
+    # s3 — любой S3-совместимый провайдер (reg.ru, Cloud.ru, AWS, Selectel и т.д.)
+    media_storage_provider: str = Field(default="telegram", env="MEDIA_STORAGE_PROVIDER")
+    media_presigned_expires_seconds: int = Field(default=3600, env="MEDIA_PRESIGNED_EXPIRES_SECONDS")
+    # MinIO (dev)
+    minio_endpoint: str = Field(default="http://minio:9000", env="MINIO_ENDPOINT")
+    minio_access_key: str = Field(default="minioadmin", env="MINIO_ACCESS_KEY")
+    minio_secret_key: str = Field(default="minioadmin", env="MINIO_SECRET_KEY")
+    minio_bucket: str = Field(default="staffprobot-media", env="MINIO_BUCKET")
+    minio_use_ssl: bool = Field(default=False, env="MINIO_USE_SSL")
+    # S3-совместимое хранилище (prod: reg.ru, Cloud.ru, AWS и т.д.)
+    s3_endpoint: Optional[str] = Field(default=None, env="S3_ENDPOINT")
+    s3_access_key: Optional[str] = Field(default=None, env="S3_ACCESS_KEY")
+    s3_secret_key: Optional[str] = Field(default=None, env="S3_SECRET_KEY")
+    s3_bucket: Optional[str] = Field(default=None, env="S3_BUCKET")
+    s3_region: str = Field(default="us-east-1", env="S3_REGION")
     
     # API
     api_host: str = "0.0.0.0"

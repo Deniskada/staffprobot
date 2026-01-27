@@ -27,8 +27,19 @@ async function loadFeatures() {
 
 function displayFeatures(features) {
     const container = document.getElementById('featuresContainer');
+    const actionsEl = document.getElementById('featuresPageActions');
     container.innerHTML = '';
-    
+    actionsEl.innerHTML = '';
+
+    const secureStorage = features.find(f => f.key === 'secure_media_storage');
+    if (secureStorage && secureStorage.enabled) {
+        const btn = document.createElement('a');
+        btn.href = '/owner/profile/media-storage';
+        btn.className = 'btn btn-outline-primary btn-sm';
+        btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Настройки хранилища';
+        actionsEl.appendChild(btn);
+    }
+
     // Группируем функции
     const activeFeatures = features.filter(f => f.available && f.enabled);
     const availableFeatures = features.filter(f => f.available && !f.enabled);

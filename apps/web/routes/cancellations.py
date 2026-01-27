@@ -232,15 +232,14 @@ async def owner_cancellations_list(
                 selectinload(ShiftCancellation.shift_schedule),
                 selectinload(ShiftCancellation.employee),
                 selectinload(ShiftCancellation.object),
-                selectinload(ShiftCancellation.verified_by)
+                selectinload(ShiftCancellation.verified_by),
+                selectinload(ShiftCancellation.media_files)
             )
             .join(ShiftSchedule, ShiftCancellation.shift_schedule_id == ShiftSchedule.id)
             .join(Object, ShiftCancellation.object_id == Object.id)
             .where(
-                and_(
-                    Object.owner_id == user.id,
-                    ShiftCancellation.cancelled_by_type == 'employee'  # Только отмены сотрудниками
-                )
+                Object.owner_id == user.id
+                # Показываем все отмены, не только сотрудниками (для отображения медиа)
             )
             .order_by(ShiftCancellation.created_at.desc())
         )
@@ -248,10 +247,95 @@ async def owner_cancellations_list(
         cancellations_result = await db.execute(cancellations_query)
         cancellations = cancellations_result.scalars().all()
         
+        # Загружаем URL для медиа файлов (restruct1 Фаза 1.4)
+        from shared.services.media_storage import get_media_storage_client
+        from core.config.settings import settings
+        
+        storage_client = None
+        if settings.media_storage_provider in ("minio", "s3"):
+            try:
+                storage_client = get_media_storage_client()
+            except Exception as e:
+                logger.warning(f"Failed to get storage client for cancellation media: {e}")
+        
+        cancellations_with_media = []
+        for cancellation in cancellations:
+            media_urls = []
+            # Проверяем наличие медиа файлов
+            has_media = cancellation.media_files is not None and len(cancellation.media_files) > 0
+            logger.debug(
+                "Cancellation media check",
+                cancellation_id=cancellation.id,
+                has_media=has_media,
+                media_count=len(cancellation.media_files) if cancellation.media_files else 0,
+                has_storage_client=storage_client is not None,
+            )
+            
+            if has_media:
+                for media_file in cancellation.media_files:
+                    media_item = {
+                        "file_type": media_file.file_type,
+                        "mime_type": media_file.mime_type,
+                        "file_size": media_file.file_size,
+                    }
+                    
+                    # Определяем, является ли storage_key S3 ключом или Telegram file_id
+                    # S3 ключи обычно содержат "/" (например, "cancellations/1610/file.jpg")
+                    # Telegram file_id обычно длинная строка без "/"
+                    is_s3_key = "/" in media_file.storage_key
+                    has_telegram_file_id = media_file.telegram_file_id is not None
+                    
+                    # Если есть S3 ключ (и storage_client доступен) - генерируем S3 URL
+                    if is_s3_key and storage_client:
+                        try:
+                            s3_url = await storage_client.get_url(media_file.storage_key, expires_in=3600)
+                            media_item["s3_url"] = s3_url
+                            logger.debug(
+                                "Generated S3 URL",
+                                cancellation_id=cancellation.id,
+                                media_id=media_file.id,
+                                storage_key=media_file.storage_key,
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to get S3 URL for media",
+                                cancellation_id=cancellation.id,
+                                media_id=media_file.id,
+                                error=str(e),
+                            )
+                    
+                    # Если есть telegram_file_id - добавляем информацию для отображения ссылки на Telegram
+                    if has_telegram_file_id:
+                        media_item["telegram_file_id"] = media_file.telegram_file_id
+                        logger.debug(
+                            "Media has Telegram file_id",
+                            cancellation_id=cancellation.id,
+                            media_id=media_file.id,
+                            telegram_file_id=media_file.telegram_file_id,
+                        )
+                    elif not is_s3_key:
+                        # Если storage_key не S3 ключ, значит это Telegram file_id
+                        media_item["telegram_file_id"] = media_file.storage_key
+                    
+                    media_urls.append(media_item)
+            elif has_media and not storage_client:
+                logger.warning(
+                    "Cancellation has media but no storage client",
+                    cancellation_id=cancellation.id,
+                    media_count=len(cancellation.media_files),
+                )
+            
+            # Добавляем медиа URL к объекту отмены
+            cancellation_dict = {
+                "cancellation": cancellation,
+                "media_urls": media_urls,
+            }
+            cancellations_with_media.append(cancellation_dict)
+        
         return templates.TemplateResponse("owner/cancellations/list.html", {
             "request": request,
             "current_user": current_user,
-            "cancellations": cancellations
+            "cancellations": cancellations_with_media
         })
     
     except Exception as e:

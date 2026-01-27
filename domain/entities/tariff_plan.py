@@ -27,6 +27,11 @@ class TariffPlan(Base):
     # Возможности тарифа (JSONB)
     features = Column(JSON, nullable=False, default=list)
     
+    # Цены хранения (restruct1 Фаза 1.6)
+    storage_price_telegram = Column(Numeric(10, 2), nullable=False, default=0)
+    storage_price_object_storage = Column(Numeric(10, 2), nullable=False, default=0)
+    storage_option_price = Column(Numeric(10, 2), nullable=False, default=0)
+    
     # Статус
     is_active = Column(Boolean, nullable=False, default=True)
     is_popular = Column(Boolean, nullable=False, default=False)  # Популярный тариф
@@ -57,6 +62,9 @@ class TariffPlan(Base):
             "max_employees": self.max_employees,
             "max_managers": self.max_managers,
             "features": self.features or [],
+            "storage_price_telegram": float(self.storage_price_telegram or 0),
+            "storage_price_object_storage": float(self.storage_price_object_storage or 0),
+            "storage_option_price": float(self.storage_option_price or 0),
             "is_active": self.is_active,
             "is_popular": self.is_popular,
             "grace_period_days": self.grace_period_days or 0,

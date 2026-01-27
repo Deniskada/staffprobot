@@ -99,6 +99,7 @@ services:
     volumes:
       - .:/app
     working_dir: /app
+    env_file: .env
     environment:
       - ENVIRONMENT=production
       - PYTHONPATH=/app
@@ -106,6 +107,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - S3_ENDPOINT=${S3_ENDPOINT}
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD}
       - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_PROD}
@@ -145,12 +147,14 @@ services:
     volumes:
       - .:/app
     working_dir: /app
+    env_file: .env
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - S3_ENDPOINT=${S3_ENDPOINT}
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD}
       - TELEGRAM_BOT_TOKEN_OVERRIDE=${TELEGRAM_BOT_TOKEN_OVERRIDE:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_PROD}
@@ -184,6 +188,7 @@ services:
     image: staffprobot-celery_worker:latest
     container_name: staffprobot_celery_worker_prod
     command: python scripts/start_celery_worker.py
+    env_file: .env
     volumes:
       - .:/app
       - /etc/letsencrypt:/etc/letsencrypt:rw
@@ -225,6 +230,7 @@ services:
     image: staffprobot-celery_beat:latest
     container_name: staffprobot_celery_beat_prod
     command: celery -A core.celery.celery_app beat --schedule=/tmp/celerybeat-schedule --pidfile=/tmp/celerybeat.pid --loglevel=info
+    env_file: .env
     volumes:
       - .:/app
       - celery_beat_prod_data:/tmp
