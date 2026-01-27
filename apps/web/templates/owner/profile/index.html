@@ -631,6 +631,9 @@ async function uploadPhoto(input) {
     formData.append('photo', file);
     
     try {
+        if (window.showGlobalLoader) {
+            showGlobalLoader('Загружаем фото профиля...');
+        }
         const response = await fetch('/owner/profile/api/photo', {
             method: 'POST',
             body: formData
@@ -645,12 +648,22 @@ async function uploadPhoto(input) {
             // Автоматически сохраняем фото в профиль
             await savePhotosToProfile();
         } else {
-            const error = await response.json();
-            alert(error.detail || 'Ошибка при загрузке фото');
+            let errorDetail = 'Ошибка при загрузке фото';
+            try {
+                const error = await response.json();
+                errorDetail = error.detail || errorDetail;
+            } catch (e) {
+                // игнорируем parse error
+            }
+            alert(errorDetail);
         }
     } catch (error) {
         console.error('Ошибка:', error);
         alert('Ошибка при загрузке фото');
+    } finally {
+        if (window.hideGlobalLoader) {
+            hideGlobalLoader();
+        }
     }
 }
 

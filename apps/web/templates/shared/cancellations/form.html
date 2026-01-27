@@ -146,33 +146,39 @@ document.addEventListener('DOMContentLoaded', function () {
     const documentWrapper = document.getElementById('documentDescriptionWrapper');
     const documentInput = document.getElementById('documentDescriptionInput');
 
-    if (!reasonSelect) {
-        return;
+    if (reasonSelect) {
+        const toggleDocumentField = () => {
+            const option = reasonSelect.options[reasonSelect.selectedIndex];
+            const requiresDocument = option && option.dataset.requiresDocument === 'true';
+
+            if (!documentWrapper) {
+                return;
+            }
+
+            if (requiresDocument) {
+                documentWrapper.classList.remove('d-none');
+                if (documentInput) {
+                    documentInput.setAttribute('required', 'required');
+                }
+            } else {
+                documentWrapper.classList.add('d-none');
+                if (documentInput) {
+                    documentInput.removeAttribute('required');
+                }
+            }
+        };
+
+        reasonSelect.addEventListener('change', toggleDocumentField);
+        toggleDocumentField();
     }
 
-    const toggleDocumentField = () => {
-        const option = reasonSelect.options[reasonSelect.selectedIndex];
-        const requiresDocument = option && option.dataset.requiresDocument === 'true';
-
-        if (!documentWrapper) {
-            return;
-        }
-
-        if (requiresDocument) {
-            documentWrapper.classList.remove('d-none');
-            if (documentInput) {
-                documentInput.setAttribute('required', 'required');
-            }
-        } else {
-            documentWrapper.classList.add('d-none');
-            if (documentInput) {
-                documentInput.removeAttribute('required');
-            }
-        }
-    };
-
-    reasonSelect.addEventListener('change', toggleDocumentField);
-    toggleDocumentField();
+    // Глобальный лоадер при отправке формы отмены
+    const form = document.querySelector('form[action="/shared/cancellations/submit"]');
+    if (form && window.showGlobalLoader) {
+        form.addEventListener('submit', function () {
+            showGlobalLoader('Отменяем смены и загружаем файлы...');
+        });
+    }
 });
 </script>
 {% endblock %}
