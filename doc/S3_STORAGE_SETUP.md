@@ -14,7 +14,7 @@ S3_BUCKET=...                  # Имя бакета
 S3_REGION=us-east-1            # Опционально. По умолчанию us-east-1; для reg.ru/Cloud.ru можно не менять.
 ```
 
-**S3_REGION:** для reg.ru, Cloud.ru и многих S3-совместимых провайдеров можно оставить `us-east-1` или не задавать (подставится по умолчанию). Менять имеет смысл только для AWS с региональными бакетами.
+**S3_REGION:** для **reg.ru / Cloud.ru** обязательно `ru-central-1` — иначе ошибка `AuthorizationHeaderMalformed: unexpected region, expecting 'ru-central-1'`. Для AWS — свой регион бакета.
 
 ## reg.ru (объектное хранилище S3)
 
@@ -33,8 +33,10 @@ S3_ENDPOINT=https://s3.cloud.ru
 S3_ACCESS_KEY=<ваш_access_key>
 S3_SECRET_KEY=<ваш_secret_key>
 S3_BUCKET=<имя_бакета>
-S3_REGION=us-east-1
+S3_REGION=ru-central-1
 ```
+
+**Важно:** для reg.ru/Cloud.ru используйте `S3_REGION=ru-central-1`. При `us-east-1` загрузка фото отмен смен и т.п. падает с `AuthorizationHeaderMalformed`.
 
 Точный endpoint и раздел с ключами см. в актуальной справке reg.ru по объектному хранилищу.
 
@@ -42,7 +44,7 @@ S3_REGION=us-east-1
 
 | Провайдер   | Endpoint (пример)        | Примечание                          |
 |-------------|--------------------------|-------------------------------------|
-| Cloud.ru    | `https://s3.cloud.ru`    | Регион при необходимости            |
+| Cloud.ru / reg.ru | `https://s3.cloud.ru` | **`S3_REGION=ru-central-1`** обязательно |
 | AWS         | `https://s3.amazonaws.com` | Указать регион в `S3_REGION`      |
 | Selectel    | `https://s3.selcdn.ru`   | `S3_REGION=ru-1`                    |
 | MinIO (dev) | `http://minio:9000`      | Использовать провайдер `minio`      |
