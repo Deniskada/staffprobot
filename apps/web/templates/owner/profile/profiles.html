@@ -1,0 +1,1397 @@
+{% extends "owner/base_owner.html" %}
+
+{% set selected_id = selected_profile_id if selected_profile_id is defined else '' %}
+
+{% block title %}Мои профили{% endblock %}
+
+{% block extra_css %}
+<style>
+  .sp-profiles-layout {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 80px);
+  }
+  .sp-profiles-header {
+    padding: 1rem 1.5rem 0.5rem 1.5rem;
+  }
+  .sp-profiles-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    padding: 0 1.5rem 1.5rem 1.5rem;
+    gap: 1.5rem;
+  }
+  .sp-profiles-list {
+    width: 28rem;
+    min-width: 22rem;
+    max-width: 32rem;
+    overflow-y: auto;
+  }
+  .sp-profiles-editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .sp-tabs {
+    border-bottom: 1px solid #dee2e6;
+  }
+  .sp-tabs .nav-link {
+    cursor: pointer;
+  }
+  .sp-tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1rem 0.5rem 1rem;
+  }
+  .sp-wizard-footer {
+    border-top: 1px solid #dee2e6;
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sp-help-block {
+    background: #f8f9fa;
+    border-left: 3px solid #0d6efd;
+    padding: 0.75rem 1rem;
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sp-profiles-layout">
+  <div class="sp-profiles-header d-flex justify-content-between align-items-center">
+    <div>
+      <h1 class="h4 mb-1">
+        <i class="bi bi-file-earmark-person me-2"></i>
+        Мои профили
+      </h1>
+      <div class="text-muted small">
+        Несколько профилей для одного Telegram‑аккаунта: физические лица, ИП и юридические лица.
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a href="/owner/profile" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Вернуться в профиль
+      </a>
+    </div>
+  </div>
+
+  <div class="sp-profiles-body">
+    <!-- Левая колонка: список профилей -->
+    <div class="card sp-profiles-list">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Мои профили</span>
+        <span class="badge bg-secondary" id="spProfilesCount">0</span>
+      </div>
+      <div class="list-group list-group-flush" id="spProfilesList">
+        <!-- Элемент для создания нового профиля -->
+        <button type="button"
+                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                onclick="spCreateNewProfileFromList()">
+          <div>
+            <div class="fw-semibold text-primary">
+              <i class="bi bi-plus-circle me-1"></i>
+              Создать новый профиль
+            </div>
+            <div class="small text-muted">Выберите тип профиля и заполните данные</div>
+          </div>
+        </button>
+      </div>
+      <div class="card-footer small text-muted">
+        Профиль с отметкой
+        <span class="badge bg-success">KYC</span>
+        прошёл проверку через госуслуги.
+      </div>
+    </div>
+
+    <!-- Правая колонка: мастер‑форма -->
+    <div class="card sp-profiles-editor" id="spProfileEditorCard" style="display: none;">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <div class="fw-semibold" id="spEditorTitle">Новый профиль</div>
+          <div class="small text-muted" id="spEditorSubtitle"></div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-success d-none" id="spProfileVerifiedBadge">
+            <i class="bi bi-patch-check-fill"></i> Профиль подтвержден
+          </span>
+          <button type="button" class="btn btn-outline-success btn-sm" id="spStartKycBtn"
+                  onclick="spStartKyc()" title="Подтвердить профиль через госуслуги">
+            <i class="bi bi-shield-check"></i> Подтвердить через Госуслуги
+          </button>
+        </div>
+      </div>
+
+      <ul class="nav nav-tabs sp-tabs" id="spWizardTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-main" data-bs-toggle="tab" data-bs-target="#pane-main" type="button" role="tab">
+            1. Основные данные
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-docs" data-bs-toggle="tab" data-bs-target="#pane-docs" type="button" role="tab">
+            2. Документы
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-address" data-bs-toggle="tab" data-bs-target="#pane-address" type="button" role="tab">
+            3. Адреса
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-contacts" data-bs-toggle="tab" data-bs-target="#pane-contacts" type="button" role="tab">
+            4. Контакты
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-bank" data-bs-toggle="tab" data-bs-target="#pane-bank" type="button" role="tab">
+            5. Банковские реквизиты
+          </button>
+        </li>
+      </ul>
+
+      <form id="spProfileForm" class="sp-tab-content tab-content">
+        <!-- Основные данные -->
+        <div class="tab-pane fade show active" id="pane-main" role="tabpanel">
+          <div class="mb-3">
+            <label class="form-label">Тип профиля *</label>
+            <div class="btn-group" role="group" aria-label="Тип профиля">
+              <input type="radio" class="btn-check" name="spProfileType" id="spTypeIndividual" autocomplete="off" value="individual" checked onchange="spChangeType('individual')">
+              <label class="btn btn-outline-secondary btn-sm" for="spTypeIndividual">
+                <i class="bi bi-person"></i> Физическое лицо
+              </label>
+              <input type="radio" class="btn-check" name="spProfileType" id="spTypeSP" autocomplete="off" value="sole_proprietor" onchange="spChangeType('sole_proprietor')">
+              <label class="btn btn-outline-secondary btn-sm" for="spTypeSP">
+                <i class="bi bi-person-badge"></i> ИП
+              </label>
+              <input type="radio" class="btn-check" name="spProfileType" id="spTypeLegal" autocomplete="off" value="legal" onchange="spChangeType('legal')">
+              <label class="btn btn-outline-secondary btn-sm" for="spTypeLegal">
+                <i class="bi bi-building"></i> Юр. лицо
+              </label>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Отображаемое название профиля *</label>
+            <input type="text" class="form-control" id="spDisplayName" name="display_name"
+                   placeholder="Например: Петров И.И., ИП Петров, ООО «Ромашка»" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Тип профиля</label>
+            <div class="d-flex gap-2">
+              <span class="badge bg-secondary" id="spProfileTypeLabel"></span>
+            </div>
+          </div>
+
+          <div id="spMainFieldsIndividual" class="d-none">
+            <div class="sp-help-block mb-3">
+              <strong>Физическое лицо.</strong>
+              Используется для сотрудников, представителей или частных контрагентов.
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Фамилия *</label>
+                <input type="text" class="form-control" name="last_name">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Имя *</label>
+                <input type="text" class="form-control" name="first_name">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Отчество</label>
+                <input type="text" class="form-control" name="middle_name">
+              </div>
+            </div>
+            <div class="row g-3 mt-2">
+              <div class="col-md-4">
+                <label class="form-label">Гражданство *</label>
+                <select class="form-select" name="citizenship">
+                  <option value="rf">РФ</option>
+                  <option value="foreign">Иностранное</option>
+                  <option value="stateless">Лицо без гражданства</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Пол</label>
+                <select class="form-select" name="gender">
+                  <option value="">Не выбрано</option>
+                  <option value="male">Мужской</option>
+                  <option value="female">Женский</option>
+                </select>
+              </div>
+              <div class="col-md-4 d-flex align-items-end">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="spIsSelfEmployed" name="is_self_employed">
+                  <label class="form-check-label" for="spIsSelfEmployed">
+                    Самозанятый
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="spMainFieldsLegal" class="d-none">
+            <div class="sp-help-block mb-3">
+              <strong>Юридическое лицо.</strong>
+              Юридическим лицом признается зарегистрированная в установленном порядке коммерческая
+              или некоммерческая организация, действующая на основании учредительных документов.
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Полное наименование *</label>
+              <input type="text" class="form-control" name="full_name">
+            </div>
+          </div>
+
+          <div id="spMainFieldsSP" class="d-none">
+            <div class="sp-help-block mb-3">
+              <strong>Индивидуальный предприниматель.</strong>
+              Индивидуальным предпринимателем признается зарегистрированное в установленном порядке физическое лицо,
+              осуществляющее предпринимательскую деятельность.
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Фамилия *</label>
+                <input type="text" class="form-control" name="last_name">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Имя *</label>
+                <input type="text" class="form-control" name="first_name">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Отчество</label>
+                <input type="text" class="form-control" name="middle_name">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Документы -->
+        <div class="tab-pane fade" id="pane-docs" role="tabpanel">
+          <div id="spDocsIndividual" class="d-none">
+            <h6 class="mb-3">Паспортные данные</h6>
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label">Серия</label>
+                <input type="text" class="form-control" name="passport_series">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Номер</label>
+                <input type="text" class="form-control" name="passport_number">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Дата выдачи</label>
+                <input type="date" class="form-control" name="passport_issued_at">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Код подразделения</label>
+                <input type="text" class="form-control" name="passport_department_code">
+              </div>
+            </div>
+            <div class="mb-3 mt-3">
+              <label class="form-label">Кем выдан</label>
+              <input type="text" class="form-control" name="passport_issued_by">
+            </div>
+            <h6 class="mt-4 mb-2">Регистрационные данные</h6>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">СНИЛС</label>
+                <input type="text" class="form-control" name="snils">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">ИНН</label>
+                <input type="text" class="form-control" name="inn">
+              </div>
+            </div>
+          </div>
+
+          <div id="spDocsLegal" class="d-none">
+            <h6 class="mb-3">Регистрационные данные ЮЛ</h6>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">ОГРН</label>
+                <input type="text" class="form-control" name="ogrn">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Дата присвоения ОГРН</label>
+                <input type="date" class="form-control" name="ogrn_assigned_at">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">ИНН</label>
+                <input type="text" class="form-control" name="inn">
+              </div>
+            </div>
+            <div class="row g-3 mt-3">
+              <div class="col-md-4">
+                <label class="form-label">ОКПО</label>
+                <input type="text" class="form-control" name="okpo">
+              </div>
+            </div>
+
+            <hr class="my-4">
+            <h6 class="mb-2">Сведения о представителе</h6>
+            <p class="small text-muted mb-2">
+              Выберите профиль физического лица, которое выступает представителем юридического лица.
+            </p>
+            <div class="input-group mb-2">
+              <input type="text" class="form-control" id="spRepresentativeDisplay" readonly
+                     placeholder="Выберите профиль представителя">
+              <button class="btn btn-outline-secondary" type="button" onclick="spSelectRepresentative()">
+                <i class="bi bi-person-search"></i> Выбрать
+              </button>
+            </div>
+            <input type="hidden" name="representative_profile_id" id="spRepresentativeId">
+
+            <div class="row g-3 mt-1">
+              <div class="col-md-6">
+                <label class="form-label">Основание полномочий</label>
+                <input type="text" class="form-control" name="representative_basis"
+                       placeholder="Например: Устав">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Наименование должности</label>
+                <input type="text" class="form-control" name="representative_position"
+                       placeholder="Например: Генеральный директор">
+              </div>
+            </div>
+          </div>
+
+          <div id="spDocsSP" class="d-none">
+            <h6 class="mb-3">Регистрационные данные ИП</h6>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">ОГРНИП</label>
+                <input type="text" class="form-control" name="ogrnip">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">ИНН</label>
+                <input type="text" class="form-control" name="inn">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">ОКПО</label>
+                <input type="text" class="form-control" name="okpo">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Адреса -->
+        <div class="tab-pane fade" id="pane-address" role="tabpanel">
+          {% include "shared/address_map.html" %}
+
+          <div id="spAddressIndividual" class="d-none mt-3">
+            <input type="hidden" name="registration_address_id" id="spRegAddressId">
+            <input type="hidden" id="spRegAddressText">
+
+            <div class="form-check mt-3">
+              <input class="form-check-input" type="checkbox" id="spSameAsReg" checked>
+              <label class="form-check-label" for="spSameAsReg">
+                Совпадает с адресом регистрации
+              </label>
+            </div>
+
+            <div id="spAddressIndividualResidence" class="mt-2" style="display: none;">
+              <label class="form-label">Адрес проживания</label>
+              <input type="text" class="form-control mb-2" id="spResidenceAddressDisplayInd"
+                     placeholder="Выберите адрес проживания на карте или в списке подсказок">
+            </div>
+            <input type="hidden" name="residence_address_id" id="spResidenceAddressId">
+          </div>
+
+          <div id="spAddressLegal" class="d-none mt-3">
+            <input type="hidden" name="registration_address_id" id="spLegalRegAddressId">
+
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="spLegalSameAsReg" checked>
+              <label class="form-check-label" for="spLegalSameAsReg">
+                Адрес в РФ совпадает с адресом регистрации
+              </label>
+            </div>
+
+            <div id="spAddressLegalRF" class="mt-2" style="display: none;">
+              <label class="form-label">Адрес в РФ</label>
+              <input type="text" class="form-control mb-2" id="spLegalAddressDisplay"
+                     placeholder="Выберите адрес в РФ на карте или в списке подсказок">
+            </div>
+            <input type="hidden" name="address_rf_id" id="spLegalAddressId">
+          </div>
+
+          <div id="spAddressSP" class="d-none mt-3">
+            <input type="hidden" name="residence_address_id" id="spResidenceAddressId">
+          </div>
+        </div>
+
+        <!-- Контакты -->
+        <div class="tab-pane fade" id="pane-contacts" role="tabpanel">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Телефон</label>
+              <input type="tel" class="form-control" name="phone">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">E‑mail</label>
+              <input type="email" class="form-control" name="email">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">MAX</label>
+              <input type="text" class="form-control" name="max_contact">
+            </div>
+          </div>
+        </div>
+
+        <!-- Банковские реквизиты -->
+        <div class="tab-pane fade" id="pane-bank" role="tabpanel">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Расчетный счет</label>
+              <input type="text" class="form-control" name="account_number">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Корреспондентский счет</label>
+              <input type="text" class="form-control" name="correspondent_account">
+            </div>
+          </div>
+          <div class="row g-3 mt-2">
+            <div class="col-md-8">
+              <label class="form-label">Наименование банка</label>
+              <input type="text" class="form-control" name="bank_name">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">БИК</label>
+              <input type="text" class="form-control" name="bik">
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <div class="sp-wizard-footer">
+        <div class="small text-muted">
+          <span id="spWizardStepLabel">Шаг 1 из 5</span>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" id="spWizardPrev" onclick="spWizardPrev()" disabled>
+            Назад
+          </button>
+          <button class="btn btn-primary btn-sm" type="button" id="spWizardNext" onclick="spWizardNext()">
+            Далее
+          </button>
+          <button class="btn btn-success btn-sm d-none" type="button" id="spWizardSave" onclick="spSaveProfile(false)" disabled>
+            Сохранить
+          </button>
+          <button class="btn btn-outline-success btn-sm d-none" type="button" id="spWizardSaveClose" onclick="spSaveProfile(true)" disabled>
+            Сохранить и закрыть
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block owner_extra_js %}
+<script src="https://api-maps.yandex.ru/2.1/?apikey={{ yandex_maps_api_key }}&lang=ru_RU" type="text/javascript"></script>
+<script src="{{ 'js/shared/address_map.js' | static_version }}"></script>
+<script>
+const spSelectedProfileId = "{{ selected_id }}";
+let spProfiles = [];
+let spCurrentProfileId = null;
+let spCurrentType = "individual";
+let spIsDirty = false;
+let spAddressActiveField = "reg"; // reg | residence
+const spSteps = ["main", "docs", "address", "contacts", "bank"];
+
+function spCurrentStepIndex() {
+  return spSteps.findIndex((key) =>
+    document.getElementById("tab-" + key)?.classList.contains("active")
+  );
+}
+
+function spSetStep(stepIndex) {
+  spSteps.forEach((key, index) => {
+    const tab = document.getElementById("tab-" + key);
+    const pane = document.getElementById("pane-" + key);
+    if (!tab || !pane) return;
+    if (index === stepIndex) {
+      tab.classList.add("active");
+      pane.classList.add("show", "fade", "active");
+    } else {
+      tab.classList.remove("active");
+      pane.classList.remove("show", "active");
+    }
+  });
+  document.getElementById("spWizardPrev").disabled = stepIndex === 0;
+  const saveVisible = stepIndex >= 1;
+  document.getElementById("spWizardNext").classList.toggle("d-none", saveVisible);
+  document.getElementById("spWizardSave").classList.toggle("d-none", !saveVisible);
+  document.getElementById("spWizardSaveClose").classList.toggle("d-none", !saveVisible);
+  document.getElementById("spWizardStepLabel").textContent = `Шаг ${
+    stepIndex + 1
+  } из ${spSteps.length}`;
+  spUpdateSaveButtonsState();
+}
+
+function spWizardPrev() {
+  const activeIndex = spCurrentStepIndex();
+  if (activeIndex > 0) spSetStep(activeIndex - 1);
+}
+
+function spWizardNext() {
+  const activeIndex = spCurrentStepIndex();
+  if (activeIndex < spSteps.length - 1) spSetStep(activeIndex + 1);
+}
+
+function spUpdateTypeVisibility() {
+  const isInd = spCurrentType === "individual";
+  const isLegal = spCurrentType === "legal";
+  const isSP = spCurrentType === "sole_proprietor";
+
+  const label = document.getElementById("spProfileTypeLabel");
+  if (label) {
+    label.textContent = isInd
+      ? "Физическое лицо"
+      : isLegal
+      ? "Юридическое лицо"
+      : "Индивидуальный предприниматель";
+  }
+
+  ["spMainFieldsIndividual", "spDocsIndividual", "spAddressIndividual"].forEach(
+    (id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle("d-none", !isInd);
+    }
+  );
+  ["spMainFieldsLegal", "spDocsLegal", "spAddressLegal"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("d-none", !isLegal);
+  });
+  ["spMainFieldsSP", "spDocsSP", "spAddressSP"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("d-none", !isSP);
+  });
+
+  // Обновляем радиокнопки типа
+  const typeMap = {
+    individual: "spTypeIndividual",
+    sole_proprietor: "spTypeSP",
+    legal: "spTypeLegal",
+  };
+  Object.entries(typeMap).forEach(([t, id]) => {
+    const radio = document.getElementById(id);
+    if (radio) radio.checked = spCurrentType === t;
+  });
+}
+
+function spChangeType(newType) {
+  spCurrentType = newType || "individual";
+  spUpdateTypeVisibility();
+  spMarkDirty();
+}
+
+function spOpenProfileWizard(type, existingProfile = null) {
+  spCurrentType = type || "individual";
+  spCurrentProfileId = existingProfile ? existingProfile.id : null;
+
+  const card = document.getElementById("spProfileEditorCard");
+  card.style.display = "flex";
+
+  const title = document.getElementById("spEditorTitle");
+  const subtitle = document.getElementById("spEditorSubtitle");
+  const verifiedBadge = document.getElementById("spProfileVerifiedBadge");
+
+  const form = document.getElementById("spProfileForm");
+  form.reset();
+  spIsDirty = false;
+  spUpdateSaveButtonsState();
+
+  if (existingProfile) {
+    title.textContent = "Редактирование профиля";
+    subtitle.textContent = existingProfile.display_name;
+    const isVerified = !!existingProfile.is_verified;
+    verifiedBadge.classList.toggle("d-none", !isVerified);
+    document
+      .getElementById("spStartKycBtn")
+      .classList.toggle("d-none", isVerified);
+    spCurrentType = existingProfile.profile_type || spCurrentType;
+  } else {
+    title.textContent = "Новый профиль";
+    subtitle.textContent = "";
+    verifiedBadge.classList.add("d-none");
+    document.getElementById("spStartKycBtn").classList.remove("d-none");
+  }
+
+  spUpdateTypeVisibility();
+  spSetStep(0);
+
+  if (existingProfile && existingProfile.details) {
+    spFillFormFromDetails(existingProfile);
+  }
+}
+
+function spFillFormFromDetails(profile) {
+  const details = profile.details || {};
+  const form = document.getElementById("spProfileForm");
+  document.getElementById("spDisplayName").value =
+    profile.display_name || "";
+
+  Object.keys(details).forEach((key) => {
+    let el = null;
+    if (spCurrentType === "individual") {
+      el = document.querySelector(
+        '#spMainFieldsIndividual [name="' +
+          key +
+          '"], #spDocsIndividual [name="' +
+          key +
+          '"]'
+      );
+    } else if (spCurrentType === "legal") {
+      el = document.querySelector(
+        '#spMainFieldsLegal [name="' +
+          key +
+          '"], #spDocsLegal [name="' +
+          key +
+          '"]'
+      );
+    } else if (spCurrentType === "sole_proprietor") {
+      el = document.querySelector(
+        '#spMainFieldsSP [name="' + key + '"], #spDocsSP [name="' + key + '"]'
+      );
+    }
+    if (!el) {
+      el = form.querySelector('[name="' + key + '"]');
+    }
+    if (!el || details[key] === null || typeof details[key] === "undefined")
+      return;
+    if (el.type === "checkbox") {
+      el.checked = !!details[key];
+    } else if (el.type === "date") {
+      // Для полей типа date обрезаем ISO формат до YYYY-MM-DD
+      const dateValue = details[key];
+      if (dateValue && typeof dateValue === "string") {
+        el.value = dateValue.split("T")[0];
+      } else {
+        el.value = dateValue || "";
+      }
+    } else {
+      el.value = details[key];
+    }
+  });
+
+  if (spCurrentType === "individual") {
+    const regId = details.registration_address_id;
+    const regFull = details.registration_address_full || "";
+    const resId = details.residence_address_id;
+    const resFull = details.residence_address_full || "";
+
+    const regIdInput = document.getElementById("spRegAddressId");
+    const regTextInput = document.getElementById("spRegAddressText");
+    const searchInput = document.getElementById("spAddressSearchInput");
+    const resIdInput = document.getElementById("spResidenceAddressId");
+    const resDisplay =
+      document.getElementById("spResidenceAddressDisplayInd") ||
+      document.getElementById("spResidenceAddressDisplay");
+    const sameCheckbox = document.getElementById("spSameAsReg");
+    const residenceBlock = document.getElementById(
+      "spAddressIndividualResidence"
+    );
+
+    if (regIdInput) regIdInput.value = regId || "";
+    if (regTextInput) regTextInput.value = regFull;
+    if (searchInput) searchInput.value = regFull;
+    if (resIdInput) resIdInput.value = resId || "";
+
+    if (sameCheckbox && residenceBlock && resFull && regFull && resFull !== regFull) {
+      sameCheckbox.checked = false;
+      residenceBlock.style.display = "block";
+      if (resDisplay) resDisplay.value = resFull;
+    } else {
+      if (sameCheckbox && residenceBlock) {
+        sameCheckbox.checked = true;
+        residenceBlock.style.display = "none";
+      }
+      if (resDisplay) resDisplay.value = resFull || regFull || "";
+    }
+
+    // При открытии вкладки сфокусируемся на адресе регистрации и позиционируем карту
+    if (window.SPAddressMap && SPAddressMap.setCenterByQuery && regFull) {
+      SPAddressMap.setCenterByQuery(regFull);
+    }
+  } else if (spCurrentType === "legal") {
+    const regId = details.registration_address_id;
+    const regFull = details.registration_address_full || "";
+    const rfId = details.address_rf_id;
+    const rfFull = details.address_rf_full || "";
+
+    const regIdInput = document.getElementById("spLegalRegAddressId");
+    const searchInput = document.getElementById("spAddressSearchInput");
+    const rfIdInput = document.getElementById("spLegalAddressId");
+    const rfDisplay = document.getElementById("spLegalAddressDisplay");
+    const sameCheckbox = document.getElementById("spLegalSameAsReg");
+    const rfBlock = document.getElementById("spAddressLegalRF");
+
+    // Если ранее был только адрес в РФ, отображаем его в нижнем поле,
+    // а регистрацию оставляем пустой, чтобы пользователь мог её заполнить отдельно.
+    if (!regId && !regFull && rfFull) {
+      if (regIdInput) regIdInput.value = "";
+      if (searchInput) searchInput.value = "";
+      if (rfIdInput) rfIdInput.value = rfId || "";
+      if (rfDisplay) rfDisplay.value = rfFull;
+      if (sameCheckbox && rfBlock) {
+        sameCheckbox.checked = false;
+        rfBlock.style.display = "block";
+      }
+    } else {
+      if (regIdInput) regIdInput.value = regId || "";
+      if (searchInput) searchInput.value = regFull;
+      if (rfIdInput) rfIdInput.value = rfId || "";
+
+      if (sameCheckbox && rfBlock && rfFull && regFull && rfFull !== regFull) {
+        sameCheckbox.checked = false;
+        rfBlock.style.display = "block";
+        if (rfDisplay) rfDisplay.value = rfFull;
+      } else {
+        if (sameCheckbox && rfBlock) {
+          sameCheckbox.checked = true;
+          rfBlock.style.display = "none";
+        }
+        if (rfDisplay) rfDisplay.value = rfFull || regFull || "";
+      }
+    }
+
+    // При открытии позиционируем карту по адресу регистрации
+    if (window.SPAddressMap && SPAddressMap.setCenterByQuery && regFull) {
+      SPAddressMap.setCenterByQuery(regFull);
+    }
+
+    // Заполняем данные представителя
+    // Используем representative_profile_profile_id (profiles.id) для поиска в списке
+    const repProfileId = details.representative_profile_profile_id || details.representative_profile_id;
+    const repDisplay = document.getElementById("spRepresentativeDisplay");
+    const repIdInput = document.getElementById("spRepresentativeId");
+    if (repProfileId) {
+      // Сохраняем individual_profiles.id в скрытое поле для отправки на сервер
+      if (repIdInput && details.representative_profile_id) {
+        repIdInput.value = details.representative_profile_id;
+      }
+      // Ищем профиль ФЛ в списке для отображения имени по profiles.id
+      const repProfile = spProfiles.find((p) => p.id === repProfileId);
+      if (repDisplay) {
+        repDisplay.value = repProfile ? repProfile.display_name : `Профиль #${repProfileId}`;
+      }
+    } else {
+      if (repIdInput) repIdInput.value = "";
+      if (repDisplay) repDisplay.value = "";
+    }
+  } else if (spCurrentType === "sole_proprietor") {
+    const resId = details.residence_address_id;
+    const resFull = details.residence_address_full || "";
+    const resIdInput = document.getElementById("spResidenceAddressId");
+    if (resIdInput) resIdInput.value = resId || "";
+
+    // Для ИП адрес отображаем в общем поле "Адрес" и центрируем карту
+    const addrInput = document.getElementById("spAddressSearchInput");
+    if (addrInput) {
+      addrInput.value = resFull || "";
+    }
+    if (window.SPAddressMap && SPAddressMap.setCenterByQuery && resFull) {
+      SPAddressMap.setCenterByQuery(resFull);
+    }
+  }
+}
+
+async function spLoadProfiles() {
+  try {
+    const resp = await fetch("/api/profiles/");
+    const data = await resp.json();
+    if (!data.success) return;
+    spProfiles = data.profiles || [];
+    document.getElementById("spProfilesCount").textContent =
+      spProfiles.length;
+    const list = document.getElementById("spProfilesList");
+    list.innerHTML = "";
+
+    // Кнопка "Создать новый профиль"
+    const createItem = document.createElement("button");
+    createItem.type = "button";
+    createItem.className =
+      "list-group-item list-group-item-action d-flex justify-content-between align-items-center";
+    createItem.onclick = () => spCreateNewProfileFromList();
+    createItem.innerHTML = `
+      <div>
+        <div class="fw-semibold text-primary">
+          <i class="bi bi-plus-circle me-1"></i>
+          Создать новый профиль
+        </div>
+        <div class="small text-muted">Выберите тип профиля и заполните данные</div>
+      </div>
+    `;
+    list.appendChild(createItem);
+
+    spProfiles.forEach((p) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className =
+        "list-group-item list-group-item-action d-flex justify-content-between align-items-center";
+      const typeLabel =
+        p.profile_type === "individual"
+          ? "ФЛ"
+          : p.profile_type === "legal"
+          ? "ЮЛ"
+          : "ИП";
+      item.innerHTML = `
+        <div>
+          <div class="fw-semibold">${p.display_name}</div>
+          <div class="small text-muted">${typeLabel}</div>
+        </div>
+        <div class="text-end">
+          ${p.is_default ? '<span class="badge bg-primary mb-1">По умолчанию</span><br>' : ""}
+          ${p.is_verified ? '<span class="badge bg-success">KYC</span>' : ""}
+        </div>
+      `;
+      item.onclick = () => spEditProfileFromList(p.id);
+      list.appendChild(item);
+    });
+  } catch (e) {
+    console.error("Load profiles error", e);
+  }
+}
+
+async function spEditProfileFromList(id) {
+  const profile = spProfiles.find((p) => p.id === id);
+  if (!profile) return;
+  spCurrentType = profile.profile_type;
+  spOpenProfileWizard(spCurrentType, profile);
+}
+
+async function spSaveProfile(closeAfter) {
+  const form = document.getElementById("spProfileForm");
+  if (!form.reportValidity()) {
+    return;
+  }
+  const fd = new FormData(form);
+  const displayName = fd.get("display_name")?.trim() || "";
+  if (!displayName) {
+    alert("Пожалуйста, укажите название профиля");
+    return;
+  }
+  const payload = {
+    profile_type: spCurrentType,
+    display_name: displayName,
+  };
+
+  // Для ФЛ: если "совпадает с адресом регистрации", копируем ID
+  if (spCurrentType === "individual") {
+    const sameCheckbox = document.getElementById("spSameAsReg");
+    const regIdInput = document.getElementById("spRegAddressId");
+    const resIdInput = document.getElementById("spResidenceAddressId");
+    if (sameCheckbox && sameCheckbox.checked && regIdInput && resIdInput) {
+      resIdInput.value = regIdInput.value;
+    }
+  }
+
+  // Для ЮЛ: если "адрес в РФ совпадает с адресом регистрации", копируем ID
+  if (spCurrentType === "legal") {
+    const sameCheckbox = document.getElementById("spLegalSameAsReg");
+    const regIdInput = document.getElementById("spLegalRegAddressId");
+    const rfIdInput = document.getElementById("spLegalAddressId");
+    if (sameCheckbox && sameCheckbox.checked && regIdInput && rfIdInput) {
+      rfIdInput.value = regIdInput.value;
+    }
+  }
+
+  // Явно добавляем даты и скрытые поля, даже если они пустые
+  const dateFields = ["ogrn_assigned_at", "passport_issued_at", "birth_date"];
+  const hiddenFields = ["registration_address_id", "residence_address_id", "address_rf_id", "representative_profile_id"];
+  
+  dateFields.forEach((key) => {
+    // Для дат ищем поле по name в зависимости от типа профиля
+    let el = null;
+    if (spCurrentType === "legal" && key === "ogrn_assigned_at") {
+      el = form.querySelector('#spDocsLegal [name="ogrn_assigned_at"]');
+    } else if (spCurrentType === "individual") {
+      if (key === "passport_issued_at") {
+        el = form.querySelector('#spDocsIndividual [name="passport_issued_at"]');
+      } else if (key === "birth_date") {
+        el = form.querySelector('#spMainFieldsIndividual [name="birth_date"]');
+      }
+    }
+    if (!el) {
+      el = form.querySelector(`[name="${key}"]`);
+    }
+    if (el) {
+      payload[key] = el.value || "";
+    }
+  });
+  
+  hiddenFields.forEach((key) => {
+    let elId = null;
+    if (key === "registration_address_id") {
+      if (spCurrentType === "legal") {
+        elId = "spLegalRegAddressId";
+      } else if (spCurrentType === "individual") {
+        elId = "spRegAddressId";
+      }
+    } else if (key === "address_rf_id") {
+      elId = "spLegalAddressId";
+    } else if (key === "residence_address_id") {
+      elId = "spResidenceAddressId";
+    } else if (key === "representative_profile_id") {
+      elId = "spRepresentativeId";
+    }
+    
+    if (elId) {
+      const el = document.getElementById(elId);
+      if (el) {
+        payload[key] = el.value || "";
+      }
+    }
+  });
+
+  fd.forEach((value, key) => {
+    if (key === "display_name") return;
+    // Пропускаем даты и скрытые поля - они уже обработаны выше
+    if (dateFields.includes(key) || hiddenFields.includes(key)) {
+      return;
+    }
+    if (!value) {
+      return;
+    }
+    if (key === "is_self_employed") {
+      payload[key] = true;
+    } else {
+      payload[key] = String(value);
+    }
+  });
+
+  try {
+    const url = spCurrentProfileId
+      ? `/api/profiles/${spCurrentProfileId}`
+      : "/api/profiles/";
+    const method = spCurrentProfileId ? "PUT" : "POST";
+    const resp = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      alert(data.error || "Ошибка сохранения профиля");
+      return;
+    }
+    spCurrentProfileId = data.profile?.id || spCurrentProfileId;
+    await spLoadProfiles();
+    // Обновляем subtitle с актуальным display_name из обновленного списка
+    if (spCurrentProfileId) {
+      const updatedProfile = spProfiles.find((p) => p.id === spCurrentProfileId);
+      if (updatedProfile?.display_name) {
+        const subtitle = document.getElementById("spEditorSubtitle");
+        if (subtitle) subtitle.textContent = updatedProfile.display_name;
+        // Обновляем поле display_name в форме
+        const displayNameInput = document.getElementById("spDisplayName");
+        if (displayNameInput) displayNameInput.value = updatedProfile.display_name;
+      }
+    }
+    spIsDirty = false;
+    spUpdateSaveButtonsState();
+    if (closeAfter) {
+      window.location.href = "/owner/profile?success=1";
+    } else {
+      alert("Профиль сохранен");
+    }
+  } catch (e) {
+    console.error("Save profile error", e);
+    alert("Ошибка сохранения профиля");
+  }
+}
+
+function spOnRegistrationAddressSelected(addr) {
+  document.getElementById("spRegAddressId").value = addr.id;
+  const regTextInput = document.getElementById("spRegAddressText");
+  if (regTextInput) {
+    regTextInput.value = addr.full_address || "";
+  }
+  const searchInput = document.getElementById("spAddressSearchInput");
+  if (searchInput) {
+    searchInput.value = addr.full_address || "";
+  }
+  spMarkDirty();
+}
+
+function spOnLegalRegAddressSelected(addr) {
+  const regIdInput = document.getElementById("spLegalRegAddressId");
+  const searchInput = document.getElementById("spAddressSearchInput");
+  if (regIdInput) regIdInput.value = addr.id;
+  if (searchInput) searchInput.value = addr.full_address || "";
+  spMarkDirty();
+}
+
+function spOnLegalRfAddressSelected(addr) {
+  const rfIdInput = document.getElementById("spLegalAddressId");
+  const rfDisplay = document.getElementById("spLegalAddressDisplay");
+  const searchInput = document.getElementById("spAddressSearchInput");
+  if (rfIdInput) rfIdInput.value = addr.id;
+  if (rfDisplay) rfDisplay.value = addr.full_address || "";
+  if (searchInput) searchInput.value = addr.full_address || "";
+  spMarkDirty();
+}
+function spOnLegalAddressSelected(addr) {
+  const sameCheckbox = document.getElementById("spLegalSameAsReg");
+  if (spAddressActiveField === "legal_rf" && sameCheckbox && !sameCheckbox.checked) {
+    spOnLegalRfAddressSelected(addr);
+  } else {
+    spOnLegalRegAddressSelected(addr);
+    if (sameCheckbox && sameCheckbox.checked) {
+      spOnLegalRfAddressSelected(addr);
+    }
+  }
+}
+function spOnResidenceAddressSelected(addr) {
+  document.getElementById("spResidenceAddressId").value = addr.id;
+  const input =
+    document.getElementById("spResidenceAddressDisplayInd") ||
+    document.getElementById("spResidenceAddressDisplay");
+  if (input) {
+    input.value = addr.full_address || "";
+  }
+  spMarkDirty();
+}
+
+function spSelectRepresentative() {
+  // Фильтруем только профили ФЛ
+  const individualProfiles = spProfiles.filter((p) => p.profile_type === "individual");
+  if (individualProfiles.length === 0) {
+    alert("Нет доступных профилей физических лиц. Сначала создайте профиль ФЛ.");
+    return;
+  }
+
+  // Создаем модальное окно для выбора
+  const modalHtml = `
+    <div class="modal fade" id="spSelectRepresentativeModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Выбор представителя</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="list-group">
+              ${individualProfiles
+                .map(
+                  (p) => `
+                <button type="button" class="list-group-item list-group-item-action" onclick="spSetRepresentative(${p.id}, '${(p.details?.last_name || "")} ${(p.details?.first_name || "")} ${(p.details?.middle_name || "")}'.trim() || '${p.display_name}')">
+                  <div class="fw-semibold">${p.display_name}</div>
+                  <div class="small text-muted">ID профиля: ${p.id}</div>
+                </button>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+            <button type="button" class="btn btn-outline-danger" onclick="spClearRepresentative()">Очистить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Удаляем старую модалку если есть
+  const oldModal = document.getElementById("spSelectRepresentativeModal");
+  if (oldModal) {
+    oldModal.remove();
+  }
+
+  // Добавляем новую модалку
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
+  const modal = new bootstrap.Modal(document.getElementById("spSelectRepresentativeModal"));
+  modal.show();
+
+  // Удаляем модалку после закрытия
+  document.getElementById("spSelectRepresentativeModal").addEventListener("hidden.bs.modal", function () {
+    this.remove();
+  });
+}
+
+function spSetRepresentative(profileId, displayName) {
+  document.getElementById("spRepresentativeId").value = profileId;
+  document.getElementById("spRepresentativeDisplay").value = displayName || `Профиль #${profileId}`;
+  const modal = bootstrap.Modal.getInstance(document.getElementById("spSelectRepresentativeModal"));
+  if (modal) {
+    modal.hide();
+  }
+  spMarkDirty();
+}
+
+function spClearRepresentative() {
+  document.getElementById("spRepresentativeId").value = "";
+  document.getElementById("spRepresentativeDisplay").value = "";
+  const modal = bootstrap.Modal.getInstance(document.getElementById("spSelectRepresentativeModal"));
+  if (modal) {
+    modal.hide();
+  }
+  spMarkDirty();
+}
+
+async function spStartKyc() {
+  if (!spCurrentProfileId) {
+    alert("Сначала выберите или создайте профиль.");
+    return;
+  }
+  try {
+    const btn = document.getElementById("spStartKycBtn");
+    btn.disabled = true;
+    const resp = await fetch(
+      `/api/profiles/${spCurrentProfileId}/kyc/start`,
+      { method: "POST" }
+    );
+    const data = await resp.json();
+    if (!data.success) {
+      alert(data.error || "Не удалось запустить проверку KYC");
+      btn.disabled = false;
+      return;
+    }
+    const respVerify = await fetch(
+      `/api/profiles/${spCurrentProfileId}/kyc/mark-verified`,
+      { method: "POST" }
+    );
+    const verifyData = await respVerify.json();
+    if (!verifyData.success) {
+      alert(verifyData.error || "Ошибка при подтверждении профиля");
+    } else {
+      alert("Профиль подтвержден через KYC.");
+      document
+        .getElementById("spProfileVerifiedBadge")
+        .classList.remove("d-none");
+      btn.classList.add("d-none");
+      await spLoadProfiles();
+    }
+  } catch (e) {
+    console.error("KYC start error", e);
+    alert("Ошибка запуска KYC‑верификации");
+  } finally {
+    const btn = document.getElementById("spStartKycBtn");
+    if (btn) btn.disabled = false;
+  }
+}
+
+function spUpdateSaveButtonsState() {
+  const saveBtn = document.getElementById("spWizardSave");
+  const saveCloseBtn = document.getElementById("spWizardSaveClose");
+  const stepIdx = spCurrentStepIndex();
+  const enabled = spIsDirty && stepIdx >= 1;
+  if (saveBtn) saveBtn.disabled = !enabled;
+  if (saveCloseBtn) saveCloseBtn.disabled = !enabled;
+}
+
+function spMarkDirty() {
+  spIsDirty = true;
+  spUpdateSaveButtonsState();
+}
+
+function spBindDirtyHandlers() {
+  const form = document.getElementById("spProfileForm");
+  if (!form) return;
+  form.addEventListener("input", spMarkDirty);
+  form.addEventListener("change", spMarkDirty);
+}
+
+function spBindTabHandlers() {
+  spSteps.forEach((key, index) => {
+    const tab = document.getElementById("tab-" + key);
+    if (!tab) return;
+    tab.addEventListener("click", function () {
+      spSetStep(index);
+    });
+  });
+}
+
+function spBindAddressFocusHandlers() {
+  const searchInput = document.getElementById("spAddressSearchInput");
+  const resInput =
+    document.getElementById("spResidenceAddressDisplayInd") ||
+    document.getElementById("spResidenceAddressDisplay");
+  const sameCheckbox = document.getElementById("spSameAsReg");
+  const residenceBlock = document.getElementById("spAddressIndividualResidence");
+  const addrLabel = document.querySelector("label[for='spAddressSearchInput']");
+  const legalSameCheckbox = document.getElementById("spLegalSameAsReg");
+  const legalRfBlock = document.getElementById("spAddressLegalRF");
+  const legalRfInput = document.getElementById("spLegalAddressDisplay");
+
+  // Физлицо: адрес регистрации / проживания
+  if (sameCheckbox && residenceBlock) {
+    sameCheckbox.addEventListener("change", function () {
+      if (this.checked) {
+        residenceBlock.style.display = "none";
+        // При совпадении адресов верхнее поле снова управляет картой как "Адрес регистрации"
+        if (addrLabel) {
+          addrLabel.textContent = "Адрес регистрации";
+        }
+        const searchInput = document.getElementById("spAddressSearchInput");
+        const regTextInput = document.getElementById("spRegAddressText");
+        if (searchInput && regTextInput) {
+          searchInput.value = regTextInput.value || "";
+          if (window.SPAddressMap && SPAddressMap.setCenterByQuery && regTextInput.value) {
+            SPAddressMap.setCenterByQuery(regTextInput.value);
+          }
+        }
+        spAddressActiveField = "reg";
+      } else {
+        residenceBlock.style.display = "block";
+        // Делаем адрес проживания активным поиском:
+        // переносим текущее значение поиска в поле проживания (если там пусто),
+        // и используем его как текст для подсказок.
+        const searchInput = document.getElementById("spAddressSearchInput");
+        if (resInput && !resInput.value && searchInput) {
+          resInput.value = searchInput.value;
+        }
+        if (addrLabel) {
+          addrLabel.textContent = "Адрес проживания";
+        }
+        if (resInput) {
+          resInput.focus();
+        }
+        spAddressActiveField = "residence";
+      }
+      spMarkDirty();
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("focus", function () {
+      spAddressActiveField = "reg";
+      if (window.SPAddressMap && SPAddressMap.setCenterByQuery) {
+        const q = this.value.trim();
+        if (q) SPAddressMap.setCenterByQuery(q);
+      }
+    });
+  }
+
+  if (resInput) {
+    resInput.addEventListener("focus", function () {
+      spAddressActiveField = "residence";
+      if (window.SPAddressMap && SPAddressMap.setCenterByQuery) {
+        const q = this.value.trim();
+        if (q) SPAddressMap.setCenterByQuery(q);
+      }
+    });
+
+    // При вводе в поле "Адрес проживания" прокидываем текст в строку поиска,
+    // чтобы подсказки и карта работали от него
+    resInput.addEventListener("input", function () {
+      const searchInput = document.getElementById("spAddressSearchInput");
+      if (searchInput) {
+        searchInput.value = this.value;
+        // Триггерим событие input, чтобы SPAddressMap пересчитал подсказки
+        const evt = new Event("input", { bubbles: true });
+        searchInput.dispatchEvent(evt);
+      }
+    });
+  }
+
+  // ЮЛ: адрес регистрации / адрес в РФ
+  if (legalSameCheckbox && legalRfBlock) {
+    legalSameCheckbox.addEventListener("change", function () {
+      if (this.checked) {
+        legalRfBlock.style.display = "none";
+        spAddressActiveField = "reg";
+      } else {
+        legalRfBlock.style.display = "block";
+        if (legalRfInput) {
+          legalRfInput.focus();
+        }
+        spAddressActiveField = "legal_rf";
+      }
+      spMarkDirty();
+    });
+  }
+
+  if (legalRfInput) {
+    legalRfInput.addEventListener("focus", function () {
+      spAddressActiveField = "legal_rf";
+      if (window.SPAddressMap && SPAddressMap.setCenterByQuery) {
+        const q = this.value.trim();
+        if (q) SPAddressMap.setCenterByQuery(q);
+      }
+    });
+    legalRfInput.addEventListener("input", function () {
+      const sInput = document.getElementById("spAddressSearchInput");
+      if (sInput) {
+        sInput.value = this.value;
+        const evt = new Event("input", { bubbles: true });
+        sInput.dispatchEvent(evt);
+      }
+    });
+  }
+}
+
+function spCreateNewProfileFromList() {
+  spOpenProfileWizard("individual", null);
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  // По умолчанию метка строки поиска — "Адрес регистрации"
+  const addrLabel = document.querySelector("label[for='spAddressSearchInput']");
+  if (addrLabel) {
+    addrLabel.textContent = "Адрес регистрации";
+  }
+  SPAddressMap.init({
+    searchInputId: "spAddressSearchInput",
+    suggestionsId: "spAddressSuggestions",
+    mapContainerId: "spAddressMap",
+    onAddressSelected: async function (addrDto) {
+      try {
+        const payload = {
+          full_address: addrDto.full_address,
+          city: addrDto.city || "",
+        };
+        const resp = await fetch("/api/addresses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!data.success) {
+          console.error("Address create error", data.error);
+          return;
+        }
+        const address = data.address;
+        if (spCurrentType === "individual") {
+          const sameCheckbox = document.getElementById("spSameAsReg");
+          if (spAddressActiveField === "residence" && sameCheckbox && !sameCheckbox.checked) {
+            spOnResidenceAddressSelected(address);
+          } else {
+            spOnRegistrationAddressSelected(address);
+            if (sameCheckbox && sameCheckbox.checked) {
+              spOnResidenceAddressSelected(address);
+            }
+          }
+        } else if (spCurrentType === "legal") {
+          spOnLegalAddressSelected(address);
+        } else if (spCurrentType === "sole_proprietor") {
+          spOnResidenceAddressSelected(address);
+        }
+      } catch (e) {
+        console.error("Address create error", e);
+      }
+    },
+  });
+
+  spBindDirtyHandlers();
+  spBindTabHandlers();
+  spBindAddressFocusHandlers();
+
+  spLoadProfiles().then(() => {
+    if (spSelectedProfileId) {
+      const id = parseInt(spSelectedProfileId, 10);
+      if (!Number.isNaN(id)) {
+        spEditProfileFromList(id);
+      }
+    }
+  });
+});
+</script>
+{% endblock %}
+

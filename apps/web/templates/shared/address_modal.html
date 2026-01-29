@@ -1,0 +1,177 @@
+{# Общий модальный компонент выбора/создания адреса #}
+<div class="modal fade" id="addressSelectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-geo-alt me-2"></i>
+          <span id="addressModalTitle">Выбор адреса</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Поиск по адресу</label>
+          <div class="input-group">
+            <input type="text" class="form-control" id="addressSearchInput" placeholder="Город, улица, дом">
+            <button class="btn btn-outline-secondary" type="button" onclick="spAddressSearch()">
+              <i class="bi bi-search"></i>
+            </button>
+          </div>
+          <div class="form-text">
+            Начните вводить адрес, чтобы найти его в базе. При необходимости можно добавить новый адрес вручную.
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-7">
+            <h6 class="mb-2">Найденные адреса</h6>
+            <div id="addressSearchResults" class="list-group small" style="max-height: 320px; overflow-y: auto;">
+              <div class="text-muted py-2 px-2">Введите запрос для поиска адреса.</div>
+            </div>
+          </div>
+          <div class="col-md-5">
+            <h6 class="mb-2">Новый адрес</h6>
+            <form id="addressCreateForm">
+              <div class="mb-2">
+                <label class="form-label">Страна</label>
+                <input type="text" class="form-control form-control-sm" name="country" value="Россия">
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Регион</label>
+                <input type="text" class="form-control form-control-sm" name="region">
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Город</label>
+                <input type="text" class="form-control form-control-sm" name="city" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Улица</label>
+                <input type="text" class="form-control form-control-sm" name="street">
+              </div>
+              <div class="row g-2 mb-2">
+                <div class="col-4">
+                  <label class="form-label">Дом</label>
+                  <input type="text" class="form-control form-control-sm" name="house">
+                </div>
+                <div class="col-4">
+                  <label class="form-label">Корпус</label>
+                  <input type="text" class="form-control form-control-sm" name="building">
+                </div>
+                <div class="col-4">
+                  <label class="form-label">Квартира</label>
+                  <input type="text" class="form-control form-control-sm" name="apartment">
+                </div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Индекс</label>
+                <input type="text" class="form-control form-control-sm" name="postal_code">
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Полный адрес</label>
+                <textarea class="form-control form-control-sm" name="full_address" rows="2"
+                  placeholder="Человекочитаемая строка адреса (будет показываться в списке)"></textarea>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="spAddressCreate()">
+                <i class="bi bi-plus-circle"></i> Добавить адрес
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let spAddressSelectCallback = null;
+
+function spOpenAddressModal(title, onSelectCallback) {
+  const titleEl = document.getElementById('addressModalTitle');
+  if (titleEl && title) {
+    titleEl.textContent = title;
+  }
+  spAddressSelectCallback = onSelectCallback;
+  const modalEl = document.getElementById('addressSelectModal');
+  if (!modalEl) return;
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+}
+
+async function spAddressSearch() {
+  const input = document.getElementById('addressSearchInput');
+  const container = document.getElementById('addressSearchResults');
+  if (!input || !container) return;
+
+  const q = input.value.trim();
+  container.innerHTML = '<div class="text-muted py-2 px-2">Поиск...</div>';
+
+  try {
+    const resp = await fetch('/api/addresses/search?q=' + encodeURIComponent(q));
+    const data = await resp.json();
+    if (!data.success) {
+      container.innerHTML = '<div class="text-danger py-2 px-2">Ошибка поиска адресов</div>';
+      return;
+    }
+    if (!data.items || data.items.length === 0) {
+      container.innerHTML = '<div class="text-muted py-2 px-2">Адреса не найдены. Попробуйте добавить новый.</div>';
+      return;
+    }
+    container.innerHTML = '';
+    data.items.forEach((item) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'list-group-item list-group-item-action';
+      btn.textContent = item.full_address || [item.city, item.street, item.house].filter(Boolean).join(', ');
+      btn.onclick = () => spSelectAddress(item);
+      container.appendChild(btn);
+    });
+  } catch (e) {
+    console.error('Address search error', e);
+    container.innerHTML = '<div class="text-danger py-2 px-2">Ошибка поиска адресов</div>';
+  }
+}
+
+async function spAddressCreate() {
+  const form = document.getElementById('addressCreateForm');
+  const formData = new FormData(form);
+  const payload = {};
+  formData.forEach((value, key) => {
+    if (value && String(value).trim()) {
+      payload[key] = String(value).trim();
+    }
+  });
+
+  try {
+    const resp = await fetch('/api/addresses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      alert(data.error || 'Ошибка создания адреса');
+      return;
+    }
+    spSelectAddress(data.address);
+  } catch (e) {
+    console.error('Address create error', e);
+    alert('Ошибка создания адреса');
+  }
+}
+
+function spSelectAddress(address) {
+  if (typeof spAddressSelectCallback === 'function') {
+    spAddressSelectCallback(address);
+  }
+  const modalEl = document.getElementById('addressSelectModal');
+  if (modalEl) {
+    const instance = bootstrap.Modal.getInstance(modalEl);
+    if (instance) instance.hide();
+  }
+}
+</script>
+

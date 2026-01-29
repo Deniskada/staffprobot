@@ -204,17 +204,17 @@
 
                 <!-- Блок "Основные настройки" удален - логика перенесена в профили организаций -->
 
-                <!-- Управление профилями организаций -->
+                <!-- Мои профили -->
                 <div class="card mb-3">
                     <div class="card-header">
                         <h6 class="mb-0">
                             <i class="fas fa-building me-2"></i>
-                            Профили организаций
+                            Мои профили
                         </h6>
                     </div>
                     <div class="card-body">
                         <p class="small text-muted mb-2">
-                            Реквизиты ИП/ЮЛ для договоров
+                            Профили физлиц, ИП и юридических лиц, от имени которых вы можете заключать договоры
                         </p>
                         <div id="orgProfilesList" class="mb-2">
                             <!-- Динамически загружается через JS -->
@@ -435,73 +435,6 @@
     </form>
 </div>
 
-<!-- Модальное окно для профиля организации -->
-<div class="modal fade" id="orgProfileModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-building me-2"></i>
-                    <span id="orgProfileModalTitle">Профиль организации</span>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="orgProfileForm">
-                    <input type="hidden" id="orgProfileId" name="profile_id">
-                    
-                    <div class="mb-3">
-                        <label for="orgProfileName" class="form-label">Название профиля *</label>
-                        <input type="text" class="form-control" id="orgProfileName" name="profile_name" 
-                               placeholder="Например: ИП Иванов, ООО Ромашка" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Тип *</label>
-                        <div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="legal_type" 
-                                       id="legalTypeIndividual" value="individual" checked
-                                       onchange="updateOrgProfileFields()">
-                                <label class="form-check-label" for="legalTypeIndividual">
-                                    <i class="fas fa-user"></i> ИП / Физ.лицо
-                                </label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="legal_type" 
-                                       id="legalTypeLegal" value="legal"
-                                       onchange="updateOrgProfileFields()">
-                                <label class="form-check-label" for="legalTypeLegal">
-                                    <i class="fas fa-building"></i> Юридическое лицо
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <hr>
-                    
-                    <div id="orgProfileFieldsContainer">
-                        <!-- Динамические поля реквизитов -->
-                    </div>
-                    
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="orgProfileDefault" name="is_default">
-                        <label class="form-check-label" for="orgProfileDefault">
-                            Использовать как профиль по умолчанию
-                        </label>
-                    </div>
-                </form>
-                </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <button type="button" class="btn btn-primary" onclick="saveOrgProfile()">
-                    <i class="fas fa-save"></i> Сохранить
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -699,18 +632,26 @@ function updatePhotosDisplay() {
     document.getElementById('photosData').value = JSON.stringify(photosData);
 }
 
-// Загрузка профилей организаций
+// Загрузка профилей контрагентов (shared /api/profiles)
 async function loadOrgProfiles() {
     try {
-        const response = await fetch('/owner/profile/organization/api/list');
+        const response = await fetch('/api/profiles/');
         const data = await response.json();
         
         if (data.success) {
             displayOrgProfiles(data.profiles);
+        } else {
+            console.error('Error loading profiles:', data.error);
         }
     } catch (error) {
-        console.error('Error loading org profiles:', error);
+        console.error('Error loading profiles:', error);
     }
+}
+
+// Временно отключаем загрузку статуса функций на этой странице,
+// чтобы не падать на отсутствующем контейнере/API.
+function loadFeatures() {
+    // no-op
 }
 
 function displayOrgProfiles(profiles) {
@@ -718,20 +659,27 @@ function displayOrgProfiles(profiles) {
     container.innerHTML = '';
     
     if (!profiles || profiles.length === 0) {
-        container.innerHTML = '<p class="text-muted small mb-0">Нет профилей</p>';
+        container.innerHTML = '<p class="text-muted small mb-0">Пока нет ни одного профиля. Нажмите «Добавить профиль», чтобы создать первый.</p>';
         return;
     }
     
     profiles.forEach(profile => {
         const item = document.createElement('div');
         item.className = 'border rounded p-2 mb-2';
+        const typeLabel =
+            profile.profile_type === 'individual'
+                ? 'Физическое лицо'
+                : profile.profile_type === 'legal'
+                ? 'Юридическое лицо'
+                : 'Индивидуальный предприниматель';
         item.innerHTML = `
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <strong>${profile.profile_name}</strong>
+                    <strong>${profile.display_name}</strong>
                     ${profile.is_default ? '<span class="badge bg-primary ms-1">По умолчанию</span>' : ''}
                     <br>
-                    <small class="text-muted">${profile.legal_type === 'individual' ? 'ИП' : 'ЮЛ'}</small>
+                    <small class="text-muted">${typeLabel}</small>
+                    ${profile.is_verified ? '<span class="badge bg-success ms-1">KYC</span>' : ''}
                 </div>
                 <div class="btn-group btn-group-sm">
                     <button type="button" class="btn btn-outline-secondary" onclick="editOrgProfile(${profile.id}); return false;">
@@ -747,100 +695,25 @@ function displayOrgProfiles(profiles) {
     });
 }
 
-// Открыть модальное окно профиля организации
-async function openOrgProfileModal(profileId = null) {
-    console.log('Opening modal for profile:', profileId);
-    
-    const modalElement = document.getElementById('orgProfileModal');
-    if (!modalElement) {
-        console.error('Modal element not found!');
-        return;
-    }
-    
-    const modal = new bootstrap.Modal(modalElement);
-    
+// Открыть мастер-профилей (новый интерфейс)
+function openOrgProfileModal(profileId = null) {
     if (profileId) {
-        console.log('Loading profile data...');
-        document.getElementById('orgProfileModalTitle').textContent = 'Редактировать профиль';
-        document.getElementById('orgProfileId').value = profileId;
-        
-        // Загружаем данные профиля
-        try {
-            const response = await fetch(`/owner/profile/organization/api/${profileId}`);
-            const data = await response.json();
-            console.log('Profile data loaded:', data);
-            
-            if (data.success) {
-                const profile = data.profile;
-                document.getElementById('orgProfileName').value = profile.profile_name || '';
-                document.getElementById('orgProfileDefault').checked = profile.is_default || false;
-                
-                // Устанавливаем тип
-                const legalRadio = profile.legal_type === 'legal' 
-                    ? document.getElementById('legalTypeLegal')
-                    : document.getElementById('legalTypeIndividual');
-                    
-                if (legalRadio) {
-                    legalRadio.checked = true;
-                }
-                
-                // Важно: обновляем поля ПОСЛЕ установки типа
-                await new Promise(resolve => setTimeout(resolve, 100)); // Небольшая задержка
-                updateOrgProfileFields();
-                
-                // Еще одна задержка для обновления DOM
-                await new Promise(resolve => setTimeout(resolve, 100));
-                
-                // Заполняем реквизиты
-                if (profile.requisites) {
-                    Object.keys(profile.requisites).forEach(key => {
-                        const input = document.querySelector(`#req_${key}`);
-                        if (input) {
-                            input.value = profile.requisites[key] || '';
-                            console.log(`Set ${key} = ${profile.requisites[key]}`);
-                        } else {
-                            console.warn(`Input #req_${key} not found`);
-                        }
-                    });
-                }
-                
-                console.log('Profile data filled, showing modal');
-                modal.show();
-            } else {
-                alert('Ошибка загрузки профиля: ' + (data.error || 'Unknown error'));
-            }
-        } catch (error) {
-            console.error('Error loading profile:', error);
-            alert('Ошибка загрузки профиля');
-        }
+        window.location.href = `/owner/profiles?profile_id=${profileId}`;
     } else {
-        console.log('Creating new profile');
-        document.getElementById('orgProfileModalTitle').textContent = 'Новый профиль';
-        document.getElementById('orgProfileForm').reset();
-        document.getElementById('orgProfileId').value = '';
-        
-        // Устанавливаем тип по умолчанию
-        const defaultRadio = document.getElementById('legalTypeIndividual');
-        if (defaultRadio) {
-            defaultRadio.checked = true;
-        }
-        
-        updateOrgProfileFields();
-        modal.show();
+        window.location.href = '/owner/profiles';
     }
 }
 
 function editOrgProfile(profileId) {
-    console.log('Editing profile:', profileId);
     openOrgProfileModal(profileId);
     return false; // Предотвращаем default действие
 }
 
 async function deleteOrgProfile(profileId) {
-    if (!confirm('Удалить профиль организации?')) return false;
+    if (!confirm('Удалить профиль?')) return false;
     
     try {
-        const response = await fetch(`/owner/profile/organization/api/${profileId}`, {
+        const response = await fetch(`/api/profiles/${profileId}`, {
             method: 'DELETE'
         });
         const data = await response.json();
@@ -855,99 +728,6 @@ async function deleteOrgProfile(profileId) {
         alert('Ошибка удаления профиля');
     }
     return false; // Предотвращаем default действие
-}
-
-function updateOrgProfileFields() {
-    const container = document.getElementById('orgProfileFieldsContainer');
-    if (!container) return;
-    
-    const legalTypeRadio = document.querySelector('#orgProfileModal input[name="org_legal_type"]:checked');
-    if (!legalTypeRadio) return;
-    
-    const legalType = legalTypeRadio.value;
-    
-    let fieldsHtml = '';
-    
-    if (legalType === 'individual') {
-        // Поля для ИП/ФЛ
-        fieldsHtml = `
-            <div class="mb-3">
-                <label class="form-label">ИНН</label>
-                <input type="text" class="form-control" name="req_inn" id="req_inn" placeholder="12 цифр">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">ОГРНИП</label>
-                <input type="text" class="form-control" name="req_ogrnip" id="req_ogrnip" placeholder="15 цифр">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">ФИО</label>
-                <input type="text" class="form-control" name="req_fio" id="req_fio">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Адрес регистрации</label>
-                <textarea class="form-control" name="req_address" id="req_address" rows="2"></textarea>
-            </div>
-        `;
-    } else {
-        // Поля для Юр.лица
-        fieldsHtml = `
-            <div class="mb-3">
-                <label class="form-label">Полное наименование</label>
-                <input type="text" class="form-control" name="req_full_name" id="req_full_name">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">ИНН</label>
-                <input type="text" class="form-control" name="req_inn" id="req_inn" placeholder="10 цифр">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">КПП</label>
-                <input type="text" class="form-control" name="req_kpp" id="req_kpp" placeholder="9 цифр">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">ОГРН</label>
-                <input type="text" class="form-control" name="req_ogrn" id="req_ogrn" placeholder="13 цифр">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Юридический адрес</label>
-                <textarea class="form-control" name="req_legal_address" id="req_legal_address" rows="2"></textarea>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Банковские реквизиты</label>
-                <input type="text" class="form-control" name="req_bank_name" id="req_bank_name" placeholder="Название банка">
-                <input type="text" class="form-control mt-2" name="req_bank_account" id="req_bank_account" placeholder="Расчётный счёт">
-                <input type="text" class="form-control mt-2" name="req_bank_bik" id="req_bank_bik" placeholder="БИК">
-            </div>
-        `;
-    }
-    
-    container.innerHTML = fieldsHtml;
-}
-
-async function saveOrgProfile() {
-    // TODO: реализовать сохранение
-    alert('Сохранение профиля будет реализовано');
-}
-
-// Загрузка статуса функций
-async function loadFeatures() {
-    try {
-        const response = await fetch('/owner/profile/features/api/status');
-        const data = await response.json();
-        
-        if (data.success) {
-            displayFeatures(data.features);
-        }
-    } catch (error) {
-        console.error('Error loading features:', error);
-    }
-}
-
-function displayFeatures(features) {
-    const container = document.getElementById('featuresContainer');
-    container.innerHTML = '';
-    
-    // TODO: отобразить функции с toggle switches
-    container.innerHTML = '<p class="text-muted">Функции будут отображены после реализации API...</p>';
 }
 
 // Определения полей для реквизитов
@@ -1029,255 +809,6 @@ function updateOrgProfileFields() {
         
         container.appendChild(formGroup);
     });
-}
-
-async function saveOrgProfile() {
-    const form = document.getElementById('orgProfileForm');
-    const formData = new FormData(form);
-    const profileId = document.getElementById('orgProfileId').value;
-    
-    // Собираем реквизиты
-    const requisites = {};
-    const legalType = formData.get('legal_type');
-    const fields = legalType === 'individual' ? INDIVIDUAL_FIELDS : LEGAL_FIELDS;
-    
-    fields.forEach(field => {
-        const value = formData.get(field.key);
-        if (value && value.trim()) {
-            requisites[field.key] = value.trim();
-        }
-    });
-    
-    const data = {
-        profile_name: formData.get('profile_name'),
-        legal_type: legalType,
-        is_default: formData.get('is_default') === 'on',
-        requisites: requisites
-    };
-    
-    try {
-        const url = profileId 
-            ? `/owner/profile/organization/api/${profileId}/update`
-            : '/owner/profile/organization/api/create';
-        
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            bootstrap.Modal.getInstance(document.getElementById('orgProfileModal')).hide();
-            await loadOrgProfiles();
-        } else {
-            alert('Ошибка: ' + result.error);
-        }
-    } catch (error) {
-        console.error('Error saving profile:', error);
-        alert('Ошибка сохранения профиля');
-    }
-}
-
-// Загрузка и отображение функций
-async function loadFeatures() {
-    try {
-        const response = await fetch('/owner/profile/features/api/status');
-        const data = await response.json();
-        
-        if (data.success) {
-            displayFeatures(data.features);
-        }
-    } catch (error) {
-        console.error('Error loading features:', error);
-    }
-}
-
-function displayFeatures(features) {
-    const container = document.getElementById('featuresContainer');
-    container.innerHTML = '';
-    
-    console.log('Displaying features:', features);
-    
-    // Группируем функции
-    const activeFeatures = features.filter(f => f.available && f.enabled);
-    const availableFeatures = features.filter(f => f.available && !f.enabled);
-    const unavailableFeatures = features.filter(f => !f.available);
-    
-    console.log('Active:', activeFeatures.length, 'Available:', availableFeatures.length, 'Unavailable:', unavailableFeatures.length);
-    
-    // Активные функции
-    if (activeFeatures.length > 0) {
-        const header = document.createElement('h6');
-        header.className = 'small text-success mb-2';
-        header.innerHTML = '<i class="fas fa-check-circle"></i> Активные функции';
-        container.appendChild(header);
-        activeFeatures.forEach(feature => renderFeatureItem(container, feature, true));
-    }
-    
-    // Доступные но выключенные
-    if (availableFeatures.length > 0) {
-        const header = document.createElement('h6');
-        header.className = 'small text-muted mb-2 mt-3';
-        header.innerHTML = '<i class="fas fa-toggle-off"></i> Доступные функции';
-        container.appendChild(header);
-        availableFeatures.forEach(feature => renderFeatureItem(container, feature, true));
-    }
-    
-    // Недоступные в тарифе
-    if (unavailableFeatures.length > 0) {
-        const header = document.createElement('h6');
-        header.className = 'small text-warning mb-2 mt-3';
-        header.innerHTML = '<i class="fas fa-lock"></i> Требуют обновления тарифа';
-        container.appendChild(header);
-        unavailableFeatures.forEach(feature => renderFeatureItem(container, feature, false));
-    }
-}
-
-function renderFeatureItem(container, feature, available) {
-    const item = document.createElement('div');
-    item.className = `feature-item ${!available ? 'disabled' : ''}`;
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'd-flex justify-content-between align-items-center';
-    
-    // Левая часть - название и описание
-    const infoDiv = document.createElement('div');
-    infoDiv.className = 'flex-grow-1';
-    infoDiv.innerHTML = `
-        <strong>${feature.name}</strong>
-        <div class="small text-muted">${feature.description}</div>
-    `;
-    
-    // Правая часть - toggle или lock
-    const controlDiv = document.createElement('div');
-    
-    if (available) {
-        const switchDiv = document.createElement('div');
-        switchDiv.className = 'form-check form-switch';
-        
-        const checkbox = document.createElement('input');
-        checkbox.className = 'form-check-input feature-toggle';
-        checkbox.type = 'checkbox';
-        checkbox.id = `feature_${feature.key}`;
-        checkbox.checked = feature.enabled;
-        checkbox.onchange = function() {
-            toggleFeature(feature.key, this.checked);
-        };
-        
-        switchDiv.appendChild(checkbox);
-        controlDiv.appendChild(switchDiv);
-    } else {
-        controlDiv.innerHTML = `
-            <div>
-                <i class="fas fa-lock text-warning"></i>
-                <a href="/owner/tariff/change" class="btn btn-sm btn-warning ms-2">
-                    Сменить тариф
-                </a>
-            </div>
-        `;
-    }
-    
-    contentDiv.appendChild(infoDiv);
-    contentDiv.appendChild(controlDiv);
-    item.appendChild(contentDiv);
-    container.appendChild(item);
-}
-
-async function toggleFeature(featureKey, enabled) {
-    console.log('Toggling feature:', featureKey, 'to', enabled);
-    
-    try {
-        const response = await fetch('/owner/profile/features/api/toggle', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({feature_key: featureKey, enabled: enabled})
-        });
-        
-        const data = await response.json();
-        console.log('Toggle response:', data);
-        
-        if (!data.success) {
-            alert('Ошибка: ' + (data.error || 'Функция недоступна'));
-            // Откатываем toggle
-            const checkbox = document.getElementById(`feature_${featureKey}`);
-            if (checkbox) checkbox.checked = !enabled;
-        } else {
-            // Успешно сохранено - обновляем меню БЕЗ перезагрузки
-            console.log('Feature toggled successfully, updating menu...');
-            
-            // Отключаем зависимые фичи в UI
-            if (data.disabled_dependent_features && data.disabled_dependent_features.length > 0) {
-                for (const depKey of data.disabled_dependent_features) {
-                    const depCheckbox = document.getElementById(`feature_${depKey}`);
-                    if (depCheckbox) {
-                        depCheckbox.checked = false;
-                        console.log(`Auto-disabled dependent feature: ${depKey}`);
-                    }
-                }
-                showToast(`Отключено зависимых фич: ${data.disabled_dependent_features.length}`, 'warning');
-            }
-            
-            await updateSidebarMenu();
-            
-            // Показываем уведомление
-            showToast(`Функция "${featureKey}" ${enabled ? 'включена' : 'отключена'}`, 'success');
-        }
-    } catch (error) {
-        console.error('Error toggling feature:', error);
-        alert('Ошибка переключения функции');
-        const checkbox = document.getElementById(`feature_${featureKey}`);
-        if (checkbox) checkbox.checked = !enabled;
-    }
-}
-
-// Обновление меню без перезагрузки страницы
-async function updateSidebarMenu() {
-    try {
-        // Перезагружаем только сайдбар
-        const response = await fetch('/owner');
-        const html = await response.text();
-        
-        // Извлекаем сайдбар из ответа
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const newSidebar = doc.querySelector('.sidebar-nav');
-        
-        if (newSidebar) {
-            const currentSidebar = document.querySelector('.sidebar-nav');
-            if (currentSidebar) {
-                currentSidebar.innerHTML = newSidebar.innerHTML;
-                
-                // КРИТИЧНО: Переинициализируем обработчики сайдбара
-                if (window.ownerSidebar) {
-                    window.ownerSidebar.menuItems = document.querySelectorAll('.sidebar-item');
-                    window.ownerSidebar.attachEventListeners();
-                }
-                
-                console.log('✅ Menu updated and re-initialized');
-            }
-        }
-    } catch (error) {
-        console.error('Error updating menu:', error);
-    }
-}
-
-// Toast уведомления
-function showToast(message, type = 'info') {
-    const toastHtml = `
-        <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0" role="alert" style="position: fixed; top: 80px; right: 20px; z-index: 9999;">
-            <div class="d-flex">
-                <div class="toast-body">${message}</div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', toastHtml);
-    const toastEl = document.body.lastElementChild;
-    const toast = new bootstrap.Toast(toastEl, {delay: 3000});
-    toast.show();
-    toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
 }
 
 // Автосохранение профиля (debounce)
