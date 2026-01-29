@@ -1,0 +1,18 @@
+{% extends "manager/base_manager.html" %}
+
+{% block title %}Мои профили{% endblock %}
+
+{% block manager_content %}
+<div class="container-fluid py-3">
+  {% set back_url = '/manager/profile' %}
+  {% set close_redirect_url = '/manager/profile?success=1' %}
+  {% include "shared/profiles_wizard.html" %}
+</div>
+{% endblock %}
+
+{% block manager_extra_js %}
+<script src="https://api-maps.yandex.ru/2.1/?apikey={{ yandex_maps_api_key }}&lang=ru_RU" type="text/javascript"></script>
+<script src="{{ 'js/shared/address_map.js' | static_version }}"></script>
+<script src="{{ 'js/shared/profiles_wizard.js' | static_version }}"></script>
+{% endblock %}
+

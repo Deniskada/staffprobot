@@ -172,8 +172,25 @@
                     </form>
     </div>
 
-    <!-- Правая колонка - статистика и действия -->
+    <!-- Правая колонка - статистика, профили и действия -->
     <div class="col-md-4">
+        <!-- Мои профили -->
+        <div class="profile-section">
+            <h5 class="mb-3">
+                <i class="bi bi-file-earmark-person"></i> Мои профили
+            </h5>
+            <p class="small text-muted">
+                Профили (физлицо / ИП / юрлицо), от имени которых вы можете заключать договоры.
+            </p>
+            <div id="orgProfilesList" class="mb-2">
+                <!-- Загружается через /api/profiles -->
+            </div>
+            <a href="/employee/profiles" class="btn btn-sm btn-primary w-100">
+                <i class="bi bi-pencil-square me-1"></i>
+                Открыть мастер профилей
+            </a>
+        </div>
+
         <!-- Статистика -->
         <div class="profile-section">
             <h5 class="mb-3">
@@ -287,5 +304,146 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ super() }}
 <script src="/static/js/employee/profile.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const container = document.getElementById("orgProfilesList");
+  if (!container) {
+    return;
+  }
+
+  async function loadOrgProfiles() {
+    try {
+      const response = await fetch("/api/profiles/");
+      const data = await response.json();
+      if (data.success) {
+        renderProfiles(data.profiles);
+      } else {
+        console.error("Error loading profiles:", data.error);
+      }
+    } catch (e) {
+      console.error("Error loading profiles:", e);
+    }
+  }
+
+  function renderProfiles(profiles) {
+    container.innerHTML = "";
+    if (!profiles || profiles.length === 0) {
+      container.innerHTML =
+        '<p class="text-muted small mb-0">Пока нет ни одного профиля. Нажмите «Открыть мастер профилей», чтобы создать первый.</p>';
+      return;
+    }
+
+    profiles.forEach(function (profile) {
+      const typeLabel =
+        profile.profile_type === "individual"
+          ? "Физическое лицо"
+          : profile.profile_type === "legal"
+          ? "Юридическое лицо"
+          : "Индивидуальный предприниматель";
+      const el = document.createElement("div");
+      el.className = "border rounded p-2 mb-2";
+      el.innerHTML =
+        '<div class="d-flex justify-content-between align-items-center">' +
+        '<div>' +
+        "<strong>" +
+        (profile.display_name || "Без названия") +
+        "</strong>" +
+        (profile.is_default
+          ? '<span class="badge bg-primary ms-1">По умолчанию</span>'
+          : "") +
+        "<br>" +
+        '<small class="text-muted">' +
+        typeLabel +
+        "</small>" +
+        (profile.is_verified
+          ? '<span class="badge bg-success ms-1">KYC</span>'
+          : "") +
+        "</div>" +
+        '<div class="btn-group btn-group-sm">' +
+        `<button type="button" class="btn btn-outline-secondary" onclick="window.location.href='/employee/profiles?profile_id=${profile.id}'; return false;">` +
+        '<i class="fas fa-edit"></i>' +
+        "</button>" +
+        `<button type="button" class="btn btn-outline-danger" onclick="spDeleteEmployeeProfile(${profile.id}); return false;">` +
+        '<i class="fas fa-trash"></i>' +
+        "</button>" +
+        "</div>" +
+        "</div>";
+      container.appendChild(el);
+    });
+  }
+
+  loadOrgProfiles();
+});
+
+async function spDeleteEmployeeProfile(profileId) {
+  if (!confirm("Удалить профиль?")) return false;
+  try {
+    const response = await fetch(`/api/profiles/${profileId}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+    if (data.success) {
+      const container = document.getElementById("orgProfilesList");
+      if (!container) return false;
+      // перезагрузим список
+      const resp = await fetch("/api/profiles/");
+      const json = await resp.json();
+      if (json.success) {
+        const profiles = json.profiles || [];
+        container.innerHTML = "";
+        if (!profiles.length) {
+          container.innerHTML =
+            '<p class="text-muted small mb-0">Пока нет ни одного профиля. Нажмите «Открыть мастер профилей», чтобы создать первый.</p>';
+        } else {
+          profiles.forEach(function (profile) {
+            const typeLabel =
+              profile.profile_type === "individual"
+                ? "Физическое лицо"
+                : profile.profile_type === "legal"
+                ? "Юридическое лицо"
+                : "Индивидуальный предприниматель";
+            const el = document.createElement("div");
+            el.className = "border rounded p-2 mb-2";
+            el.innerHTML =
+              '<div class="d-flex justify-content-between align-items-center">' +
+              '<div>' +
+              "<strong>" +
+              (profile.display_name || "Без названия") +
+              "</strong>" +
+              (profile.is_default
+                ? '<span class="badge bg-primary ms-1">По умолчанию</span>'
+                : "") +
+              "<br>" +
+              '<small class="text-muted">' +
+              typeLabel +
+              "</small>" +
+              (profile.is_verified
+                ? '<span class="badge bg-success ms-1">KYC</span>'
+                : "") +
+              "</div>" +
+              '<div class="btn-group btn-group-sm">' +
+              `<button type="button" class="btn btn-outline-secondary" onclick="window.location.href='/employee/profiles?profile_id=${profile.id}'; return false;">` +
+              '<i class="fas fa-edit"></i>' +
+              "</button>" +
+              `<button type="button" class="btn btn-outline-danger" onclick="spDeleteEmployeeProfile(${profile.id}); return false;">` +
+              '<i class="fas fa-trash"></i>' +
+              "</button>" +
+              "</div>" +
+              "</div>";
+            container.appendChild(el);
+          });
+        }
+      }
+    } else {
+      alert("Ошибка: " + data.error);
+    }
+  } catch (error) {
+    console.error("Error deleting profile:", error);
+    alert("Ошибка удаления профиля");
+  }
+  return false;
+}
+</script>
 {% endblock %}

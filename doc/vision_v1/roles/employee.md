@@ -26,6 +26,7 @@
 - [GET] `/employee/objects`  — (apps/web/routes/employee.py)
 - [GET] `/employee/profile`  — (apps/web/routes/employee.py)
 - [POST] `/employee/profile`  — (apps/web/routes/employee.py)
+- [GET] `/employee/profiles`  — (apps/web/routes/employee.py) — мастер «Мои профили» (shared wizard, query: profile_id)
 - [GET] `/employee/reviews`  — (apps/web/routes/employee_reviews.py)
 - [GET] `/employee/shifts`  — (apps/web/routes/employee.py)
 - [GET] `/employee/shifts/{shift_id}`  — (apps/web/routes/employee.py)
@@ -58,7 +59,8 @@
 - `employee/history.html`
 - `employee/index.html`
 - `employee/objects.html`
-- `employee/profile.html`
+- `employee/profile.html` — страница профиля с блоком «Мои профили» (таблица с кнопками редактирования/удаления, ссылка на мастер)
+- `employee/profile/profiles.html` — мастер «Мои профили» (include shared/profiles_wizard.html, extra_js: Yandex Maps, address_map.js, profiles_wizard.js)
 - `employee/reviews.html`
 - `employee/shifts/detail.html`
 - `employee/shifts/list.html`

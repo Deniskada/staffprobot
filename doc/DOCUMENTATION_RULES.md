@@ -36,6 +36,14 @@
 - Перед коммитом: быстрый diff по `doc/vision_v1` и запуск автогенерации при необходимости.
 - При обнаружении несоответствий — завести задачу на коррекцию документации.
 
+## Недавние изменения (main, 29.01.2026)
+
+### Мастер профилей для управляющего и сотрудника ✅
+- **Роуты:** `GET /manager/profiles`, `GET /employee/profiles` — мастер «Мои профили» (shared wizard, query: profile_id). Файлы: manager_profiles.py, employee.py.
+- **Шаблоны:** manager/profile/profiles.html, employee/profile/profiles.html — include shared/profiles_wizard.html; на страницах профиля (manager/profile.html, employee/profile.html) — таблица «Мои профили» с кнопками редактирования и удаления.
+- **Исправления:** глобальный `import os` в employee.py (устранена 500 на /employee/profiles); подключение profiles_wizard.js на /employee/profiles; выравнивание выпадающего меню профиля (dropdown-menu-end) в base_manager.html и base_employee.html.
+- **Документация:** обновлены doc/vision_v1/roles/manager.md, doc/vision_v1/roles/employee.md; changelog: doc/changelogs/2026_01_29_profiles_wizard.md.
+
 ## Недавние изменения (main, 15.01.2026)
 
 ### Система протоколирования изменений договоров ✅

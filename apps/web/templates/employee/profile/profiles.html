@@ -1,0 +1,18 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}Мои профили{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  {% set back_url = '/employee/profile' %}
+  {% set close_redirect_url = '/employee/profile?success=1' %}
+  {% include "shared/profiles_wizard.html" %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script src="https://api-maps.yandex.ru/2.1/?apikey={{ yandex_maps_api_key }}&lang=ru_RU" type="text/javascript"></script>
+<script src="{{ 'js/shared/address_map.js' | static_version }}"></script>
+<script src="{{ 'js/shared/profiles_wizard.js' | static_version }}"></script>
+{% endblock %}

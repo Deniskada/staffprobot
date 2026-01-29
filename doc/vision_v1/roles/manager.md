@@ -51,6 +51,7 @@
 - [POST] `/objects/{object_id}/edit`  — (apps/web/routes/manager.py)
 - [GET] `/profile`  — (apps/web/routes/manager.py)
 - [POST] `/profile`  — (apps/web/routes/manager.py)
+- [GET] `/profiles`  — (apps/web/routes/manager_profiles.py) — мастер «Мои профили» (shared wizard, query: profile_id)
 - [GET] `/reports`  — (apps/web/routes/manager.py)
 - [POST] `/reports/generate`  — (apps/web/routes/manager.py)
 - [GET] `/reports/stats/period`  — (apps/web/routes/manager.py)
@@ -100,7 +101,8 @@
 - `manager/payroll/list.html` — интерфейс начислений с двумя вкладками. По умолчанию открывается «Сводка по сотрудникам» (агрегированные показатели по каждому сотруднику, сортировка по ФИО/количеству/сумме/последнему периоду, фильтры по периоду и объекту, переключатель «Показать уволенных сотрудников»). Вкладка «Начисления» показывает плоский список записей.
 - `manager/payroll/detail.html` — детализация начислений сотрудника: верхняя таблица с начислениями (сортировка по столбцам) и подробный блок ниже. Раздел «Выплаты» отображается перед протоколом изменений. Кнопки добавления удержаний/доплат активны только пока нет выплат.
 - `manager/payroll_adjustments/list.html` — список начислений (PayrollAdjustment) с фильтрами и кнопкой создания (требует can_manage_payroll)
-- `manager/profile.html`
+- `manager/profile.html` — страница профиля с блоком «Мои профили» (таблица с кнопками редактирования/удаления, ссылка на мастер)
+- `manager/profile/profiles.html` — мастер «Мои профили» (include shared/profiles_wizard.html, manager_extra_js: Yandex Maps, address_map.js, profiles_wizard.js)
 - `manager/reports/index.html`
 - `manager/reviews.html`
 - `manager/shifts/detail.html`

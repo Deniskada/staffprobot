@@ -14,6 +14,7 @@ from collections import defaultdict
 from calendar import monthrange
 import logging
 from io import BytesIO
+import os
 
 from apps.web.dependencies import get_current_user_dependency
 from core.database.session import get_db_session, get_async_session
@@ -37,6 +38,7 @@ from shared.services.cancellation_policy_service import CancellationPolicyServic
 from apps.web.utils.shift_history_utils import build_shift_history_items
 from apps.web.utils.calendar_utils import create_calendar_grid
 from openpyxl import Workbook
+from shared.services.profile_service import ProfileService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -812,9 +814,8 @@ async def employee_objects(
             })
         
         # Получаем ключ API Яндекс Карт
-        import os
         yandex_maps_api_key = os.getenv("YANDEX_MAPS_API_KEY", "")
-        
+
         return templates.TemplateResponse("employee/objects.html", {
         "request": request,
         "current_user": current_user,
@@ -2014,19 +2015,60 @@ async def employee_profile(
             "Специализированные задачи"
         ]
         
-        return templates.TemplateResponse("employee/profile.html", {
-            "request": request,
-            "current_user": user,
-            "user": user,
-            "profile_stats": profile_stats,
-            "applications_count": applications_count,
-            "interviews_count": interviews_count,
-            "work_categories": work_categories,
-            "available_interfaces": available_interfaces
-        })
+        return templates.TemplateResponse(
+            "employee/profile.html",
+            {
+                "request": request,
+                "current_user": user,
+                "user": user,
+                "profile_stats": profile_stats,
+                "applications_count": applications_count,
+                "interviews_count": interviews_count,
+                "work_categories": work_categories,
+                "available_interfaces": available_interfaces,
+            },
+        )
     except Exception as e:
         logger.error(f"Ошибка загрузки профиля: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки профиля: {e}")
+
+
+@router.get("/profiles", response_class=HTMLResponse)
+async def employee_profiles_page(
+    request: Request,
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Страница мастера «Мои профили» для сотрудника."""
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    # Навигация и стили берутся из base_employee.html
+    available_interfaces = await get_available_interfaces_for_user(current_user, db)
+
+    applications_count_res = await db.execute(
+        select(func.count(Application.id)).where(Application.applicant_id == user_id)
+    )
+    applications_count = applications_count_res.scalar() or 0
+
+    yandex_maps_api_key = os.getenv("YANDEX_MAPS_API_KEY", "")
+    selected_profile_id = request.query_params.get("profile_id")
+
+    return templates.TemplateResponse(
+        "employee/profile/profiles.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "available_interfaces": available_interfaces,
+            "applications_count": applications_count,
+            "selected_profile_id": selected_profile_id,
+            "yandex_maps_api_key": yandex_maps_api_key,
+        },
+    )
 
 
 @router.post("/profile")

@@ -140,6 +140,27 @@
         </div>
     </div>
     <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-earmark-person me-2"></i>
+                    Мои профили
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">
+                    Профили, от имени которых вы можете заключать договоры (физлица, ИП, юрлица).
+                </p>
+                <div id="orgProfilesList" class="mb-2">
+                    <!-- Загружается через /api/profiles -->
+                </div>
+                <a href="/manager/profiles" class="btn btn-sm btn-primary w-100">
+                    <i class="bi bi-pencil-square me-1"></i>
+                    Открыть мастер профилей
+                </a>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
@@ -201,5 +222,99 @@
         </div>
     </div>
 </div>
+
+{% block extra_js %}
+{{ super() }}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const container = document.getElementById("orgProfilesList");
+  if (!container) {
+    return;
+  }
+
+  async function loadOrgProfiles() {
+    try {
+      const response = await fetch("/api/profiles/");
+      const data = await response.json();
+      if (data.success) {
+        renderProfiles(data.profiles);
+      } else {
+        console.error("Error loading profiles:", data.error);
+      }
+    } catch (e) {
+      console.error("Error loading profiles:", e);
+    }
+  }
+
+  function renderProfiles(profiles) {
+    container.innerHTML = "";
+    if (!profiles || profiles.length === 0) {
+      container.innerHTML =
+        '<p class="text-muted small mb-0">Пока нет ни одного профиля. Нажмите «Открыть мастер профилей», чтобы создать первый.</p>';
+      return;
+    }
+
+    profiles.forEach(function (profile) {
+      const typeLabel =
+        profile.profile_type === "individual"
+          ? "Физическое лицо"
+          : profile.profile_type === "legal"
+          ? "Юридическое лицо"
+          : "Индивидуальный предприниматель";
+      const el = document.createElement("div");
+      el.className = "border rounded p-2 mb-2";
+      el.innerHTML =
+        '<div class="d-flex justify-content-between align-items-center">' +
+        '<div>' +
+        "<strong>" +
+        (profile.display_name || "Без названия") +
+        "</strong>" +
+        (profile.is_default
+          ? '<span class="badge bg-primary ms-1">По умолчанию</span>'
+          : "") +
+        "<br>" +
+        '<small class="text-muted">' +
+        typeLabel +
+        "</small>" +
+        (profile.is_verified
+          ? '<span class="badge bg-success ms-1">KYC</span>'
+          : "") +
+        "</div>" +
+        '<div class="btn-group btn-group-sm">' +
+        `<button type="button" class="btn btn-outline-secondary" onclick="window.location.href='/manager/profiles?profile_id=${profile.id}'; return false;">` +
+        '<i class="fas fa-edit"></i>' +
+        "</button>" +
+        `<button type="button" class="btn btn-outline-danger" onclick="spDeleteProfile(${profile.id}); return false;">` +
+        '<i class="fas fa-trash"></i>' +
+        "</button>" +
+        "</div>" +
+        "</div>";
+      container.appendChild(el);
+    });
+  }
+
+  window.spDeleteProfile = async function (profileId) {
+    if (!confirm("Удалить профиль?")) return false;
+    try {
+      const response = await fetch(`/api/profiles/${profileId}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (data.success) {
+        await loadOrgProfiles();
+      } else {
+        alert("Ошибка: " + data.error);
+      }
+    } catch (error) {
+      console.error("Error deleting profile:", error);
+      alert("Ошибка удаления профиля");
+    }
+    return false;
+  };
+
+  loadOrgProfiles();
+});
+</script>
+{% endblock %}
 
 {% endblock %}

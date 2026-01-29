@@ -16,7 +16,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, shared_cancellations, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll, manager_payroll_adjustments, owner_payroll_adjustments, cancellations, admin_notifications, organization_profiles, owner_features, owner_media_storage, owner_cancellation_reasons, owner_rules, owner_tasks, owner_incidents, manager_tasks, employee_tasks, webhooks, owner_subscription, support, media_proxy
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, shared_cancellations, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll, manager_payroll_adjustments, owner_payroll_adjustments, cancellations, admin_notifications, organization_profiles, owner_features, owner_media_storage, owner_cancellation_reasons, owner_rules, owner_tasks, owner_incidents, manager_tasks, employee_tasks, webhooks, owner_subscription, support, media_proxy, shared_profiles, address_book, manager_profiles
 from routes.shared.calendar_api import router as calendar_api_router
 from apps.web.routes.system_settings_api import router as system_settings_router
 from core.database.session import get_db_session
@@ -304,6 +304,8 @@ app.include_router(shared_appeals.router, prefix="/api/appeals", tags=["Обжа
 app.include_router(shared_reviews.router, prefix="/api/reviews", tags=["Отзывы"])
 app.include_router(shared_cancellations.router, prefix="/shared/cancellations", tags=["shared", "cancellations"])
 app.include_router(review_reports.router, prefix="/api/reports/reviews", tags=["Отчеты - Отзывы"])
+app.include_router(shared_profiles.router, tags=["Профили (shared API)"])
+app.include_router(address_book.router, tags=["База адресов (shared API)"])
 app.include_router(owner_reviews.router, prefix="/owner", tags=["Владелец - Отзывы"])
 app.include_router(employee_reviews.router, prefix="/employee", tags=["Сотрудник - Отзывы"])
 app.include_router(manager_reviews.router, prefix="/manager", tags=["Управляющий - Отзывы"])
@@ -312,6 +314,7 @@ app.include_router(simple_test.router, tags=["Простой тест"])
 app.include_router(manager_reviews_simple.router, tags=["Управляющий - Отзывы (Простая версия)"])
 app.include_router(test_dropdown.router, tags=["Тест Dropdown"])
 app.include_router(support.router, prefix="/support", tags=["Поддержка"])
+app.include_router(manager_profiles.router, prefix="/manager", tags=["Управляющий - Профили"])
 
 
 # API для интеграции с ботом
