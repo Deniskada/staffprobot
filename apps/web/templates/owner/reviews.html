@@ -692,9 +692,10 @@
                     
                     if (data.success && data.contracts) {
                         let filteredCount = 0;
+                        const eid = employeeId != null ? Number(employeeId) : null;
                         data.contracts.forEach(contract => {
-                            // Если указан employeeId, фильтруем только договоры с этим сотрудником
-                            if (!employeeId || contract.employee_id == employeeId) {
+                            const cEid = contract.employee_id != null ? Number(contract.employee_id) : null;
+                            if (!eid || cEid === eid) {
                                 const option = document.createElement('option');
                                 option.value = contract.id;
                                 option.textContent = `${contract.contract_number} - ${contract.title}`;
@@ -703,7 +704,7 @@
                             }
                         });
                         
-                        if (filteredCount === 0 && employeeId) {
+                        if (filteredCount === 0 && eid) {
                             contractSelect.innerHTML = '<option value="">Нет договоров с выбранным сотрудником</option>';
                         }
                     }
@@ -789,14 +790,26 @@
         // Отправка отзыва
         async function submitReview() {
             try {
+                const targetId = document.getElementById('target-id').value;
+                const contractId = document.getElementById('contract-id').value;
+                const title = (document.getElementById('review-title').value || '').trim() || 'Отзыв';
+                const rating = document.getElementById('review-rating').value;
+                if (!targetId || !contractId) {
+                    showAlert('Выберите сотрудника и договор', 'danger');
+                    return;
+                }
+                if (!rating || isNaN(parseFloat(rating)) || parseFloat(rating) < 1 || parseFloat(rating) > 5) {
+                    showAlert('Укажите оценку от 1 до 5', 'danger');
+                    return;
+                }
                 const formData = new FormData();
                 formData.append('target_type', document.getElementById('target-type').value);
-                formData.append('target_id', document.getElementById('target-id').value);
-                formData.append('contract_id', document.getElementById('contract-id').value);
-                formData.append('title', 'Отзыв'); // Заголовок обязателен
-                formData.append('rating', document.getElementById('review-rating').value);
+                formData.append('target_id', targetId);
+                formData.append('contract_id', contractId);
+                formData.append('title', title);
+                formData.append('rating', rating);
                 formData.append('content', document.getElementById('review-content').value);
-                formData.append('is_anonymous', document.getElementById('is-anonymous').checked);
+                if (document.getElementById('is-anonymous').checked) formData.append('is_anonymous', '1');
 
                 const response = await fetch('/api/reviews/create', {
                     method: 'POST',
@@ -808,20 +821,19 @@
                 
                 if (result.success) {
                     showAlert('Отзыв отправлен на модерацию', 'success');
-                    
-                    // Закрываем модальное окно
                     const modal = bootstrap.Modal.getInstance(document.getElementById('createReviewModal'));
-                    modal.hide();
-                    
-                    // Очищаем форму
+                    if (modal) modal.hide();
                     document.getElementById('create-review-form').reset();
                     selectedRating = 5;
-                    
-                    // Обновляем статистику и список отзывов
                     loadStatistics();
                     loadReviews();
                 } else {
-                    showAlert(result.message || 'Ошибка отправки отзыва', 'danger');
+                    let msg = result.message;
+                    if (!msg && result.detail) {
+                        const d = Array.isArray(result.detail) ? result.detail : [result.detail];
+                        msg = d.map(x => x.msg || String(x)).join('; ') || 'Ошибка валидации';
+                    }
+                    showAlert(msg || 'Ошибка отправки отзыва', 'danger');
                 }
                 
             } catch (error) {
