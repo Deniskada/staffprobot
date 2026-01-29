@@ -32,6 +32,11 @@
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="address-tab" data-bs-toggle="tab" data-bs-target="#address" type="button" role="tab">
+                                <i class="fas fa-map-marker-alt"></i> Адрес
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
                             <button class="nav-link" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" role="tab">
                                 <i class="fas fa-coins"></i> Финансы
                             </button>
@@ -57,42 +62,6 @@
                                            name="name" 
                                            value="{{ object.name }}"
                                            required>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label for="address" class="form-label">Адрес *</label>
-                                    <textarea class="form-control" 
-                                              id="address" 
-                                              name="address" 
-                                              rows="3"
-                                              required>{{ object.address }}</textarea>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label for="coordinates" class="form-label">Координаты</label>
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   id="latitude" 
-                                                   name="latitude" 
-                                                   value="{{ object.coordinates.split(',')[0] if object.coordinates else '' }}"
-                                                   placeholder="55.7558"
-                                                   pattern="^-?[0-9]+\.?[0-9]*$">
-                                            <div class="form-text">Широта (latitude)</div>
-                                        </div>
-                                        <div class="col-6">
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   id="longitude" 
-                                                   name="longitude" 
-                                                   value="{{ object.coordinates.split(',')[1] if object.coordinates else '' }}"
-                                                   placeholder="37.6176"
-                                                   pattern="^-?[0-9]+\.?[0-9]*$">
-                                            <div class="form-text">Долгота (longitude)</div>
-                                        </div>
-                                    </div>
-                                    <div class="form-text">Координаты для геолокации (необязательно)</div>
                                 </div>
                             </div>
                             
@@ -132,17 +101,6 @@
                                         <option value="Australia/Sydney" {% if object.timezone == 'Australia/Sydney' %}selected{% endif %}>Сидней (UTC+10/+11)</option>
                                     </select>
                                     <div class="form-text">Часовой пояс для отображения времени смен</div>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="max_distance" 
-                                           name="max_distance" 
-                                           min="1"
-                                           value="{{ object.max_distance }}">
-                                    <div class="form-text">Максимальное расстояние для открытия смены</div>
                                 </div>
                                 
                                 <div class="mb-3">
@@ -198,7 +156,59 @@
                             </div>
                             <!-- Конец вкладки 1: Основное -->
                             
-                            <!-- Вкладка 2: Финансы -->
+                            <!-- Вкладка 2: Адрес -->
+                            <div class="tab-pane fade" id="address" role="tabpanel">
+                                {% include "shared/address_map.html" %}
+
+                                <div class="mb-3 d-none">
+                                    <label for="object-address" class="form-label">Адрес *</label>
+                                    <textarea class="form-control" 
+                                              id="object-address" 
+                                              name="address" 
+                                              rows="3"
+                                              required>{{ object.address }}</textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="coordinates" class="form-label">Координаты</label>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="latitude" 
+                                                   name="latitude" 
+                                                   value="{{ object.coordinates.split(',')[0] if object.coordinates else '' }}"
+                                                   placeholder="55.7558"
+                                                   pattern="^-?[0-9]+\.?[0-9]*$">
+                                            <div class="form-text">Широта (latitude)</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="longitude" 
+                                                   name="longitude" 
+                                                   value="{{ object.coordinates.split(',')[1] if object.coordinates else '' }}"
+                                                   placeholder="37.6176"
+                                                   pattern="^-?[0-9]+\.?[0-9]*$">
+                                            <div class="form-text">Долгота (longitude)</div>
+                                        </div>
+                                    </div>
+                                    <div class="form-text">Координаты можно скорректировать вручную или выбрать точку на карте.</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="max_distance" 
+                                           name="max_distance" 
+                                           min="1"
+                                           value="{{ object.max_distance }}">
+                                    <div class="form-text">Максимальное расстояние для открытия смены</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Вкладка 3: Финансы -->
                             <div class="tab-pane fade" id="finance" role="tabpanel">
                                 <div class="row">
                                     <div class="col-md-12">
@@ -484,9 +494,9 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Конец вкладки 2: Финансы -->
+                            <!-- Конец вкладки 3: Финансы -->
                             
-                            <!-- Вкладка 3: Условия работы и задачи -->
+                            <!-- Вкладка 4: Условия работы и задачи -->
                             <div class="tab-pane fade" id="tasks" role="tabpanel">
                                 <div class="mb-3">
                                     <label for="work_conditions" class="form-label">Условия работы</label>
@@ -657,7 +667,7 @@
                                 </div>
                             </div>
                             </div>
-                            <!-- Конец вкладки 3: Условия работы и задачи -->
+                            <!-- Конец вкладки 4: Условия работы и задачи -->
                         </div>
                         <!-- Конец tab-content -->
                         
@@ -686,6 +696,8 @@
 </div>
 
 {% block scripts %}
+<script src="https://api-maps.yandex.ru/2.1/?apikey={{ yandex_maps_api_key }}&lang=ru_RU" type="text/javascript"></script>
+<script src="{{ 'js/shared/address_map.js' | static_version }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
@@ -710,6 +722,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Валидация времени
     form.addEventListener('submit', function(e) {
+        // Перед отправкой формы синхронизируем скрытое поле address с видимой строкой поиска
+        const hiddenAddress = document.getElementById('object-address');
+        const searchInput = document.getElementById('spAddressSearchInput');
+        if (hiddenAddress && searchInput && searchInput.value) {
+            hiddenAddress.value = searchInput.value;
+        }
+        
         console.log('Form submit event triggered');
         console.log('Form data:', new FormData(form));
         
@@ -807,6 +826,69 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Инициализируем маску при загрузке страницы
     updateWorkDaysMask();
+    
+    // Инициализация карты и адресного поиска
+    if (window.SPAddressMap) {
+        const addressTextarea = document.getElementById('object-address');
+        const latitudeInput = document.getElementById('latitude');
+        const longitudeInput = document.getElementById('longitude');
+        const searchInput = document.getElementById('spAddressSearchInput');
+
+        let initialLat = 55.751244;
+        let initialLon = 37.618423;
+
+        if (latitudeInput && longitudeInput && latitudeInput.value && longitudeInput.value) {
+            initialLat = parseFloat(latitudeInput.value) || initialLat;
+            initialLon = parseFloat(longitudeInput.value) || initialLon;
+        }
+
+        SPAddressMap.init({
+            searchInputId: "spAddressSearchInput",
+            suggestionsId: "spAddressSuggestions",
+            mapContainerId: "spAddressMap",
+            initialLat: initialLat,
+            initialLon: initialLon,
+            onAddressSelected: async function (addr) {
+                if (addressTextarea) {
+                    addressTextarea.value = addr.full_address || "";
+                }
+                if (searchInput && addr.full_address) {
+                    searchInput.value = addr.full_address;
+                }
+                if (latitudeInput && longitudeInput) {
+                    latitudeInput.value = addr.lat != null ? String(addr.lat) : "";
+                    longitudeInput.value = addr.lon != null ? String(addr.lon) : "";
+                }
+
+                // Сохраняем адрес в локную БД адресов (привязка к пользователю)
+                try {
+                    const payload = {
+                        full_address: addr.full_address,
+                        city: addr.city || "",
+                    };
+                    await fetch("/api/addresses", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+                } catch (e) {
+                    console.error("Address create error", e);
+                }
+            }
+        });
+
+        // При открытии формы подставляем сохранённый адрес в строку поиска
+        if (addressTextarea && addressTextarea.value && searchInput) {
+            searchInput.value = addressTextarea.value;
+        }
+
+        // При ручном вводе в строке поиска сразу обновляем скрытое поле address
+        if (searchInput && addressTextarea) {
+            searchInput.addEventListener('input', function () {
+                addressTextarea.value = this.value;
+            });
+        }
+    }
 });
 
 // Функции для управления задачами

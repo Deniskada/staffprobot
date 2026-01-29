@@ -6,9 +6,11 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Qu
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from apps.web.middleware.role_middleware import get_user_id_from_current_user
 from apps.web.services.object_service import ObjectService, TimeSlotService
 from core.database.session import get_db_session
 from core.logging.logger import logger
+from domain.entities.address import Address
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -147,11 +149,19 @@ async def create_object_form(
     current_user: dict = Depends(require_owner_or_superadmin)
 ):
     """Форма создания объекта"""
-    return templates.TemplateResponse("objects/create.html", {
-        "request": request,
-        "title": "Создание объекта",
-        "current_user": current_user
-    })
+    import os
+
+    yandex_maps_api_key = os.getenv("YANDEX_MAPS_API_KEY", "")
+
+    return templates.TemplateResponse(
+        "objects/create.html",
+        {
+            "request": request,
+            "title": "Создание объекта",
+            "current_user": current_user,
+            "yandex_maps_api_key": yandex_maps_api_key,
+        },
+    )
 
 
 @router.post("/create")
@@ -251,6 +261,20 @@ async def create_object(
         }
         
         new_object = await object_service.create_object(object_data, current_user["telegram_id"])
+
+        # Пополняем локальную базу адресов (привязка к пользователю)
+        try:
+            user_id = await get_user_id_from_current_user(current_user, db)
+            addr = Address(
+                user_id=user_id,
+                country="Россия",
+                city="",
+                full_address=address,
+            )
+            db.add(addr)
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Failed to create address for object {new_object.id}: {e}")
         
         # Планирование тайм-слотов до конца текущего года
         try:
@@ -389,13 +413,20 @@ async def edit_object_form(
             "available_for_applicants": obj.available_for_applicants,
             "is_active": obj.is_active
         }
+
+        import os
+        yandex_maps_api_key = os.getenv("YANDEX_MAPS_API_KEY", "")
         
-        return templates.TemplateResponse("objects/edit.html", {
-            "request": request,
-            "title": f"Редактирование: {object_data['name']}",
-            "object": object_data,
-            "current_user": current_user
-        })
+        return templates.TemplateResponse(
+            "objects/edit.html",
+            {
+                "request": request,
+                "title": f"Редактирование: {object_data['name']}",
+                "object": object_data,
+                "current_user": current_user,
+                "yandex_maps_api_key": yandex_maps_api_key,
+            },
+        )
         
     except HTTPException:
         raise

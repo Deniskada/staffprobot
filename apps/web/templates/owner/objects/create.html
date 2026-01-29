@@ -32,6 +32,11 @@
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="address-tab" data-bs-toggle="tab" data-bs-target="#address" type="button" role="tab">
+                                <i class="fas fa-map-marker-alt"></i> Адрес
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
                             <button class="nav-link" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" role="tab">
                                 <i class="fas fa-coins"></i> Финансы
                             </button>
@@ -57,41 +62,6 @@
                                            name="name" 
                                            placeholder="Например: Магазин №1"
                                            required>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label for="address" class="form-label">Адрес *</label>
-                                    <textarea class="form-control" 
-                                              id="address" 
-                                              name="address" 
-                                              rows="3"
-                                              placeholder="Полный адрес объекта"
-                                              required></textarea>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label for="coordinates" class="form-label">Координаты</label>
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   id="latitude" 
-                                                   name="latitude" 
-                                                   placeholder="55.7558"
-                                                   pattern="^-?[0-9]+\.?[0-9]*$">
-                                            <div class="form-text">Широта (latitude)</div>
-                                        </div>
-                                        <div class="col-6">
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   id="longitude" 
-                                                   name="longitude" 
-                                                   placeholder="37.6176"
-                                                   pattern="^-?[0-9]+\.?[0-9]*$">
-                                            <div class="form-text">Долгота (longitude)</div>
-                                        </div>
-                                    </div>
-                                    <div class="form-text">Координаты для геолокации (необязательно)</div>
                                 </div>
                                 
                                 <div class="mb-3">
@@ -170,18 +140,6 @@
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="max_distance" 
-                                           name="max_distance" 
-                                           min="1"
-                                           value="500"
-                                           placeholder="500">
-                                    <div class="form-text">Максимальное расстояние для открытия смены</div>
-                                </div>
-                                
-                                <div class="mb-3">
                                     <label for="auto_close_minutes" class="form-label">Автозакрытие смен (минуты)</label>
                                     <input type="number" 
                                            class="form-control" 
@@ -217,7 +175,59 @@
                             </div>
                             <!-- Конец вкладки 1: Основное -->
                             
-                            <!-- Вкладка 2: Финансы -->
+                            <!-- Вкладка 2: Адрес -->
+                            <div class="tab-pane fade" id="address" role="tabpanel">
+                                {% include "shared/address_map.html" %}
+
+                                <div class="mb-3 d-none">
+                                    <label for="object-address" class="form-label">Адрес объекта *</label>
+                                    <textarea class="form-control"
+                                              id="object-address"
+                                              name="address"
+                                              rows="3"
+                                              placeholder="Будет заполнен из выбранного адреса, можно откорректировать вручную"
+                                              required></textarea>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Координаты</label>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <input type="text"
+                                                   class="form-control"
+                                                   id="latitude"
+                                                   name="latitude"
+                                                   placeholder="55.7558"
+                                                   pattern="^-?[0-9]+\.?[0-9]*$">
+                                            <div class="form-text">Широта (latitude)</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="text"
+                                                   class="form-control"
+                                                   id="longitude"
+                                                   name="longitude"
+                                                   placeholder="37.6176"
+                                                   pattern="^-?[0-9]+\.?[0-9]*$">
+                                            <div class="form-text">Долгота (longitude)</div>
+                                        </div>
+                                    </div>
+                                    <div class="form-text">Координаты будут подставлены при выборе точки на карте.</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="max_distance" class="form-label">Максимальное расстояние (м)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="max_distance" 
+                                           name="max_distance" 
+                                           min="1"
+                                           value="500"
+                                           placeholder="500">
+                                    <div class="form-text">Максимальное расстояние для открытия смены</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Вкладка 3: Финансы -->
                             <div class="tab-pane fade" id="finance" role="tabpanel">
                                 <div class="row">
                                     <div class="col-md-12">
@@ -430,9 +440,9 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Конец вкладки 2: Финансы -->
+                            <!-- Конец вкладки 3: Финансы -->
                             
-                            <!-- Вкладка 3: Условия работы и задачи -->
+                            <!-- Вкладка 4: Условия работы и задачи -->
                             <div class="tab-pane fade" id="tasks" role="tabpanel">
                                 <div class="mb-3">
                                     <label for="work_conditions" class="form-label">Условия работы</label>
@@ -534,6 +544,8 @@
 </div>
 
 {% block scripts %}
+<script src="https://api-maps.yandex.ru/2.1/?apikey={{ yandex_maps_api_key }}&lang=ru_RU" type="text/javascript"></script>
+<script src="{{ 'js/shared/address_map.js' | static_version }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
@@ -564,6 +576,48 @@ document.addEventListener('DOMContentLoaded', function() {
             closingTime.value = opening.toTimeString().slice(0, 5);
         }
     });
+    // Инициализация карты и адресного поиска
+    if (window.SPAddressMap) {
+        SPAddressMap.init({
+            searchInputId: "spAddressSearchInput",
+            suggestionsId: "spAddressSuggestions",
+            mapContainerId: "spAddressMap",
+            onAddressSelected: async function (addr) {
+                const addrTextarea = document.getElementById('object-address');
+                const latInput = document.getElementById('latitude');
+                const lonInput = document.getElementById('longitude');
+                if (addrTextarea) {
+                    addrTextarea.value = addr.full_address || "";
+                }
+                if (latInput && lonInput) {
+                    latInput.value = addr.lat != null ? String(addr.lat) : "";
+                    lonInput.value = addr.lon != null ? String(addr.lon) : "";
+                }
+
+                // Сохраняем адрес в локную БД адресов (привязка к пользователю)
+                try {
+                    const payload = {
+                        full_address: addr.full_address,
+                        city: addr.city || "",
+                    };
+                    await fetch("/api/addresses", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+                } catch (e) {
+                    console.error("Address create error", e);
+                }
+            }
+        });
+
+        // При открытии формы подставляем сохранённый адрес в строку поиска
+        const addrTextarea = document.getElementById('object-address');
+        const searchInput = document.getElementById('spAddressSearchInput');
+        if (addrTextarea && addrTextarea.value && searchInput) {
+            searchInput.value = addrTextarea.value;
+        }
+    }
 });
 
 // Динамическое отображение описания графика выплат

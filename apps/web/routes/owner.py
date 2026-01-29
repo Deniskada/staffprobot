@@ -836,7 +836,10 @@ async def owner_objects_create(request: Request):
         org_service = OrgStructureService(session)
         org_units = await org_service.get_units_by_owner(user_id)
         org_tree = await org_service.get_org_tree(user_id)
-    
+
+    import os
+    yandex_maps_api_key = os.getenv("YANDEX_MAPS_API_KEY", "")
+
     return templates.TemplateResponse("owner/objects/create.html", {
         "request": request,
         "title": "Создание объекта",
@@ -844,7 +847,8 @@ async def owner_objects_create(request: Request):
         "available_interfaces": available_interfaces,
         "payment_schedules": payment_schedules,
         "org_units": org_units,
-        "org_tree": org_tree
+        "org_tree": org_tree,
+        "yandex_maps_api_key": yandex_maps_api_key,
     })
 
 
@@ -1191,7 +1195,10 @@ async def owner_objects_edit(request: Request, object_id: int):
             org_service = OrgStructureService(session)
             org_units = await org_service.get_units_by_owner(user_id)
             org_tree = await org_service.get_org_tree(user_id)
-            
+
+            import os
+            yandex_maps_api_key = os.getenv("YANDEX_MAPS_API_KEY", "")
+
             return templates.TemplateResponse("owner/objects/edit.html", {
                 "request": request,
                 "title": f"Редактирование: {object_data['name']}",
@@ -1200,7 +1207,8 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "current_user": current_user,
                 "payment_schedules": payment_schedules,
                 "org_units": org_units,
-                "org_tree": org_tree
+                "org_tree": org_tree,
+                "yandex_maps_api_key": yandex_maps_api_key,
             })
             
     except HTTPException:
@@ -5715,24 +5723,63 @@ async def owner_profile(
                 'notes': subscription.notes if subscription else None
             }
         
-        return templates.TemplateResponse("owner/profile/index.html", {
-            "request": request,
-            "current_user": current_user,
-            "available_interfaces": available_interfaces,
-            "enabled_features": enabled_features,
-            "profile": profile,
-            "subscription_info": subscription_info,
-            "tags_by_category": tags_by_category,
-            "tags_by_category_json": tags_by_category_json,
-            "legal_types": [
-                {"value": "individual", "label": "Физическое лицо (ИП)"},
-                {"value": "legal", "label": "Юридическое лицо (ООО)"}
-            ]
-        })
+        return templates.TemplateResponse(
+            "owner/profile/index.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "available_interfaces": available_interfaces,
+                "enabled_features": enabled_features,
+                "profile": profile,
+                "subscription_info": subscription_info,
+                "tags_by_category": tags_by_category,
+                "tags_by_category_json": tags_by_category_json,
+                "legal_types": [
+                    {"value": "individual", "label": "Физическое лицо (ИП)"},
+                    {"value": "legal", "label": "Юридическое лицо (ООО)"},
+                ],
+            },
+        )
         
     except Exception as e:
         logger.error(f"Error loading profile: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки профиля")
+
+
+@router.get("/profiles", response_class=HTMLResponse)
+async def owner_profiles_page(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Страница управления профилями контрагентов владельца (ФЛ, ИП, ЮЛ).
+
+    Использует shared API /api/profiles и общий мастер-редактор.
+    """
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
+    user_id = await get_user_id_from_current_user(current_user, db)
+    context = await get_owner_context(user_id, db)
+
+    selected_profile_id = request.query_params.get("profile_id")
+
+    # Ключ Яндекс.Карт для мастера профилей
+    import os
+
+    yandex_maps_api_key = os.getenv("YANDEX_MAPS_API_KEY", "")
+
+    return templates.TemplateResponse(
+        "owner/profile/profiles.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "selected_profile_id": selected_profile_id,
+            "yandex_maps_api_key": yandex_maps_api_key,
+            **context,
+        },
+    )
 
 
 @router.post("/profile/save")

@@ -156,3 +156,9 @@
 - `owner/templates/contracts/edit.html`
 - `owner/timeslots/detail.html`
 - `owner/timeslots/edit.html`
+
+### Адрес объекта в веб-формах владельца
+
+- Формы `/owner/objects/create` и `/owner/objects/{object_id}/edit` используют общий компонент карты и поиска адреса (`apps/web/templates/shared/address_map.html` + `apps/web/static/js/shared/address_map.js`) на основе Яндекс.Карт.
+- Видимая строка поиска адреса синхронизируется со скрытым полем `textarea` с `name="address"`, которое отправляется в форму при сохранении объекта.
+- При выборе адреса на карте или из подсказки автоматически обновляются координаты объекта (`latitude`, `longitude`), при необходимости их можно откорректировать вручную перед сохранением.
