@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from typing import List, Optional
 from datetime import datetime
+from core.database.session import get_db_session
 from apps.web.services.contract_service import ContractService
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
 from core.logging.logger import logger
@@ -104,28 +105,81 @@ async def create_contract_template(
         raise HTTPException(status_code=400, detail=f"Ошибка создания шаблона: {str(e)}")
 
 
-@router.get("/{template_id}", response_class=HTMLResponse)
-async def contract_template_detail(request: Request, template_id: int):
-    """Детали шаблона договора."""
-    # Проверяем авторизацию
+@router.get("/constructor", response_class=HTMLResponse)
+async def constructor_choose_type(request: Request):
+    """Выбор типа договора для мастера конструктора."""
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
-    
+    return templates.TemplateResponse(
+        "owner/templates/contracts/constructor_choose.html",
+        {
+            "request": request,
+            "title": "Создать шаблон — выбор типа",
+            "current_user": current_user,
+        },
+    )
+
+
+@router.get("/constructor/wizard/{flow_id}", response_class=HTMLResponse)
+async def constructor_wizard(request: Request, flow_id: int):
+    """Мастер конструктора шаблона по flow_id."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    return templates.TemplateResponse(
+        "owner/templates/contracts/constructor_wizard.html",
+        {
+            "request": request,
+            "title": "Мастер создания шаблона",
+            "flow_id": flow_id,
+            "current_user": current_user,
+        },
+    )
+
+
+@router.get("/{template_id}", response_class=HTMLResponse)
+async def contract_template_detail(
+    request: Request, template_id: int, db=Depends(get_db_session)
+):
+    """Детали шаблона договора."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+
     contract_service = ContractService()
     template = await contract_service.get_contract_template(template_id)
-    
     if not template:
         raise HTTPException(status_code=404, detail="Шаблон не найден")
-    
+
+    full_body_preview = None
+    if template.contract_type_id:
+        from sqlalchemy import select
+        from domain.entities.contract_type import ContractType
+        from shared.services.contract_full_body_renderer import (
+            get_preview_context,
+        )
+        result = await db.execute(
+            select(ContractType).where(ContractType.id == template.contract_type_id)
+        )
+        ct = result.scalar_one_or_none()
+        if ct and ct.full_body:
+            from jinja2 import Template as JinjaTemplate
+            ctx = get_preview_context()
+            try:
+                full_body_preview = JinjaTemplate(ct.full_body).render(ctx)
+            except Exception:
+                full_body_preview = None
+
     return templates.TemplateResponse(
         "owner/templates/contracts/detail.html",
         {
             "request": request,
             "template": template,
+            "full_body_preview": full_body_preview,
             "title": "Детали шаблона",
-            "current_user": current_user
-        }
+            "current_user": current_user,
+        },
     )
 
 

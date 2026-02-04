@@ -1,0 +1,68 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">{{ title }}</h1>
+        <a href="/owner/contract-templates" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-body">
+          <p class="text-muted mb-4">Выберите тип договора для пошагового создания шаблона.</p>
+          <div id="contractTypesList"></div>
+          <div id="flowsList" class="mt-3" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  const typesEl = document.getElementById('contractTypesList');
+  const flowsEl = document.getElementById('flowsList');
+  async function loadTypes() {
+    const r = await fetch('/api/constructor/contract-types', { credentials: 'include' });
+    const data = await r.json();
+    if (!data.success || !data.contract_types || !data.contract_types.length) {
+      typesEl.innerHTML = '<p class="text-muted">Нет доступных типов договоров.</p>';
+      return;
+    }
+    typesEl.innerHTML = data.contract_types.map(t => `
+      <button type="button" class="btn btn-outline-primary btn-lg d-block mb-2 w-100 text-start" data-type-id="${t.id}" data-type-code="${t.code}">
+        <i class="bi bi-file-earmark-text me-2"></i>${t.label}
+      </button>
+    `).join('');
+    typesEl.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const typeId = parseInt(this.dataset.typeId, 10);
+        loadFlows(typeId);
+      });
+    });
+  }
+  async function loadFlows(contractTypeId) {
+    const r = await fetch('/api/constructor/flows?contract_type_id=' + contractTypeId, { credentials: 'include' });
+    const data = await r.json();
+    if (!data.success || !data.flows || !data.flows.length) {
+      flowsEl.style.display = 'block';
+      flowsEl.innerHTML = '<p class="text-muted">Нет доступных мастеров для этого типа.</p>';
+      return;
+    }
+    if (data.flows.length === 1) {
+      window.location.href = '/owner/contract-templates/constructor/wizard/' + data.flows[0].id;
+      return;
+    }
+    flowsEl.style.display = 'block';
+    flowsEl.innerHTML = '<h5 class="mb-3">Выберите мастер</h5>' + data.flows.map(f => `
+      <a href="/owner/contract-templates/constructor/wizard/${f.id}" class="btn btn-primary d-block mb-2">${f.name}</a>
+    `).join('');
+  }
+  loadTypes();
+})();
+</script>
+{% endblock %}

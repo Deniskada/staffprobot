@@ -1,0 +1,347 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+.constructor-wizard .progress-step { cursor: pointer; padding: 4px 10px; margin: 2px; border-radius: 6px; font-size: 0.9rem; display: inline-block; }
+.constructor-wizard .progress-step.active { background: #198754; color: #fff; }
+.constructor-wizard .progress-step.visited { background: #0d6efd; color: #fff; }
+.constructor-wizard .progress-step.pending { background: #e9ecef; color: #6c757d; }
+.constructor-wizard .btn-group-vertical .btn { max-width: 320px; text-align: left; }
+.constructor-wizard .form-control, .constructor-wizard .form-select { max-width: 280px; }
+.constructor-wizard .form-check { display: flex; align-items: flex-start; gap: 8px; }
+.constructor-wizard .form-check-label { order: 1; flex: 1; }
+.constructor-wizard .form-check-input { order: 0; flex-shrink: 0; margin-top: 0.3em; }
+.constructor-wizard .step-checkbox-add { background: #e8f5e9; border-left: 3px solid #198754; padding: 8px 12px; margin: 4px 0; border-radius: 4px; animation: fadeIn 0.3s; }
+@keyframes fadeIn { from { opacity: 0.5; } to { opacity: 1; } }
+</style>
+<div class="container-fluid constructor-wizard">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0" id="wizardTitle">{{ title }}</h1>
+        <a href="/owner/contract-templates/constructor" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="mb-3" id="progressSteps"></div>
+      <div id="stepContent"></div>
+      <div class="d-flex justify-content-between mt-4">
+        <a href="/owner/contract-templates" class="btn btn-outline-secondary" id="btnCancel">Отмена</a>
+        <div>
+          <button type="button" class="btn btn-outline-secondary me-2" id="btnPrev" style="display:none;">Назад</button>
+          <button type="button" class="btn btn-primary" id="btnNext">Далее</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  const flowId = {{ flow_id }};
+  let flow = null;
+  let currentStepIndex = 0;
+  const stepChoices = {};
+
+  function renderProgress() {
+    if (!flow || !flow.steps) return;
+    const vis = visibleSteps();
+    const cur = flow.steps[currentStepIndex];
+    const curPos = vis.findIndex(s => s.slug === cur.slug);
+    const el = document.getElementById('progressSteps');
+    el.innerHTML = vis.map((s, i) => {
+      let cls = 'progress-step pending';
+      if (i === curPos) cls = 'progress-step active';
+      else if (i < curPos) cls = 'progress-step visited';
+      const stepIdx = flow.steps.findIndex(st => st.slug === s.slug);
+      return `<span class="${cls}" data-step-index="${stepIdx}" title="${(s.title || '').replace(/"/g, '&quot;')}">${i + 1}</span>`;
+    }).join('') + (vis.length ? ' <span class="text-muted small ms-2">Шаг ' + (curPos + 1) + ' из ' + vis.length + '</span>' : '');
+    el.querySelectorAll('.progress-step').forEach(sp => {
+      sp.addEventListener('click', function() {
+        const idx = parseInt(this.dataset.stepIndex, 10);
+        if (idx >= 0 && idx < flow.steps.length) {
+          collectStepValues(flow.steps[currentStepIndex]);
+          currentStepIndex = idx;
+          renderStep();
+        }
+      });
+    });
+  }
+
+  function getStepData(slug) {
+    const choice = stepChoices[slug];
+    if (typeof choice === 'string') return { _option: choice };
+    if (choice && typeof choice === 'object') return choice;
+    return {};
+  }
+
+  function isStepVisible(step) {
+    if (step.slug === 'contract_info') return false;
+    const sh = step.schema && step.schema.show_if;
+    if (!sh || !sh.step_slug || !sh.field) return true;
+    const data = getStepData(sh.step_slug);
+    return !!data[sh.field];
+  }
+
+  function visibleSteps() {
+    if (!flow || !flow.steps) return [];
+    return flow.steps.filter(function(s) { return isStepVisible(s); });
+  }
+
+  function nextVisibleIndex(fromIndex) {
+    for (let j = fromIndex + 1; j < flow.steps.length; j++) {
+      if (isStepVisible(flow.steps[j])) return j;
+    }
+    return -1;
+  }
+
+  function prevVisibleIndex(fromIndex) {
+    for (let j = fromIndex - 1; j >= 0; j--) {
+      if (isStepVisible(flow.steps[j])) return j;
+    }
+    return -1;
+  }
+
+  function isFieldShown(step, fKey, opts, conds) {
+    if (!conds || conds.length === 0) return true;
+    const data = getStepData(step.slug);
+    for (let i = 0; i < conds.length; i++) {
+      const c = conds[i];
+      const v = c.if_field === '_option' ? data._option : data[c.if_field];
+      if (String(v) === String(c.eq) && (c.then_show_fields || []).indexOf(fKey) >= 0) return true;
+    }
+    return false;
+  }
+
+  function renderStep() {
+    if (!flow || !flow.steps || currentStepIndex >= flow.steps.length) {
+      document.getElementById('stepContent').innerHTML = '<p class="text-muted">Загрузка...</p>';
+      return;
+    }
+    const step = flow.steps[currentStepIndex];
+    const schema = step.schema || {};
+    const infoBlock = schema.info_block || '';
+    const fields = schema.fields || [];
+    const options = schema.options || [];
+    const tables = schema.tables || [];
+    const conditionals = schema.conditionals || [];
+    let html = '';
+    if (infoBlock) html += '<div class="alert alert-info mb-3">' + infoBlock + '</div>';
+    if (options.length) {
+      const key = fields[0] && fields[0].key ? fields[0].key : 'option';
+      const current = (getStepData(step.slug)._option || '').toString();
+      html += '<div class="mb-3"><label class="form-label">Выбор</label><div class="btn-group-vertical w-100">';
+      options.forEach(opt => {
+        html += `<button type="button" class="btn ${current === opt.key ? 'btn-primary' : 'btn-outline-primary'} mb-1" data-option="${opt.key}">${opt.label}</button>`;
+      });
+      html += '</div><input type="hidden" name="step_' + step.slug + '_option" value="' + current + '"></div>';
+    }
+    const optionFieldKey = (options.length && fields[0]) ? fields[0].key : null;
+    fields.forEach(f => {
+      if (f.key === '_option') return;
+      if (f.type === 'radio' && optionFieldKey === f.key) return;
+      if (!isFieldShown(step, f.key, options, conditionals)) return;
+      const val = (getStepData(step.slug)[f.key] ?? '').toString();
+      const req = f.required ? ' required' : '';
+      if (f.type === 'checkbox') {
+        const addCls = (step.slug === 'extra' && (f.key || '').startsWith('req_')) ? ' step-checkbox-add' : '';
+        html += '<div class="form-check mb-2' + addCls + '"><label class="form-check-label" for="f_' + step.slug + '_' + f.key + '">' + (f.label || f.key) + '</label><input class="form-check-input" type="checkbox" name="' + f.key + '" id="f_' + step.slug + '_' + f.key + '" ' + (val === 'true' ? 'checked' : '') + '></div>';
+      } else if (f.type === 'profile_select') {
+        html += '<div class="mb-2"><label class="form-label">' + (f.label || f.key) + '</label><select class="form-select profile-select" name="' + f.key + '" id="f_' + step.slug + '_' + f.key + '" data-source="' + (f.profile_source || '') + '"' + req + '><option value="">— Загрузка —</option></select></div>';
+      } else if (f.type === 'select' && Array.isArray(f.options)) {
+        html += '<div class="mb-2"><label class="form-label">' + (f.label || f.key) + '</label><select class="form-select" name="' + f.key + '" id="f_' + step.slug + '_' + f.key + '"' + req + '>';
+        html += '<option value="">—</option>';
+        f.options.forEach(o => {
+          const sel = val === String(o.key) ? ' selected' : '';
+          html += '<option value="' + (o.key || '').toString().replace(/"/g, '&quot;') + '"' + sel + '>' + (o.label || o.key) + '</option>';
+        });
+        html += '</select></div>';
+      } else if (f.type === 'date' || f.type === 'number' || f.type === 'text') {
+        html += '<div class="mb-2"><label class="form-label">' + (f.label || f.key) + '</label><input type="' + f.type + '" class="form-control" name="' + f.key + '" id="f_' + step.slug + '_' + f.key + '" value="' + val.replace(/"/g, '&quot;') + '"' + req + '></div>';
+      } else {
+        html += '<div class="mb-2"><label class="form-label">' + (f.label || f.key) + '</label><input type="text" class="form-control" name="' + f.key + '" id="f_' + step.slug + '_' + f.key + '" value="' + val.replace(/"/g, '&quot;') + '"' + req + '></div>';
+      }
+    });
+    tables.forEach(tbl => {
+      const tid = (tbl.id || 'table').toString().replace(/"/g, '');
+      if (step.slug === 'object' && tid === 'works') {
+        const opt = (getStepData(step.slug)._option || '').toString();
+        if (opt !== 'in_contract') return;
+      }
+      const cols = tbl.columns || [];
+      const rows = Array.isArray(getStepData(step.slug)[tid]) ? getStepData(step.slug)[tid] : [];
+      if (rows.length === 0) rows.push({});
+      html += '<div class="mb-3 table-block" data-table-id="' + tid + '"><label class="form-label">' + (tbl.label || tid) + '</label>';
+      html += '<table class="table table-sm table-bordered"><thead><tr>';
+      cols.forEach(c => { html += '<th>' + (c.label || c.key) + '</th>'; });
+      html += '<th style="width:80px"></th></thead><tbody>';
+      rows.forEach((row, rIdx) => {
+        html += '<tr data-row-index="' + rIdx + '">';
+        cols.forEach(c => {
+          const ckey = (c.key || 'col').toString();
+          const v = (row[ckey] ?? '').toString().replace(/"/g, '&quot;');
+          const ctype = (c.type || 'text');
+          html += '<td><input type="' + ctype + '" class="form-control form-control-sm table-cell" name="t_' + tid + '_' + rIdx + '_' + ckey + '" data-table-id="' + tid + '" data-row-index="' + rIdx + '" data-col-key="' + ckey + '" value="' + v + '"></td>';
+        });
+        html += '<td><button type="button" class="btn btn-outline-danger btn-sm remove-row" data-table-id="' + tid + '" data-row-index="' + rIdx + '"><i class="bi bi-trash"></i></button></td></tr>';
+      });
+      html += '</tbody></table><button type="button" class="btn btn-outline-secondary btn-sm add-row" data-table-id="' + tid + '"><i class="bi bi-plus"></i> Добавить строку</button></div>';
+    });
+    document.getElementById('stepContent').innerHTML = '<h5 class="mb-3">' + step.title + '</h5>' + html;
+
+    document.querySelectorAll('[data-option]').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const opt = this.dataset.option;
+        const prev = getStepData(step.slug);
+        const next = typeof prev === 'object' && prev !== null ? Object.assign({}, prev, { _option: opt }) : { _option: opt };
+        stepChoices[step.slug] = next;
+        renderStep();
+      });
+    });
+    document.querySelectorAll('#stepContent input, #stepContent select').forEach(inp => {
+      inp.addEventListener('change', function() {
+        collectStepValues(step);
+        if (step.slug === 'extra') renderProgress();
+        else if ((step.schema && step.schema.conditionals && step.schema.conditionals.length) || step.slug === 'object') renderStep();
+      });
+      inp.addEventListener('input', function() { collectStepValues(step); });
+    });
+    document.querySelectorAll('.add-row').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const tid = this.dataset.tableId;
+        const data = getStepData(step.slug);
+        const arr = Array.isArray(data[tid]) ? data[tid].slice() : [];
+        arr.push({});
+        stepChoices[step.slug] = Object.assign({}, data, { _option: data._option, [tid]: arr });
+        renderStep();
+      });
+    });
+    document.querySelectorAll('.remove-row').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const tid = this.dataset.tableId;
+        const rIdx = parseInt(this.dataset.rowIndex, 10);
+        const data = getStepData(step.slug);
+        const arr = Array.isArray(data[tid]) ? data[tid].slice() : [];
+        arr.splice(rIdx, 1);
+        if (arr.length === 0) arr.push({});
+        stepChoices[step.slug] = Object.assign({}, data, { _option: data._option, [tid]: arr });
+        renderStep();
+      });
+    });
+    collectStepValues(step);
+
+    const hasPrev = prevVisibleIndex(currentStepIndex) >= 0;
+    const hasNext = nextVisibleIndex(currentStepIndex) >= 0;
+    document.getElementById('btnPrev').style.display = hasPrev ? 'inline-block' : 'none';
+    document.getElementById('btnNext').textContent = hasNext ? 'Далее' : 'Создать шаблон';
+    document.getElementById('btnNext').style.display = 'inline-block';
+    renderProgress();
+
+    document.querySelectorAll('.profile-select').forEach(sel => {
+      const key = sel.name;
+      const curVal = (getStepData(step.slug)[key] || '').toString();
+      const src = sel.dataset.source;
+      if (src === 'owner_organization') {
+        fetch('/owner/profile/organization/api/list', { credentials: 'include' })
+          .then(r => r.json())
+          .then(data => {
+            sel.innerHTML = '<option value="">— Выберите профиль —</option>';
+            (data.profiles || []).forEach(p => {
+              const opt = document.createElement('option');
+              opt.value = p.id;
+              opt.textContent = p.profile_name || ('Профиль #' + p.id);
+              if (String(p.id) === curVal) opt.selected = true;
+              sel.appendChild(opt);
+            });
+          })
+          .catch(() => { sel.innerHTML = '<option value="">— Ошибка загрузки —</option>'; });
+      }
+    });
+  }
+
+  window.doSubmit = function() {
+    const name = prompt('Название шаблона:', flow ? flow.name : 'Шаблон');
+    if (!name) return;
+    const desc = prompt('Описание (необязательно):', '');
+    fetch('/api/constructor/flows/' + flowId + '/build-template', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step_choices: stepChoices, template_name: name, template_description: desc || '' })
+    }).then(r => r.json()).then(data => {
+      if (data.success && data.template_id) {
+        window.location.href = '/owner/contract-templates/' + data.template_id;
+      } else {
+        alert('Ошибка: ' + (data.detail || 'не удалось создать шаблон'));
+      }
+    }).catch(() => alert('Ошибка сети'));
+  };
+
+  function collectStepValues(step) {
+    const slug = step.slug;
+    const prev = stepChoices[slug];
+    const opt = document.querySelector('input[name="step_' + slug + '_option"]');
+    const optionKey = opt ? opt.value : (typeof prev === 'string' ? prev : (prev && prev._option));
+    const obj = optionKey ? { _option: optionKey } : {};
+    document.querySelectorAll('#stepContent [name]').forEach(inp => {
+      if (!inp.name || inp.name.startsWith('step_') || inp.name.startsWith('t_')) return;
+      if (inp.type === 'checkbox') obj[inp.name] = inp.checked;
+      else obj[inp.name] = inp.value;
+    });
+    const tables = (step.schema && step.schema.tables) || [];
+    tables.forEach(tbl => {
+      const tid = (tbl.id || 'table').toString();
+      const cols = tbl.columns || [];
+      const byRow = {};
+      document.querySelectorAll('#stepContent input[data-table-id="' + tid + '"]').forEach(inp => {
+        const rIdx = parseInt(inp.dataset.rowIndex, 10);
+        const ckey = inp.dataset.colKey || inp.name.split('_').pop();
+        if (!byRow[rIdx]) byRow[rIdx] = {};
+        byRow[rIdx][ckey] = inp.type === 'number' ? (inp.value === '' ? null : Number(inp.value)) : inp.value;
+      });
+      const rows = Object.keys(byRow).sort((a, b) => a - b).map(k => byRow[k]);
+      if (rows.length) obj[tid] = rows;
+    });
+    stepChoices[slug] = Object.keys(obj).length ? obj : optionKey || null;
+  }
+
+  async function loadFlow() {
+    const r = await fetch('/api/constructor/flows/' + flowId, { credentials: 'include' });
+    const data = await r.json();
+    if (!data.success || !data.flow) {
+      document.getElementById('stepContent').innerHTML = '<p class="text-danger">Мастер не найден.</p>';
+      return;
+    }
+    flow = data.flow;
+    document.getElementById('wizardTitle').textContent = flow.name || 'Мастер создания шаблона';
+    currentStepIndex = 0;
+    renderStep();
+  }
+
+  document.getElementById('btnPrev').addEventListener('click', function() {
+    const j = prevVisibleIndex(currentStepIndex);
+    if (j < 0) return;
+    const step = flow.steps[currentStepIndex];
+    collectStepValues(step);
+    currentStepIndex = j;
+    renderStep();
+  });
+
+  document.getElementById('btnNext').addEventListener('click', function() {
+    if (!flow || currentStepIndex >= flow.steps.length) return;
+    const step = flow.steps[currentStepIndex];
+    collectStepValues(step);
+    const j = nextVisibleIndex(currentStepIndex);
+    if (j < 0) {
+      window.doSubmit();
+    } else {
+      currentStepIndex = j;
+      renderStep();
+    }
+  });
+
+  loadFlow();
+})();
+</script>
+{% endblock %}

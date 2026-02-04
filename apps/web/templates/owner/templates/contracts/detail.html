@@ -9,10 +9,10 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1 class="h3 mb-0">{{ template.name }}</h1>
                 <div>
-                    <a href="/owner/templates/contracts/{{ template.id }}/edit" class="btn btn-primary">
+                    <a href="/owner/contract-templates/{{ template.id }}/edit" class="btn btn-primary">
                         <i class="bi bi-pencil"></i> Редактировать
                     </a>
-                    <a href="/owner/templates/contracts" class="btn btn-outline-secondary">
+                    <a href="/owner/contract-templates" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-left"></i> Назад к списку
                     </a>
                 </div>
@@ -49,10 +49,19 @@
                     {% endif %}
 
                     <div class="mt-3">
-                        <strong>Содержимое шаблона:</strong>
-                        <div class="border p-3 mt-2" style="max-height: 400px; overflow-y: auto;">
-                            {{ template.content|safe }}
+                        <strong>{% if full_body_preview %}Текст договора (превью){% else %}Содержимое шаблона{% endif %}:</strong>
+                        <div class="border p-3 mt-2 bg-light" style="max-height: 600px; overflow-y: auto; white-space: pre-wrap;">
+                            {% if full_body_preview %}
+                                {{ full_body_preview }}
+                            {% else %}
+                                {{ template.content|safe }}
+                            {% endif %}
                         </div>
+                        {% if full_body_preview %}
+                        <p class="text-muted small mt-2">
+                            Превью с заглушками. Реальные реквизиты и данные подставятся при создании договора.
+                        </p>
+                        {% endif %}
                     </div>
                 </div>
             </div>

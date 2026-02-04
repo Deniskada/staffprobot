@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session
 from core.logging.logger import logger
 from domain.entities.contract import Contract, ContractTemplate, ContractVersion
+from domain.entities.contract_type import ContractType
 from domain.entities.user import User, UserRole
 from domain.entities.object import Object
 from shared.services.role_service import RoleService
@@ -208,15 +209,54 @@ class ContractService:
             content = contract_data.get("content")
             values = contract_data.get("values", {})
             
-            if contract_data.get("template_id") and values:
-                # Получаем шаблон
+            if contract_data.get("template_id") and not content:
                 template_query = select(ContractTemplate).where(ContractTemplate.id == contract_data["template_id"])
                 template_result = await session.execute(template_query)
                 template = template_result.scalar_one_or_none()
-                
-                if template and template.content and not content:
-                    # Генерируем контент из шаблона
-                    content = await self._generate_content_from_template(template.content, values, owner, employee)
+                values = contract_data.get("values") or {}
+
+                if template:
+                    if template.contract_type_id:
+                        ct_result = await session.execute(
+                            select(ContractType).where(ContractType.id == template.contract_type_id)
+                        )
+                        ct = ct_result.scalar_one_or_none()
+                        if ct and ct.full_body:
+                            from shared.services.contract_full_body_renderer import (
+                                build_contract_context,
+                            )
+                            import copy
+                            merged = copy.deepcopy(dict(template.constructor_values or {}))
+                            for k, v in (values or {}).items():
+                                if v is not None and v != "":
+                                    merged[k] = v
+                            if isinstance(merged.get("customer"), dict) and "customer_profile_id" in merged["customer"]:
+                                merged["customer_profile_id"] = merged["customer"].get("customer_profile_id")
+                            sd = contract_data.get("start_date")
+                            ed = contract_data.get("end_date")
+                            if sd:
+                                merged["work_start"] = sd.isoformat() if hasattr(sd, "isoformat") else str(sd)
+                            if ed:
+                                merged["work_end"] = ed.isoformat() if hasattr(ed, "isoformat") else str(ed)
+                            terms = merged.setdefault("terms", {})
+                            if sd and "work_start" not in terms:
+                                terms["work_start"] = sd.isoformat() if hasattr(sd, "isoformat") else str(sd)
+                            if ed and "work_end" not in terms:
+                                terms["work_end"] = ed.isoformat() if hasattr(ed, "isoformat") else str(ed)
+                            ctx = await build_contract_context(
+                                session, merged, owner, employee, contract_number
+                            )
+                            from jinja2 import Template
+                            try:
+                                content = Template(ct.full_body).render(ctx)
+                            except Exception as e:
+                                logger.error("Full body render failed", error=str(e))
+                                content = template.content or ""
+
+                    if not content and template.content and values:
+                        content = await self._generate_content_from_template(
+                            template.content, values, owner, employee
+                        )
             
             # Парсим даты если они переданы как строки
             from datetime import date
