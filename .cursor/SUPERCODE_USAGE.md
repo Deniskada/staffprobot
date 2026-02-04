@@ -7,16 +7,13 @@
 
 ### 2. Настройка режимов
 1. Открыть `Supercode: Create Custom Mode`
-2. Создать три режима, используя системные промпты из:
-   - `.cursor/supercode_modes/staffpro_architect.md`
-   - `.cursor/supercode_modes/roadmap_executor.md`
-   - `.cursor/supercode_modes/refactor_review.md`
+2. Создать три режима и вставить системные промпты из **`.cursor/SUPERCODE_SETUP.md`**:
+   - `StaffPro Architect`
+   - `Roadmap Executor`
+   - `Refactor & Review`
 
 ### 3. Создание workflows
-Создать workflows в Supercode UI согласно описаниям из:
-- `.cursor/supercode_workflows/new_task_from_roadmap.md`
-- `.cursor/supercode_workflows/route_changes_check.md`
-- `.cursor/supercode_workflows/shared_domain_changes.md`
+Создать workflows в Supercode UI по описаниям из **`.cursor/SUPERCODE_SETUP.md`**.
 
 ## Ежедневное использование
 
@@ -157,8 +154,10 @@
 ### 4. Следуй roadmap строго
 Используй "Roadmap Executor" для строгого следования плану - не перепрыгивай задачи.
 
-### 5. Спрашивай Project Brain
-При сомнениях используй режим "StaffPro Architect" или workflow "Вопрос к Project Brain".
+### 5. При сомнениях — проверяй по коду
+- Сделай точный поиск по репозиторию (имя функции/класса/эндпоинта).
+- Прочитай релевантные файлы целиком.
+- Сверься с `.cursor/rules/staffprobot.mdc` (критические запреты и паттерны).
 
 ## Решение проблем
 
@@ -180,9 +179,7 @@
 ## Дополнительные ресурсы
 
 - `.cursor/SUPERCODE_SETUP.md` - подробная инструкция по установке
-- `.cursor/supercode_modes/` - системные промпты для режимов
-- `.cursor/supercode_workflows/` - описания workflows
-- `.cursor/CHECKLIST.md` - чеклист проверки Supercode
+- `.cursor/rules/staffprobot.mdc` - единые критические правила проекта (always apply)
 
 ---
 

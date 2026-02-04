@@ -27,7 +27,7 @@ class ChangelogEntry(Base):
     github_issue = Column(Integer, nullable=True)
     created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     impact_score = Column(Float, nullable=True, comment="Оценка влияния на систему (для ML)")
-    indexed_in_brain = Column(Boolean, nullable=False, server_default='false', comment="Проиндексировано в Project Brain")
+    indexed_in_brain = Column(Boolean, nullable=False, server_default='false', comment="Проиндексировано в базе знаний")
     
     def __repr__(self) -> str:
         return f"<ChangelogEntry(id={self.id}, type='{self.change_type}', component='{self.component}', status='{self.status}')>"
