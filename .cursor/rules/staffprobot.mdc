@@ -1,0 +1,124 @@
+---
+alwaysApply: true
+---
+
+# StaffProBot — единые правила Cursor (актуально)
+
+## 1) Базовые принципы
+
+- **Краткость**: отвечай и действуй по делу, без повторов.
+- **KISS/DRY**: простые решения, без дублирования логики.
+- **Не выдумывать**: перед изменениями находи существующий код через поиск, затем читай файл.
+- **Docker-first**: проект разрабатывается и проверяется через Docker Compose.
+
+## 2) Процесс работы (обязательно)
+
+Перед реализацией:
+- Сформулировать план (что/где меняем, риски, тест-план).
+- Дождаться подтверждения пользователя.
+
+После реализации:
+- Показать результат.
+- Дождаться подтверждения.
+
+## 3) Docker (dev)
+
+- **Запуск**: `docker compose -f docker-compose.dev.yml up -d`
+- **Остановка**: `docker compose -f docker-compose.dev.yml down`
+- **Команды в web**: `docker compose -f docker-compose.dev.yml exec web ...`
+
+Перезапуски:
+- Изменения в `apps/web/*` → `restart web`
+- Изменения в `apps/bot/*` → `restart bot`
+- Изменения в `shared/*` или `domain/*` → `restart web bot celery_worker celery_beat`
+
+## 4) Критические правила кода (нельзя нарушать)
+
+### 4.1. `user_id` vs `telegram_id`
+
+`user_id` — внутренний ID из БД, **не** `telegram_id`.
+
+```python
+# ❌ Неправильно (telegram_id)
+user_id = current_user.get("id")
+
+# ✅ Правильно (внутренний user_id)
+from shared.services.user_service import get_user_id_from_current_user
+user_id = await get_user_id_from_current_user(current_user, session)
+```
+
+### 4.2. Роутинг по ролям
+
+- Префиксы ролей задаются **только** в `apps/web/app.py` через `include_router(...)`.
+- В файлах роутов **не** дублировать `/owner`, `/manager`, `/employee`.
+- Не допускать дублей: один метод + один путь = один обработчик.
+
+### 4.3. Jinja templates
+
+```python
+# ✅ Только так
+from apps.web.jinja import templates
+```
+
+Запрещено создавать локальные `Jinja2Templates(...)`.
+
+### 4.4. Сессии БД в web-роутах
+
+- Только `Depends(get_db_session)`.
+- Запрещено: `async with get_async_session()` в web-роутах.
+
+### 4.5. URLHelper
+
+Запрещён хардкод доменов/URL:
+
+```python
+from core.utils.url_helper import URLHelper
+URLHelper.get_web_url("/owner/objects")
+```
+
+### 4.6. Статика
+
+В шаблонах для CSS/JS использовать `| static_version`.
+
+## 5) Документация и планирование (активный контур)
+
+- **Roadmap**: `doc/plans/roadmap.md` (формат фазы/версии/эпики).
+- **Цели**: `doc/plans/goals_map.md` и `doc/plans/goals_optimization.md`.
+- Старые документы держим в `local_archive/` (не в git).
+
+## 6) Инструменты (использовать по умолчанию)
+
+### 6.1. Cursor Memory Bank
+
+Использовать команды:
+- `/van` → инициализация и сбор контекста
+- `/plan` → план работ
+- `/build` → реализация
+- `/reflect` → итог/проверки
+- `/archive` → фиксация результата
+
+### 6.2. Supercode.sh
+
+Использовать режимы:
+- **Roadmap Executor** — последовательное выполнение задач
+- **StaffPro Architect** — контроль критических правил
+- **Refactor & Review** — проверка качества перед коммитом
+
+### 6.3. OpenSpec + Spec Kit
+
+Спеки как “источник истины” для крупных изменений:
+- `specs/capabilities/*` — актуальные спецификации
+- `changes/active/*` — активные предложения изменений
+
+CLI:
+- `specify init` / `specify check` / `specify version`
+
+### 6.4. TaskMaster (если включён)
+
+Использовать для декомпозиции больших задач и трекинга подзадач.
+
+## 7) Коммиты
+
+- Сообщения **на русском**, максимально короткие.
+- Формат: `Тип: Кратко` (например, `Обновление: правила Cursor`).
+
