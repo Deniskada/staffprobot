@@ -30,7 +30,7 @@ class ChromaClient:
             self.collection = await asyncio.to_thread(
                 self.client.get_or_create_collection,
                 name=self._default_collection_name,
-                metadata={"description": "Project Brain knowledge base"},
+                metadata={"description": "Knowledge base"},
             )
             logger.info("ChromaDB клиент инициализирован успешно")
         except Exception as error:

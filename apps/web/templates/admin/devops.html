@@ -264,27 +264,7 @@
                     </h3>
                 </div>
                 <div class="card-body">
-                    <p>Снапшоты, диффы и визуализатор Project Brain.</p>
-                    <a class="btn btn-primary w-100" href="/admin/devops/architecture">
-                        Открыть раздел архитектуры
-                    </a>
-                    <hr>
-                    <h5 class="mb-2">Последние события Brain</h5>
-                    {% if brain_events and brain_events|length > 0 %}
-                    <ul class="list-group list-group-flush">
-                      {% for e in brain_events %}
-                        <li class="list-group-item">
-                          <div><strong>{{ e.event }}</strong> · <small class="text-muted">{{ e.timestamp }}</small></div>
-                          {% if e.commit_sha %}<div class="mono">{{ e.commit_sha }}</div>{% endif %}
-                          {% if e.stats %}
-                            <small class="text-muted">nodes: {{ e.stats.total_nodes or e.stats.nodes or '?' }}, edges: {{ e.stats.total_edges or e.stats.edges or '?' }}</small>
-                          {% endif %}
-                        </li>
-                      {% endfor %}
-                    </ul>
-                    {% else %}
-                      <div class="alert alert-light mb-0">Событий пока нет</div>
-                    {% endif %}
+                    <p class="mb-0 text-muted">Раздел архитектуры отключён как deprecated.</p>
                 </div>
             </div>
         </div>
