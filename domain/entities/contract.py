@@ -24,10 +24,15 @@ class ContractTemplate(Base):
     # Новые поля
     is_public = Column(Boolean, default=False, nullable=False)
     fields_schema = Column(JSON, nullable=True)  # [{key,label,type,required,options}]
-    
+    contract_type_id = Column(Integer, ForeignKey("contract_types.id", ondelete="SET NULL"), nullable=True, index=True)
+    constructor_flow_id = Column(Integer, ForeignKey("constructor_flows.id", ondelete="SET NULL"), nullable=True, index=True)
+    constructor_values = Column(JSON, nullable=True)  # step_choices из мастера (customer_profile_id и др.)
+
     # Отношения
     creator = relationship("User", backref="created_templates")
     contracts = relationship("Contract", back_populates="template")
+    contract_type = relationship("ContractType", backref="templates")
+    constructor_flow = relationship("ConstructorFlow", backref="templates")
 
 
 class Contract(Base):

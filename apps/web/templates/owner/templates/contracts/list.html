@@ -11,19 +11,22 @@
                 <div class="d-flex gap-2">
                     <!-- Выбор типа шаблонов -->
                     <div class="btn-group" role="group">
-                        <a href="/owner/templates/contracts?template_type=planning" 
+                        <a href="/owner/contract-templates?template_type=planning" 
                            class="btn {% if template_type == 'planning' %}btn-primary{% else %}btn-outline-primary{% endif %}">
                             <i class="bi bi-calendar3"></i> Планирование
                         </a>
-                        <a href="/owner/templates/contracts?template_type=contract" 
+                        <a href="/owner/contract-templates?template_type=contract" 
                            class="btn {% if template_type == 'contract' %}btn-primary{% else %}btn-outline-primary{% endif %}">
                             <i class="bi bi-file-earmark-text"></i> Договоры
                         </a>
                     </div>
                     
                     <!-- Кнопка создания -->
-                    <a href="/owner/templates/contracts/create?template_type={{ template_type }}" class="btn btn-success">
+                    <a href="/owner/contract-templates/create?template_type={{ template_type }}" class="btn btn-success">
                         <i class="bi bi-plus-circle"></i> Создать шаблон
+                    </a>
+                    <a href="/owner/contract-templates/constructor" class="btn btn-outline-primary">
+                        <i class="bi bi-diagram-3"></i> Мастер конструктора
                     </a>
                 </div>
             </div>
@@ -94,11 +97,11 @@
                             
                             <div class="card-footer">
                                 <div class="btn-group w-100" role="group">
-                                    <a href="/owner/templates/contracts/{{ template.id }}?template_type={{ template_type }}" 
+                                    <a href="/owner/contract-templates/{{ template.id }}?template_type={{ template_type }}" 
                                        class="btn btn-outline-primary btn-sm">
                                         <i class="bi bi-eye"></i> Просмотр
                                     </a>
-                                    <a href="/owner/templates/contracts/{{ template.id }}/edit?template_type={{ template_type }}" 
+                                    <a href="/owner/contract-templates/{{ template.id }}/edit?template_type={{ template_type }}" 
                                        class="btn btn-outline-secondary btn-sm">
                                         <i class="bi bi-pencil"></i> Редактировать
                                     </a>
@@ -123,7 +126,7 @@
                             У вас пока нет шаблонов договоров. Создайте первый шаблон для стандартизации договоров.
                         {% endif %}
                     </p>
-                    <a href="/owner/templates/contracts/create?template_type={{ template_type }}" class="btn btn-primary">
+                    <a href="/owner/contract-templates/create?template_type={{ template_type }}" class="btn btn-primary">
                         <i class="bi bi-plus-circle"></i> Создать первый шаблон
                     </a>
                 </div>
@@ -135,7 +138,7 @@
 <script>
 function deleteTemplate(templateId, templateType) {
     if (confirm('Вы уверены, что хотите удалить этот шаблон?')) {
-        fetch(`/owner/templates/contracts/${templateId}/delete?template_type=${templateType}`, {
+        fetch(`/owner/contract-templates/${templateId}/delete?template_type=${templateType}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

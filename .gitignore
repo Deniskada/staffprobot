@@ -88,3 +88,14 @@ staffprobot_*.tar
 staffprobot_*.tar.gz
 dev_config_backup_*.tar.gz
 deployment/backup/*.sql.cursor/
+
+# Local archive (не коммитить)
+local_archive/
+
+# Офисные документы в репозитории не храним
+doc/**/*.odt
+doc/**/*.doc
+doc/**/*.docx
+docs/**/*.odt
+docs/**/*.doc
+docs/**/*.docx
