@@ -1,0 +1,159 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}Редактировать обращение #{{ incident.id }} - StaffProBot{% endblock %}
+
+{% block extra_css %}
+<style>
+.item-row { background: #f8f9fa; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center mb-3">
+        <a href="/employee/incidents/{{ incident.id }}" class="btn btn-outline-secondary btn-sm me-2"><i class="bi bi-arrow-left"></i></a>
+        <h4 class="mb-0">Редактировать обращение #{{ incident.id }}</h4>
+    </div>
+
+    <form method="POST" action="/employee/incidents/{{ incident.id }}/edit" enctype="multipart/form-data">
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Категория <span class="text-danger">*</span></label>
+                    <select name="category" class="form-select" required>
+                        <option value="">— Выберите —</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.name }}" {% if incident.category == cat.name %}selected{% endif %}>{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Объект (необязательно)</label>
+                    <select name="object_id" class="form-select">
+                        <option value="">— Без привязки —</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" {% if incident.object_id == obj.id %}selected{% endif %}>{{ obj.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Комментарий</label>
+                    <textarea name="notes" class="form-control" rows="3" placeholder="Описание обращения...">{{ incident.notes or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cart3"></i> Товары</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem()">
+                    <i class="bi bi-plus"></i> Добавить
+                </button>
+            </div>
+            <div class="card-body" id="items-container">
+                <p class="text-muted mb-0" id="no-items-msg">Добавьте товары</p>
+            </div>
+            <div class="card-footer text-end">
+                <strong>Итого: <span id="grand-total">0.00</span> ₽</strong>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-lg"></i> Сохранить</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const products = {{ products | tojson }};
+let itemIdx = 0;
+
+function addItem(productId, productName, quantity, price) {
+    document.getElementById('no-items-msg').style.display = 'none';
+    const c = document.getElementById('items-container');
+    const i = itemIdx++;
+    productId = productId || '';
+    productName = productName || '';
+    quantity = quantity != null ? quantity : 1;
+    price = price != null ? price : 0;
+    let opts = '<option value="">— Товар —</option>';
+    products.forEach(p => {
+        const sel = p.id == productId ? ' selected' : '';
+        opts += `<option value="${p.id}" data-name="${p.name}" data-price="${p.price}" data-unit="${p.unit}"${sel}>${p.name} (${p.price} ₽/${p.unit})</option>`;
+    });
+    const div = document.createElement('div');
+    div.className = 'item-row';
+    div.id = `item-${i}`;
+    div.innerHTML = `
+        <div class="row g-2 align-items-end">
+            <div class="col-5">
+                <select class="form-select form-select-sm" onchange="onProductSelect(${i}, this)">
+                    ${opts}
+                </select>
+                <input type="hidden" name="items[${i}][product_id]" id="pid-${i}" value="${productId}">
+                <input type="hidden" name="items[${i}][product_name]" id="pname-${i}" value="${productName}">
+            </div>
+            <div class="col-2">
+                <input type="number" step="0.001" min="0.001" value="${quantity}" class="form-control form-control-sm"
+                       name="items[${i}][quantity]" id="qty-${i}" onchange="calcRow(${i})">
+            </div>
+            <div class="col-2">
+                <input type="number" step="0.01" min="0" value="${price}" class="form-control form-control-sm"
+                       name="items[${i}][price]" id="price-${i}" onchange="calcRow(${i})">
+            </div>
+            <div class="col-2 text-end fw-bold" id="total-${i}">0.00 ₽</div>
+            <div class="col-1 text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeItem(${i})"><i class="bi bi-x"></i></button>
+            </div>
+        </div>`;
+    c.appendChild(div);
+    calcRow(i);
+}
+
+function onProductSelect(i, sel) {
+    const opt = sel.options[sel.selectedIndex];
+    document.getElementById(`pid-${i}`).value = opt.value;
+    document.getElementById(`pname-${i}`).value = opt.dataset.name || '';
+    document.getElementById(`price-${i}`).value = opt.dataset.price || 0;
+    calcRow(i);
+}
+
+function calcRow(i) {
+    const q = parseFloat(document.getElementById(`qty-${i}`).value) || 0;
+    const p = parseFloat(document.getElementById(`price-${i}`).value) || 0;
+    document.getElementById(`total-${i}`).textContent = (q * p).toFixed(2) + ' ₽';
+    calcGrand();
+}
+
+function calcGrand() {
+    let sum = 0;
+    document.querySelectorAll('[id^="total-"]').forEach(el => {
+        sum += parseFloat(el.textContent) || 0;
+    });
+    document.getElementById('grand-total').textContent = sum.toFixed(2);
+}
+
+function removeItem(i) {
+    const el = document.getElementById(`item-${i}`);
+    if (el) el.remove();
+    calcGrand();
+    if (!document.querySelectorAll('.item-row').length) {
+        document.getElementById('no-items-msg').style.display = '';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const initialItems = {{ incident_items | tojson }};
+    if (initialItems && initialItems.length > 0) {
+        document.getElementById('no-items-msg').style.display = 'none';
+        initialItems.forEach(function(it) {
+            addItem(it.product_id, it.product_name, parseFloat(it.quantity), parseFloat(it.price));
+        });
+    } else {
+        calcGrand();
+    }
+});
+</script>
+{% endblock %}

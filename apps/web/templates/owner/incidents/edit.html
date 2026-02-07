@@ -1,13 +1,17 @@
 {% extends "owner/base_owner.html" %}
-{% block title %}Редактирование инцидента{% endblock %}
+{% block title %}Редактирование тикета{% endblock %}
 {% block content %}
 <div class="container mt-4">
-  <h3>Инцидент {{ incident.custom_number or ('#' ~ incident.id) }}</h3>
+  <h3>Тикет {{ incident.custom_number or ('#' ~ incident.id) }}
+    <span class="badge bg-{{ 'primary' if incident.incident_type == 'deduction' else 'info' }}">
+      {{ 'Удержание' if incident.incident_type == 'deduction' else 'Обращение' }}
+    </span>
+  </h3>
   
   {% if incident.status in ['resolved', 'rejected', 'cancelled'] %}
-  <div class="alert alert-warning" role="alert">
-    <i class="bi bi-exclamation-triangle"></i> Нельзя редактировать инцидент со статусом "{{ 'Решен' if incident.status == 'resolved' else ('Отклонен' if incident.status == 'rejected' else 'Отменен') }}".
-    <a href="{{ back_url if back_url else '/owner/incidents' }}" class="alert-link" id="backToListLink">Вернуться к списку инцидентов</a>
+  <div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i> Нельзя редактировать тикет со статусом "{{ 'Решён' if incident.status == 'resolved' else ('Отклонён' if incident.status == 'rejected' else 'Отменён') }}".
+    <a href="{{ back_url }}" class="alert-link">Вернуться к списку</a>
   </div>
   {% else %}
   <form method="post" action="/owner/incidents/{{ incident.id }}/edit">
@@ -20,33 +24,46 @@
         <label class="form-label">Дата</label>
         <input type="date" name="custom_date" class="form-control" value="{{ incident.custom_date.strftime('%Y-%m-%d') if incident.custom_date else '' }}">
       </div>
+      {% if incident.incident_type == 'deduction' %}
       <div class="col-md-4">
         <label class="form-label">Ущерб</label>
         <input type="number" step="0.01" name="damage_amount" class="form-control" value="{{ incident.damage_amount or '' }}">
       </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label">Категория</label>
         <select name="category" class="form-select">
           {% for c in categories %}
-            <option value="{{ c.name }}" {{ 'selected' if incident.category==c.name else '' }}>{{ c.name }}</option>
+            <option value="{{ c.name }}" {{ 'selected' if incident.category==c.name }}>{{ c.name }}</option>
           {% endfor %}
         </select>
       </div>
+      {% if incident.incident_type == 'deduction' %}
       <div class="col-md-4">
         <label class="form-label">Критичность</label>
         <select name="severity" class="form-select">
           {% set severity_labels = {'low':'Низкая','medium':'Средняя','high':'Высокая','critical':'Критичная'} %}
           {% for s,val in severity_labels.items() %}
-            <option value="{{ s }}" {{ 'selected' if incident.severity==s else '' }}>{{ val }}</option>
+            <option value="{{ s }}" {{ 'selected' if incident.severity==s }}>{{ val }}</option>
           {% endfor %}
         </select>
       </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label">Статус</label>
         <select name="status" class="form-select">
           {% set status_labels = {'new':'Новый','in_review':'На рассмотрении','resolved':'Решён','rejected':'Отклонён'} %}
           {% for st,val in status_labels.items() %}
-            <option value="{{ st }}" {{ 'selected' if incident.status==st else '' }}>{{ val }}</option>
+            <option value="{{ st }}" {{ 'selected' if incident.status==st }}>{{ val }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Объект</label>
+        <select name="object_id" class="form-select" id="ownerIncidentObject">
+          <option value="">— не выбран —</option>
+          {% for o in objects %}
+            <option value="{{ o.id }}" {{ 'selected' if incident.object_id==o.id }}>{{ o.name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -56,15 +73,15 @@
           <option value="">{% if incident.object %}Выберите сотрудника{% else %}Сначала выберите объект{% endif %}</option>
         </select>
       </div>
+      {% if incident.incident_type == 'request' %}
       <div class="col-md-6">
-        <label class="form-label">Объект</label>
-        <select name="object_id" class="form-select" id="ownerIncidentObject">
-          <option value="">— не выбран —</option>
-          {% for o in objects %}
-            <option value="{{ o.id }}" {{ 'selected' if incident.object_id==o.id else '' }}>{{ o.name }} (ID {{ o.id }})</option>
-          {% endfor %}
-        </select>
+        <div class="form-check form-switch mt-2">
+          <input class="form-check-input" type="checkbox" name="compensate_purchase" id="compensatePurchase" {{ 'checked' if incident.compensate_purchase }}>
+          <label class="form-check-label fw-bold" for="compensatePurchase">Компенсировать покупку</label>
+        </div>
+        <small class="text-muted">При переводе в «Решён» будет создана корректировка-компенсация</small>
       </div>
+      {% endif %}
       <div class="col-12">
         <label class="form-label">Описание</label>
         <textarea name="notes" class="form-control" rows="3">{{ incident.notes or '' }}</textarea>
@@ -72,113 +89,139 @@
     </div>
     <input type="hidden" name="return_url" value="{{ back_url }}">
     <div class="mt-3">
-      <a href="{{ back_url }}" class="btn btn-secondary" id="backToListBtn">Вернуться к списку</a>
+      <a href="{{ back_url }}" class="btn btn-secondary" id="backToListBtn">К списку</a>
       {% if incident.status not in ['cancelled', 'resolved', 'rejected'] %}
         <button type="button" class="btn btn-outline-danger" onclick="showCancelModal({{ incident.id }}, '{{ incident.custom_number or ('#' ~ incident.id) }}')">
-          <i class="bi bi-x-circle"></i> Отменить инцидент
+          <i class="bi bi-x-circle"></i> Отменить
         </button>
       {% endif %}
       <button type="submit" class="btn btn-primary">Сохранить</button>
     </div>
   </form>
   {% endif %}
-  
-  <!-- Модальное окно отмены инцидента -->
+
+  {% if incident.incident_type == 'request' %}
+  <!-- Позиции товаров -->
+  <hr class="my-4">
+  <div class="d-flex justify-content-between align-items-center">
+    <h5>Позиции обращения</h5>
+    {% if incident.status not in ['resolved', 'rejected', 'cancelled'] %}
+    <button class="btn btn-sm btn-outline-primary" onclick="showAddItemModal()"><i class="bi bi-plus"></i> Добавить</button>
+    {% endif %}
+  </div>
+  <table class="table table-sm table-striped mt-2" id="itemsTable">
+    <thead><tr><th>Товар</th><th class="text-end">Кол-во</th><th class="text-end">Цена</th><th class="text-end">Итого</th>
+      {% if incident.status not in ['resolved', 'rejected', 'cancelled'] %}<th class="text-end">Действия</th>{% endif %}
+    </tr></thead>
+    <tbody>
+      {% for item in incident_items %}
+      <tr data-item-id="{{ item.id }}">
+        <td>{{ item.product_name }}</td>
+        <td class="text-end">{{ item.quantity }}</td>
+        <td class="text-end">{{ '{:,.2f}'.format(item.price).replace(',', ' ') }}</td>
+        <td class="text-end">{{ '{:,.2f}'.format(item.total).replace(',', ' ') }}</td>
+        {% if incident.status not in ['resolved', 'rejected', 'cancelled'] %}
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-primary" onclick="editItem({{ item.id }}, '{{ item.product_name | e }}', {{ item.quantity }}, {{ item.price }})"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteItem({{ item.id }})"><i class="bi bi-trash"></i></button>
+        </td>
+        {% endif %}
+      </tr>
+      {% else %}
+      <tr id="noItemsRow"><td colspan="5" class="text-muted">Позиций нет</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fw-bold"><td colspan="3" class="text-end">Итого:</td><td class="text-end" id="itemsGrandTotal">
+        {{ '{:,.2f}'.format(incident_items | sum(attribute='total')).replace(',', ' ') if incident_items else '0.00' }}
+      </td>{% if incident.status not in ['resolved', 'rejected', 'cancelled'] %}<td></td>{% endif %}</tr>
+    </tfoot>
+  </table>
+
+  <!-- Модал добавления/редактирования позиции -->
+  <div class="modal fade" id="itemModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="itemModalTitle">Добавить позицию</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editItemId">
+          <div class="mb-3" id="productSelectGroup">
+            <label class="form-label">Товар из справочника</label>
+            <select class="form-select" id="itemProductSelect" onchange="onModalProductSelect(this)">
+              <option value="">— выберите —</option>
+              {% for p in products %}
+                <option value="{{ p.id }}" data-name="{{ p.name }}" data-price="{{ p.price }}">{{ p.name }} ({{ p.unit }}, {{ p.price }} ₽)</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Наименование</label>
+            <input type="text" class="form-control" id="itemName" required>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label">Количество</label>
+              <input type="number" step="0.001" min="0.001" class="form-control" id="itemQty" value="1">
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label">Цена</label>
+              <input type="number" step="0.01" min="0" class="form-control" id="itemPrice" value="0">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="button" class="btn btn-primary" onclick="saveItem()">Сохранить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Модальное окно отмены -->
   <div class="modal fade" id="cancelIncidentModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content">
         <form method="post" id="cancelIncidentForm">
           <input type="hidden" name="cancellation_reason" id="cancelReasonInput">
-          <input type="hidden" name="return_url" id="cancelReturnUrlInput">
+          <input type="hidden" name="return_url" value="{{ back_url }}">
           <div class="modal-header bg-warning">
-            <h5 class="modal-title">Отменить инцидент <span id="cancelIncidentNumber"></span>?</h5>
+            <h5 class="modal-title">Отменить тикет <span id="cancelIncidentNumber"></span>?</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            <p class="mb-3">Выберите причину отмены инцидента:</p>
             <div class="form-check mb-2">
               <input class="form-check-input" type="radio" name="reason_radio" id="reason_duplicate" value="duplicate" checked>
-              <label class="form-check-label" for="reason_duplicate">
-                Ошибочно заведен (дубль)
-              </label>
+              <label class="form-check-label" for="reason_duplicate">Ошибочно заведен (дубль)</label>
             </div>
             <div class="form-check mb-2">
               <input class="form-check-input" type="radio" name="reason_radio" id="reason_not_confirmed" value="not_confirmed">
-              <label class="form-check-label" for="reason_not_confirmed">
-                Инцидент не подтвердился
-              </label>
+              <label class="form-check-label" for="reason_not_confirmed">Не подтвердился</label>
             </div>
             <div class="form-check mb-3">
               <input class="form-check-input" type="radio" name="reason_radio" id="reason_owner_decision" value="owner_decision">
-              <label class="form-check-label" for="reason_owner_decision">
-                Решение владельца
-              </label>
+              <label class="form-check-label" for="reason_owner_decision">Решение владельца</label>
             </div>
-            <div class="mb-3">
-              <label for="cancelNotes" class="form-label">Комментарий (необязательно):</label>
-              <textarea class="form-control" id="cancelNotes" name="notes" rows="3" placeholder="Дополнительная информация об отмене"></textarea>
-            </div>
+            <textarea class="form-control" name="notes" rows="2" placeholder="Комментарий"></textarea>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-            <button type="submit" class="btn btn-warning">Отменить инцидент</button>
+            <button type="submit" class="btn btn-warning">Отменить тикет</button>
           </div>
         </form>
       </div>
     </div>
   </div>
 
-  <script>
-  function showCancelModal(incidentId, incidentNumber) {
-  document.getElementById('cancelIncidentNumber').textContent = incidentNumber;
-  const backBtn = document.getElementById('backToListBtn');
-  const backUrl = backBtn ? backBtn.href : '{{ back_url if back_url else "/owner/incidents" }}';
-  const cancelForm = document.getElementById('cancelIncidentForm');
-  cancelForm.action = `/owner/incidents/${incidentId}/cancel`;
-  document.getElementById('cancelReturnUrlInput').value = backUrl;
-  
-  // Сброс формы
-  document.getElementById('cancelNotes').value = '';
-  document.getElementById('reason_duplicate').checked = true;
-  document.getElementById('reason_not_confirmed').checked = false;
-  document.getElementById('reason_owner_decision').checked = false;
-  
-  // Обновление скрытого поля при изменении радиокнопок
-  document.querySelectorAll('input[name="reason_radio"]').forEach(radio => {
-    radio.removeEventListener('change', updateCancelReason);
-    radio.addEventListener('change', updateCancelReason);
-  });
-  document.getElementById('cancelReasonInput').value = 'duplicate';
-  
-  new bootstrap.Modal(document.getElementById('cancelIncidentModal')).show();
-}
-
-function updateCancelReason() {
-  const selectedReason = document.querySelector('input[name="reason_radio"]:checked');
-  if (selectedReason) {
-    document.getElementById('cancelReasonInput').value = selectedReason.value;
-  }
-}
-
-// Обработка отправки формы отмены
-document.getElementById('cancelIncidentForm')?.addEventListener('submit', function(e) {
-  const selectedReason = document.querySelector('input[name="reason_radio"]:checked');
-  if (!selectedReason) {
-    e.preventDefault();
-    alert('Пожалуйста, выберите причину отмены');
-    return false;
-  }
-  document.getElementById('cancelReasonInput').value = selectedReason.value;
-});
-  </script>
-
   <hr class="my-4">
   <h5>История изменений</h5>
   <table class="table table-sm">
     <thead><tr><th>Когда</th><th>Кто</th><th>Поле</th><th>Старое</th><th>Новое</th></tr></thead>
     <tbody>
-      {% set hist = history if history is defined else [] %}
-      {% for h in hist %}
+      {% for h in (history if history is defined else []) %}
         <tr>
           <td>{{ h.changed_at.strftime('%d.%m.%Y %H:%M') if h.changed_at else '—' }}</td>
           <td>{{ h.changer.first_name if h.changer else '—' }}</td>
@@ -192,17 +235,9 @@ document.getElementById('cancelIncidentForm')?.addEventListener('submit', functi
     </tbody>
   </table>
 
-  <h5 class="mt-4">Корректировки по инциденту</h5>
+  <h5 class="mt-4">Корректировки</h5>
   <table class="table table-sm table-striped">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Тип</th>
-        <th>Сумма</th>
-        <th>Дата</th>
-        <th>Применена</th>
-      </tr>
-    </thead>
+    <thead><tr><th>ID</th><th>Тип</th><th>Сумма</th><th>Дата</th><th>Применена</th></tr></thead>
     <tbody>
       {% if adjustments and adjustments|length > 0 %}
         {% for adj in adjustments %}
@@ -220,106 +255,110 @@ document.getElementById('cancelIncidentForm')?.addEventListener('submit', functi
     </tbody>
   </table>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
+const INCIDENT_ID = {{ incident.id }};
+
+// Employee loading
 document.addEventListener('DOMContentLoaded', function () {
   const objectSelect = document.getElementById('ownerIncidentObject');
   const employeeSelect = document.getElementById('ownerIncidentEmployee');
   const currentEmployeeId = {{ incident.employee.id if incident.employee else 'null' }};
   const initialGroups = {{ employee_groups | tojson | safe }};
 
-  if (!objectSelect || !employeeSelect) {
-    console.error('Не удалось инициализировать форму инцидента (редактирование)');
-    return;
-  }
-
-  function formatEmployee(emp) {
-    const parts = [];
-    if (emp.last_name) parts.push(emp.last_name);
-    if (emp.first_name) parts.push(emp.first_name);
-    if (emp.middle_name) parts.push(emp.middle_name);
-    return parts.join(' ').trim() || `ID ${emp.id}`;
-  }
-
-  function renderEmployeeGroups(groups, selectedId) {
+  if (!objectSelect || !employeeSelect) return;
+  function fmt(e) { return `${e.last_name || ''} ${e.first_name || ''}`.trim() || `ID ${e.id}`; }
+  function renderGroups(groups, selId) {
     employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
-
-    if (groups.active && groups.active.length > 0) {
-      groups.active.forEach(emp => {
-        const opt = document.createElement('option');
-        opt.value = emp.id;
-        opt.textContent = formatEmployee(emp);
-        if (selectedId && emp.id === selectedId) {
-          opt.selected = true;
-        }
-        employeeSelect.appendChild(opt);
-      });
+    (groups.active || []).forEach(e => { const o = new Option(fmt(e), e.id); if (selId && e.id === selId) o.selected = true; employeeSelect.add(o); });
+    if (groups.former && groups.former.length) {
+      const d = new Option('Бывшие', ''); d.disabled = true; employeeSelect.add(d);
+      groups.former.forEach(e => { const o = new Option(fmt(e), e.id); o.classList.add('text-muted'); if (selId && e.id === selId) o.selected = true; employeeSelect.add(o); });
     }
-
-    if (groups.former && groups.former.length > 0) {
-      const divider = document.createElement('option');
-      divider.value = '';
-      divider.disabled = true;
-      divider.textContent = 'Бывшие';
-      divider.classList.add('fw-bold', 'fst-italic', 'text-muted');
-      employeeSelect.appendChild(divider);
-
-      groups.former.forEach(emp => {
-        const opt = document.createElement('option');
-        opt.value = emp.id;
-        opt.textContent = formatEmployee(emp);
-        opt.classList.add('fst-italic', 'text-muted');
-        if (selectedId && emp.id === selectedId) {
-          opt.selected = true;
-        }
-        employeeSelect.appendChild(opt);
-      });
-    }
-
     employeeSelect.disabled = false;
   }
-
-  function resetEmployees(message) {
-    employeeSelect.innerHTML = `<option value="">${message}</option>`;
-    employeeSelect.disabled = true;
-  }
-
-  async function loadEmployees(objectId, selectedId = null) {
-    resetEmployees('Загрузка сотрудников...');
-    try {
-      const resp = await fetch(`/owner/incidents/api/employees?object_id=${encodeURIComponent(objectId)}`);
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-      const data = await resp.json();
-      renderEmployeeGroups(data || { active: [], former: [] }, selectedId);
-    } catch (error) {
-      console.error('Ошибка загрузки сотрудников:', error);
-      resetEmployees('Не удалось загрузить сотрудников');
-    }
-  }
-
-  objectSelect.addEventListener('change', function () {
-    const objectId = this.value;
-    if (!objectId) {
-      resetEmployees('Сначала выберите объект');
-      return;
-    }
-    employeeSelect.disabled = true;
-    loadEmployees(objectId);
+  function resetEmp(msg) { employeeSelect.innerHTML = `<option value="">${msg}</option>`; employeeSelect.disabled = true; }
+  objectSelect.addEventListener('change', async function() {
+    if (!this.value) { resetEmp('Сначала выберите объект'); return; }
+    resetEmp('Загрузка...');
+    try { const r = await fetch(`/owner/incidents/api/employees?object_id=${this.value}`); renderGroups(await r.json()); } catch { resetEmp('Ошибка'); }
   });
-
   if (objectSelect.value) {
-    if (initialGroups && (initialGroups.active.length || initialGroups.former.length)) {
-      renderEmployeeGroups(initialGroups, currentEmployeeId);
-    } else {
-      loadEmployees(objectSelect.value, currentEmployeeId);
-    }
-  } else {
-    resetEmployees('Сначала выберите объект');
-  }
+    if (initialGroups && (initialGroups.active?.length || initialGroups.former?.length)) renderGroups(initialGroups, currentEmployeeId);
+    else if (objectSelect.value) fetch(`/owner/incidents/api/employees?object_id=${objectSelect.value}`).then(r => r.json()).then(d => renderGroups(d, currentEmployeeId));
+  } else resetEmp('Сначала выберите объект');
 });
+
+// Cancel modal
+function showCancelModal(id, num) {
+  document.getElementById('cancelIncidentNumber').textContent = num;
+  document.getElementById('cancelIncidentForm').action = `/owner/incidents/${id}/cancel`;
+  document.getElementById('cancelReasonInput').value = 'duplicate';
+  document.querySelectorAll('input[name="reason_radio"]').forEach(r => r.addEventListener('change', function() { document.getElementById('cancelReasonInput').value = this.value; }));
+  new bootstrap.Modal(document.getElementById('cancelIncidentModal')).show();
+}
+
+{% if incident.incident_type == 'request' %}
+// Items CRUD via API
+let itemModal;
+document.addEventListener('DOMContentLoaded', () => { itemModal = new bootstrap.Modal(document.getElementById('itemModal')); });
+
+function onModalProductSelect(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (opt.dataset.name) document.getElementById('itemName').value = opt.dataset.name;
+  if (opt.dataset.price) document.getElementById('itemPrice').value = opt.dataset.price;
+}
+
+function showAddItemModal() {
+  document.getElementById('itemModalTitle').textContent = 'Добавить позицию';
+  document.getElementById('editItemId').value = '';
+  document.getElementById('itemProductSelect').selectedIndex = 0;
+  document.getElementById('itemName').value = '';
+  document.getElementById('itemQty').value = '1';
+  document.getElementById('itemPrice').value = '0';
+  document.getElementById('productSelectGroup').classList.remove('d-none');
+  itemModal.show();
+}
+
+function editItem(id, name, qty, price) {
+  document.getElementById('itemModalTitle').textContent = 'Редактировать позицию';
+  document.getElementById('editItemId').value = id;
+  document.getElementById('itemName').value = name;
+  document.getElementById('itemQty').value = qty;
+  document.getElementById('itemPrice').value = price;
+  document.getElementById('productSelectGroup').classList.add('d-none');
+  itemModal.show();
+}
+
+async function saveItem() {
+  const itemId = document.getElementById('editItemId').value;
+  const body = {
+    product_name: document.getElementById('itemName').value,
+    quantity: parseFloat(document.getElementById('itemQty').value),
+    price: parseFloat(document.getElementById('itemPrice').value),
+  };
+  if (!itemId) {
+    const sel = document.getElementById('itemProductSelect');
+    body.product_id = sel.value ? parseInt(sel.value) : null;
+  }
+  const url = itemId
+    ? `/owner/incidents/${INCIDENT_ID}/items/${itemId}`
+    : `/owner/incidents/${INCIDENT_ID}/items`;
+  const method = itemId ? 'PUT' : 'POST';
+  try {
+    const r = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    if (r.ok) { itemModal.hide(); location.reload(); }
+    else { const d = await r.json(); alert(d.detail || 'Ошибка'); }
+  } catch(e) { alert('Ошибка сети'); }
+}
+
+async function deleteItem(itemId) {
+  if (!confirm('Удалить позицию?')) return;
+  try {
+    const r = await fetch(`/owner/incidents/${INCIDENT_ID}/items/${itemId}`, { method: 'DELETE' });
+    if (r.ok) location.reload();
+  } catch(e) { alert('Ошибка'); }
+}
+{% endif %}
 </script>
 {% endblock %}

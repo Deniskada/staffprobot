@@ -63,6 +63,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.url.path.startswith('/employee/incidents') %}active{% endif %}" href="/employee/incidents">
+                            <i class="bi bi-ticket-detailed"></i> Тикеты
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/employee/reviews">
                             <i class="bi bi-star"></i> Отзывы
                         </a>

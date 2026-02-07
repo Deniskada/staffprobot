@@ -31,6 +31,7 @@ class IncidentService:
         role: str,
         owner_id: Optional[int] = None,
         status_filter: Optional[str] = None,
+        incident_type: Optional[str] = None,
         limit: int = 100
     ) -> List[Incident]:
         """Получить инциденты с учётом роли."""
@@ -64,6 +65,8 @@ class IncidentService:
         
         if status_filter:
             query = query.where(Incident.status == status_filter)
+        if incident_type:
+            query = query.where(Incident.incident_type == incident_type)
         
         query = query.order_by(Incident.created_at.desc()).limit(limit)
         result = await self.session.execute(query)
@@ -74,6 +77,7 @@ class IncidentService:
         owner_id: int,
         category: str,
         created_by: int,
+        incident_type: str = "deduction",
         object_id: Optional[int] = None,
         shift_schedule_id: Optional[int] = None,
         employee_id: Optional[int] = None,
@@ -92,8 +96,9 @@ class IncidentService:
             object_id=object_id,
             shift_schedule_id=shift_schedule_id,
             employee_id=employee_id,
+            incident_type=incident_type,
             category=category,
-            severity=severity or "medium",
+            severity=severity or ("medium" if incident_type == "deduction" else "low"),
             status="new",
             reason_code=reason_code,
             notes=notes,
@@ -203,8 +208,8 @@ class IncidentService:
                 error=str(notification_error),
             )
 
-        # Автокорректировки по статусам
-        if new_status == "resolved" and incident.damage_amount and incident.employee_id:
+        # Автокорректировки по статусам (тип "deduction")
+        if new_status == "resolved" and incident.incident_type == "deduction" and incident.damage_amount and incident.employee_id:
             from shared.services.payroll_adjustment_service import PayrollAdjustmentService
             from datetime import date as date_type
             adj_service = PayrollAdjustmentService(self.session)
@@ -227,6 +232,15 @@ class IncidentService:
                 incident_id=incident.id
             )
             await self.session.commit()
+
+        # Компенсация расходных материалов (тип "request")
+        if (
+            new_status == "resolved"
+            and incident.incident_type == "request"
+            and incident.compensate_purchase
+            and incident.employee_id
+        ):
+            await self._create_expense_compensation(incident, changed_by_id)
         
         if old_status == "resolved" and new_status == "in_review" and incident.employee_id:
             # Откат: проверить возвраты
@@ -290,7 +304,8 @@ class IncidentService:
         changed_fields = [
             'category', 'severity', 'status', 'reason_code', 'notes',
             'object_id', 'shift_schedule_id', 'employee_id',
-            'custom_number', 'custom_date', 'damage_amount'
+            'custom_number', 'custom_date', 'damage_amount',
+            'compensate_purchase'
         ]
         for field in changed_fields:
             if field in data:
@@ -519,6 +534,37 @@ class IncidentService:
         
         return incident
     
+    async def _create_expense_compensation(self, incident: Incident, changed_by: int) -> None:
+        """Создать корректировку-компенсацию расходных материалов по обращению."""
+        from shared.services.payroll_adjustment_service import PayrollAdjustmentService
+        from shared.services.incident_item_service import IncidentItemService
+
+        item_service = IncidentItemService(self.session)
+        total = await item_service.calculate_total(incident.id)
+        if not total or total <= 0:
+            logger.warning("Нет позиций для компенсации", incident_id=incident.id)
+            return
+
+        adj_service = PayrollAdjustmentService(self.session)
+        desc = (
+            f"Компенсация расходных материалов по тикету {incident.custom_number}"
+            if incident.custom_number
+            else f"Компенсация расходных материалов по тикету #{incident.id}"
+        )
+        await adj_service.create_expense_compensation(
+            employee_id=incident.employee_id,
+            object_id=incident.object_id,
+            amount=total,
+            description=desc,
+            created_by=changed_by,
+            incident_id=incident.id,
+        )
+        await self.session.commit()
+        logger.info(
+            "Создана компенсация расходных материалов",
+            incident_id=incident.id, employee_id=incident.employee_id, amount=float(total)
+        )
+
     async def _notify_incident_created(self, incident: Incident) -> None:
         """Отправить уведомления о создании инцидента."""
         from shared.services.notification_service import NotificationService

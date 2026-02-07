@@ -1,9 +1,10 @@
 {% extends "owner/base_owner.html" %}
-{% block title %}Создать инцидент{% endblock %}
+{% block title %}Создать тикет{% endblock %}
 {% block content %}
 <div class="container mt-4">
-  <h3>Создать инцидент</h3>
-  <form method="post" action="/owner/incidents/create">
+  <h3>Создать тикет — {{ 'Удержание' if incident_type == 'deduction' else 'Обращение' }}</h3>
+  <form method="post" action="/owner/incidents/create" id="createForm">
+    <input type="hidden" name="incident_type" value="{{ incident_type }}">
     <div class="row g-3">
       <div class="col-md-4">
         <label class="form-label">Категория</label>
@@ -13,6 +14,7 @@
           {% endfor %}
         </select>
       </div>
+      {% if incident_type == 'deduction' %}
       <div class="col-md-4">
         <label class="form-label">Критичность</label>
         <select class="form-select" name="severity">
@@ -22,6 +24,7 @@
           <option value="critical">Критичная</option>
         </select>
       </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label">Номер</label>
         <input type="text" name="custom_number" class="form-control">
@@ -35,7 +38,7 @@
         <select class="form-select" name="object_id" id="incidentObject">
           <option value="">— не выбран —</option>
           {% for o in objects %}
-            <option value="{{ o.id }}">{{ o.name }} (ID {{ o.id }})</option>
+            <option value="{{ o.id }}">{{ o.name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -45,103 +48,134 @@
           <option value="">Сначала выберите объект</option>
         </select>
       </div>
+      {% if incident_type == 'deduction' %}
       <div class="col-md-4">
         <label class="form-label">Ущерб (сумма)</label>
         <input type="number" step="0.01" name="damage_amount" class="form-control">
       </div>
+      {% endif %}
       <div class="col-12">
         <label class="form-label">Описание</label>
-        <textarea name="notes" rows="8" class="form-control"></textarea>
+        <textarea name="notes" rows="4" class="form-control"></textarea>
       </div>
     </div>
+
+    {% if incident_type == 'request' %}
+    <!-- Позиции товаров -->
+    <hr class="my-3">
+    <h5>Товары</h5>
+    <div id="itemsContainer">
+      <div class="row g-2 mb-2 item-row" data-idx="0">
+        <div class="col-md-4">
+          <select class="form-select form-select-sm product-select" onchange="onProductSelect(this, 0)">
+            <option value="">— выберите товар —</option>
+            {% for p in products %}
+              <option value="{{ p.id }}" data-name="{{ p.name }}" data-unit="{{ p.unit }}" data-price="{{ p.price }}">{{ p.name }} ({{ p.unit }}, {{ p.price }} ₽)</option>
+            {% endfor %}
+          </select>
+          <input type="hidden" name="items[0][product_id]" class="item-product-id">
+          <input type="hidden" name="items[0][product_name]" class="item-product-name">
+        </div>
+        <div class="col-md-2">
+          <input type="number" step="0.001" min="0.001" name="items[0][quantity]" class="form-control form-control-sm item-qty" placeholder="Кол-во" value="1" oninput="updateItemTotal(0)">
+        </div>
+        <div class="col-md-2">
+          <input type="number" step="0.01" min="0" name="items[0][price]" class="form-control form-control-sm item-price" placeholder="Цена" value="0" oninput="updateItemTotal(0)">
+        </div>
+        <div class="col-md-2">
+          <input type="text" class="form-control form-control-sm item-total" readonly value="0.00" tabindex="-1">
+        </div>
+        <div class="col-md-2">
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeItemRow(this)"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-primary mt-1" onclick="addItemRow()"><i class="bi bi-plus"></i> Добавить товар</button>
+    <div class="mt-2 fw-bold">Итого: <span id="grandTotal">0.00</span> ₽</div>
+    {% endif %}
+
     <div class="mt-3">
-      <a href="/owner/incidents" class="btn btn-secondary">Отмена</a>
+      <a href="/owner/incidents?incident_type={{ incident_type }}" class="btn btn-secondary">Отмена</a>
       <button type="submit" class="btn btn-danger">Создать</button>
     </div>
   </form>
 </div>
-{% block extra_js %}
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   const objectSelect = document.getElementById('incidentObject');
   const employeeSelect = document.getElementById('incidentEmployee');
+  if (!objectSelect || !employeeSelect) return;
 
-  if (!objectSelect || !employeeSelect) {
-    console.error('Не удалось инициализировать форму инцидента (создание)');
-    return;
-  }
-
-  function resetEmployeeSelect(message) {
-    employeeSelect.innerHTML = `<option value="">${message}</option>`;
-    employeeSelect.disabled = true;
-  }
-
-  function renderEmployeeGroups(groups) {
+  function resetEmp(msg) { employeeSelect.innerHTML = `<option value="">${msg}</option>`; employeeSelect.disabled = true; }
+  function renderEmpGroups(groups) {
     employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
-
-    if (groups.active && groups.active.length > 0) {
-      groups.active.forEach(emp => {
-        const opt = document.createElement('option');
-        opt.value = emp.id;
-        opt.textContent = formatEmployeeName(emp);
-        employeeSelect.appendChild(opt);
-      });
+    (groups.active || []).forEach(e => { const o = new Option(`${e.last_name || ''} ${e.first_name || ''}`.trim() || `ID ${e.id}`, e.id); employeeSelect.add(o); });
+    if (groups.former && groups.former.length) {
+      const d = new Option('Бывшие', ''); d.disabled = true; employeeSelect.add(d);
+      groups.former.forEach(e => { const o = new Option(`${e.last_name || ''} ${e.first_name || ''}`.trim() || `ID ${e.id}`, e.id); o.classList.add('text-muted'); employeeSelect.add(o); });
     }
-
-    if (groups.former && groups.former.length > 0) {
-      const divider = document.createElement('option');
-      divider.value = '';
-      divider.disabled = true;
-      divider.textContent = 'Бывшие';
-      divider.classList.add('fw-bold', 'fst-italic', 'text-muted');
-      employeeSelect.appendChild(divider);
-
-      groups.former.forEach(emp => {
-        const opt = document.createElement('option');
-        opt.value = emp.id;
-        opt.textContent = formatEmployeeName(emp);
-        opt.classList.add('fst-italic', 'text-muted');
-        employeeSelect.appendChild(opt);
-      });
-    }
-
     employeeSelect.disabled = false;
   }
-
-  function formatEmployeeName(emp) {
-    const parts = [];
-    if (emp.last_name) parts.push(emp.last_name);
-    if (emp.first_name) parts.push(emp.first_name);
-    if (emp.middle_name) parts.push(emp.middle_name);
-    return parts.join(' ').trim() || `ID ${emp.id}`;
-  }
-
-  async function loadEmployees(objectId) {
-    resetEmployeeSelect('Загрузка сотрудников...');
+  objectSelect.addEventListener('change', async function() {
+    if (!this.value) { resetEmp('Сначала выберите объект'); return; }
+    resetEmp('Загрузка...');
     try {
-      const response = await fetch(`/owner/incidents/api/employees?object_id=${encodeURIComponent(objectId)}`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const data = await response.json();
-      renderEmployeeGroups(data || { active: [], former: [] });
-    } catch (error) {
-      console.error('Ошибка загрузки сотрудников:', error);
-      resetEmployeeSelect('Не удалось загрузить сотрудников');
-    }
-  }
-
-  objectSelect.addEventListener('change', function () {
-    const objectId = this.value;
-    if (!objectId) {
-      resetEmployeeSelect('Сначала выберите объект');
-      return;
-    }
-    loadEmployees(objectId);
+      const r = await fetch(`/owner/incidents/api/employees?object_id=${this.value}`);
+      renderEmpGroups(await r.json());
+    } catch { resetEmp('Ошибка загрузки'); }
   });
 });
+
+{% if incident_type == 'request' %}
+let itemIdx = 1;
+
+function onProductSelect(sel, idx) {
+  const opt = sel.options[sel.selectedIndex];
+  const row = sel.closest('.item-row');
+  row.querySelector('.item-product-id').value = opt.value || '';
+  row.querySelector('.item-product-name').value = opt.dataset.name || '';
+  if (opt.dataset.price) { row.querySelector('.item-price').value = opt.dataset.price; }
+  updateItemTotal(idx);
+}
+
+function updateItemTotal(idx) {
+  const row = document.querySelector(`.item-row[data-idx="${idx}"]`);
+  if (!row) return;
+  const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+  const price = parseFloat(row.querySelector('.item-price').value) || 0;
+  row.querySelector('.item-total').value = (qty * price).toFixed(2);
+  updateGrandTotal();
+}
+
+function updateGrandTotal() {
+  let total = 0;
+  document.querySelectorAll('.item-total').forEach(el => { total += parseFloat(el.value) || 0; });
+  document.getElementById('grandTotal').textContent = total.toFixed(2);
+}
+
+function addItemRow() {
+  const container = document.getElementById('itemsContainer');
+  const template = container.querySelector('.item-row').cloneNode(true);
+  template.dataset.idx = itemIdx;
+  template.querySelectorAll('input, select').forEach(el => {
+    el.name = el.name ? el.name.replace(/\[\d+\]/, `[${itemIdx}]`) : '';
+    if (el.classList.contains('item-qty')) { el.value = '1'; el.setAttribute('oninput', `updateItemTotal(${itemIdx})`); }
+    else if (el.classList.contains('item-price')) { el.value = '0'; el.setAttribute('oninput', `updateItemTotal(${itemIdx})`); }
+    else if (el.classList.contains('item-total')) { el.value = '0.00'; }
+    else if (el.tagName === 'SELECT') { el.selectedIndex = 0; el.setAttribute('onchange', `onProductSelect(this, ${itemIdx})`); }
+    else if (el.type === 'hidden') { el.value = ''; }
+  });
+  container.appendChild(template);
+  itemIdx++;
+}
+
+function removeItemRow(btn) {
+  const rows = document.querySelectorAll('.item-row');
+  if (rows.length <= 1) return;
+  btn.closest('.item-row').remove();
+  updateGrandTotal();
+}
+{% endif %}
 </script>
 {% endblock %}
-{% endblock %}
-
-

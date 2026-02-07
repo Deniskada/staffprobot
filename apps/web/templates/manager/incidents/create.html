@@ -1,14 +1,15 @@
 {% extends "manager/base_manager.html" %}
-{% block title %}Создать инцидент{% endblock %}
+{% block title %}Создать тикет{% endblock %}
 {% block manager_content %}
 <div class="container mt-4">
-  <h2>Создать инцидент</h2>
+  <h2>Создать тикет <span class="badge {{ 'bg-danger' if incident_type == 'deduction' else 'bg-primary' }}">{{ 'Удержание' if incident_type == 'deduction' else 'Обращение' }}</span></h2>
   <form method="post" action="/manager/incidents/create" class="mt-3">
+    <input type="hidden" name="incident_type" value="{{ incident_type }}">
     <div class="row g-3">
       <div class="col-md-4">
-        <label class="form-label">Объект</label>
-        <select name="object_id" id="incidentObject" class="form-select" required>
-          <option value="">Выберите объект</option>
+        <label class="form-label">Объект{% if incident_type == 'deduction' %} <span class="text-danger">*</span>{% endif %}</label>
+        <select name="object_id" id="incidentObject" class="form-select" {% if incident_type == 'deduction' %}required{% endif %}>
+          <option value="">{% if incident_type == 'request' %}Без привязки{% else %}Выберите объект{% endif %}</option>
           {% for obj in objects %}
           <option value="{{ obj.id }}">{{ obj.name }}</option>
           {% endfor %}
@@ -20,6 +21,7 @@
           <option value="">Сначала выберите объект</option>
         </select>
       </div>
+      {% if incident_type == 'deduction' %}
       <div class="col-md-4">
         <label class="form-label">Критичность</label>
         <select name="severity" class="form-select">
@@ -29,15 +31,17 @@
         </select>
       </div>
       <div class="col-md-4">
-        <label class="form-label">Номер инцидента</label>
+        <label class="form-label">Номер тикета</label>
         <input type="text" name="custom_number" class="form-control" placeholder="Например: INC-2025-001" />
       </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label">Сотрудник</label>
         <select name="employee_id" id="incidentEmployee" class="form-select" disabled>
           <option value="">Сначала выберите объект</option>
         </select>
       </div>
+      {% if incident_type == 'deduction' %}
       <div class="col-md-4">
         <label class="form-label">Ущерб (₽)</label>
         <input type="number" step="0.01" min="0" name="damage_amount" class="form-control" placeholder="0.00" />
@@ -47,50 +51,61 @@
         <input type="date" name="custom_date" class="form-control" />
         <div class="form-text">Дата, на которую будет создана корректировка начислений</div>
       </div>
+      {% endif %}
       <div class="col-12">
         <label class="form-label">Описание</label>
-        <textarea name="notes" class="form-control" rows="4" placeholder="Краткое описание инцидента..."></textarea>
+        <textarea name="notes" class="form-control" rows="4" placeholder="Краткое описание тикета..."></textarea>
       </div>
     </div>
+
+    {% if incident_type == 'request' %}
+    <!-- Товары -->
+    <div class="card mt-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-cart3"></i> Товары</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem()"><i class="bi bi-plus"></i> Добавить</button>
+      </div>
+      <div class="card-body" id="items-container">
+        <p class="text-muted mb-0" id="no-items-msg">Добавьте товары</p>
+      </div>
+      <div class="card-footer text-end"><strong>Итого: <span id="grand-total">0.00</span> ₽</strong></div>
+    </div>
+    {% endif %}
+
     <div class="mt-3 d-flex gap-2">
       <button type="submit" class="btn btn-danger"><i class="fas fa-exclamation-triangle"></i> Создать</button>
-      <a href="/manager/incidents" class="btn btn-outline-secondary">Отмена</a>
+      <a href="/manager/incidents?incident_type={{ incident_type }}" class="btn btn-outline-secondary">Отмена</a>
     </div>
   </form>
 </div>
 
 <script>
+const incidentType = '{{ incident_type }}';
+const products = {{ products | tojson }};
+let itemIdx = 0;
+
 document.addEventListener('DOMContentLoaded', function() {
   const objectSelect = document.getElementById('incidentObject');
   const categorySelect = document.getElementById('incidentCategory');
   const employeeSelect = document.getElementById('incidentEmployee');
-
-  if (!objectSelect || !categorySelect || !employeeSelect) {
-    console.error('Не найдены элементы формы');
-    return;
-  }
+  if (!objectSelect || !categorySelect || !employeeSelect) return;
 
   async function loadCategories(objectId) {
     categorySelect.innerHTML = '<option value="">Загрузка...</option>';
     categorySelect.disabled = true;
     try {
-      const resp = await fetch(`/manager/incidents/api/categories?object_id=${encodeURIComponent(objectId)}`);
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
+      const resp = await fetch(`/manager/incidents/api/categories?object_id=${encodeURIComponent(objectId)}&incident_type=${incidentType}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       categorySelect.innerHTML = '<option value="">Выберите категорию</option>';
-      if (data.categories && data.categories.length > 0) {
-        data.categories.forEach(c => {
-          const opt = document.createElement('option');
-          opt.value = c.name;
-          opt.textContent = c.name;
-          categorySelect.appendChild(opt);
-        });
-      }
+      (data.categories || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        opt.textContent = c.name;
+        categorySelect.appendChild(opt);
+      });
       categorySelect.disabled = false;
     } catch (e) {
-      console.error('Ошибка загрузки категорий:', e);
       categorySelect.innerHTML = '<option value="">Ошибка загрузки</option>';
       categorySelect.disabled = true;
     }
@@ -106,33 +121,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderEmployeeGroups(groups) {
     employeeSelect.innerHTML = '<option value="">Выберите сотрудника</option>';
-
-    if (groups.active && groups.active.length > 0) {
-      groups.active.forEach(emp => {
-        const opt = document.createElement('option');
-        opt.value = emp.id;
-        opt.textContent = formatEmployeeName(emp);
-        employeeSelect.appendChild(opt);
-      });
-    }
-
+    (groups.active || []).forEach(emp => {
+      const opt = document.createElement('option');
+      opt.value = emp.id; opt.textContent = formatEmployeeName(emp);
+      employeeSelect.appendChild(opt);
+    });
     if (groups.former && groups.former.length > 0) {
-      const divider = document.createElement('option');
-      divider.value = '';
-      divider.disabled = true;
-      divider.textContent = 'Бывшие';
-      divider.classList.add('fw-bold', 'fst-italic', 'text-muted');
-      employeeSelect.appendChild(divider);
-
+      const d = document.createElement('option'); d.disabled = true; d.textContent = 'Бывшие';
+      employeeSelect.appendChild(d);
       groups.former.forEach(emp => {
         const opt = document.createElement('option');
-        opt.value = emp.id;
-        opt.textContent = formatEmployeeName(emp);
-        opt.classList.add('fst-italic', 'text-muted');
+        opt.value = emp.id; opt.textContent = formatEmployeeName(emp);
         employeeSelect.appendChild(opt);
       });
     }
-
     employeeSelect.disabled = false;
   }
 
@@ -141,13 +143,10 @@ document.addEventListener('DOMContentLoaded', function() {
     employeeSelect.disabled = true;
     try {
       const resp = await fetch(`/manager/api/employees/for-object/${encodeURIComponent(objectId)}`);
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       renderEmployeeGroups(data || { active: [], former: [] });
     } catch (e) {
-      console.error('Ошибка загрузки сотрудников:', e);
       employeeSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
       employeeSelect.disabled = true;
     }
@@ -156,16 +155,68 @@ document.addEventListener('DOMContentLoaded', function() {
   objectSelect.addEventListener('change', function() {
     const oid = this.value;
     if (!oid) {
-      categorySelect.innerHTML = '<option value="">Сначала выберите объект</option>';
-      categorySelect.disabled = true;
-      employeeSelect.innerHTML = '<option value="">Сначала выберите объект</option>';
-      employeeSelect.disabled = true;
+      categorySelect.innerHTML = '<option value="">Сначала выберите объект</option>'; categorySelect.disabled = true;
+      employeeSelect.innerHTML = '<option value="">Сначала выберите объект</option>'; employeeSelect.disabled = true;
       return;
     }
     loadCategories(oid);
     loadEmployees(oid);
   });
 });
+
+/* --- Товары (для request) --- */
+function addItem() {
+  const noMsg = document.getElementById('no-items-msg');
+  if (noMsg) noMsg.style.display = 'none';
+  const c = document.getElementById('items-container');
+  if (!c) return;
+  const i = itemIdx++;
+  let opts = '<option value="">— Товар —</option>';
+  products.forEach(p => {
+    opts += `<option value="${p.id}" data-name="${p.name}" data-price="${p.price}" data-unit="${p.unit}">${p.name} (${p.price} ₽/${p.unit})</option>`;
+  });
+  const div = document.createElement('div');
+  div.className = 'row g-2 align-items-end mb-2';
+  div.id = `item-${i}`;
+  div.innerHTML = `
+    <div class="col-5"><select class="form-select form-select-sm" onchange="onProductSelect(${i}, this)">${opts}</select>
+      <input type="hidden" name="items[${i}][product_id]" id="pid-${i}">
+      <input type="hidden" name="items[${i}][product_name]" id="pname-${i}"></div>
+    <div class="col-2"><input type="number" step="0.001" min="0.001" value="1" class="form-control form-control-sm" name="items[${i}][quantity]" id="qty-${i}" onchange="calcRow(${i})"></div>
+    <div class="col-2"><input type="number" step="0.01" min="0" value="0" class="form-control form-control-sm" name="items[${i}][price]" id="price-${i}" onchange="calcRow(${i})"></div>
+    <div class="col-2 text-end fw-bold" id="total-${i}">0.00 ₽</div>
+    <div class="col-1 text-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeItem(${i})"><i class="bi bi-x"></i></button></div>`;
+  c.appendChild(div);
+}
+function onProductSelect(i, sel) {
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById(`pid-${i}`).value = opt.value;
+  document.getElementById(`pname-${i}`).value = opt.dataset.name || '';
+  document.getElementById(`price-${i}`).value = opt.dataset.price || 0;
+  calcRow(i);
+}
+function calcRow(i) {
+  const q = parseFloat(document.getElementById(`qty-${i}`).value) || 0;
+  const p = parseFloat(document.getElementById(`price-${i}`).value) || 0;
+  document.getElementById(`total-${i}`).textContent = (q * p).toFixed(2) + ' ₽';
+  calcGrand();
+}
+function calcGrand() {
+  let sum = 0;
+  document.querySelectorAll('[id^="total-"]').forEach(el => { sum += parseFloat(el.textContent) || 0; });
+  const gt = document.getElementById('grand-total');
+  if (gt) gt.textContent = sum.toFixed(2);
+}
+function removeItem(i) {
+  const el = document.getElementById(`item-${i}`);
+  if (el) el.remove();
+  calcGrand();
+  const c = document.getElementById('items-container');
+  if (c && !c.querySelector('.row')) {
+    const noMsg = document.getElementById('no-items-msg');
+    if (noMsg) noMsg.style.display = '';
+  }
+}
 </script>
 {% endblock %}
 

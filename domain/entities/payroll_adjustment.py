@@ -97,7 +97,8 @@ class PayrollAdjustment(Base):
             'cancellation_fine_short_notice': 'Штраф за отмену смены',
             'cancellation_fine_invalid_reason': 'Штраф за отмену смены',
             'incident_deduction': 'Удержание по инциденту',
-            'incident_refund': 'Возврат удержания по инциденту'
+            'incident_refund': 'Возврат удержания по инциденту',
+            'expense_compensation': 'Компенсация расходных материалов'
         }
         return type_labels.get(self.adjustment_type, self.adjustment_type)
     

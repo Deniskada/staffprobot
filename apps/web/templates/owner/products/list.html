@@ -1,0 +1,106 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}Справочник товаров{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Справочник товаров</h3>
+    <div>
+      {% if show_inactive %}
+        <a href="/owner/products" class="btn btn-sm btn-outline-secondary">Скрыть неактивные</a>
+      {% else %}
+        <a href="/owner/products?show_inactive=true" class="btn btn-sm btn-outline-secondary">Показать неактивные</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Форма добавления -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="post" action="/owner/products" class="row g-2 align-items-end" id="productForm">
+        <input type="hidden" name="product_id" id="editProductId" value="">
+        <input type="hidden" name="action" id="productAction" value="save">
+        <div class="col-md-4">
+          <label class="form-label">Наименование</label>
+          <input type="text" name="name" id="productName" class="form-control" placeholder="Название товара" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Ед. изм.</label>
+          <input type="text" name="unit" id="productUnit" class="form-control" value="шт." placeholder="шт.">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Цена, ₽</label>
+          <input type="number" step="0.01" name="price" id="productPrice" class="form-control" value="0" min="0">
+        </div>
+        <div class="col-md-4 d-flex gap-2">
+          <button type="submit" class="btn btn-primary" id="productSubmitBtn">Добавить</button>
+          <button type="button" class="btn btn-secondary d-none" id="productCancelBtn" onclick="cancelEdit()">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <table class="table table-sm table-hover">
+    <thead>
+      <tr>
+        <th>Наименование</th>
+        <th>Ед. изм.</th>
+        <th class="text-end">Цена, ₽</th>
+        <th style="width:200px;" class="text-end">Действия</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      <tr class="{{ 'table-secondary text-muted' if not p.is_active }}">
+        <td>{{ p.name }}{% if not p.is_active %} <span class="badge bg-secondary">неактивен</span>{% endif %}</td>
+        <td>{{ p.unit }}</td>
+        <td class="text-end">{{ '{:,.2f}'.format(p.price).replace(',', ' ') }}</td>
+        <td class="text-end">
+          {% if p.is_active %}
+            <button class="btn btn-sm btn-outline-primary" onclick="startEdit({{ p.id }}, '{{ p.name | e }}', '{{ p.unit | e }}', '{{ p.price }}')">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <form method="post" action="/owner/products" class="d-inline">
+              <input type="hidden" name="product_id" value="{{ p.id }}">
+              <input type="hidden" name="name" value="{{ p.name }}">
+              <input type="hidden" name="action" value="deactivate">
+              <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Деактивировать товар?')">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </form>
+          {% else %}
+            <form method="post" action="/owner/products" class="d-inline">
+              <input type="hidden" name="product_id" value="{{ p.id }}">
+              <input type="hidden" name="name" value="{{ p.name }}">
+              <input type="hidden" name="action" value="activate">
+              <button class="btn btn-sm btn-outline-success">Активировать</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-muted text-center">Товаров нет</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function startEdit(id, name, unit, price) {
+  document.getElementById('editProductId').value = id;
+  document.getElementById('productName').value = name;
+  document.getElementById('productUnit').value = unit;
+  document.getElementById('productPrice').value = price;
+  document.getElementById('productSubmitBtn').textContent = 'Сохранить';
+  document.getElementById('productCancelBtn').classList.remove('d-none');
+}
+
+function cancelEdit() {
+  document.getElementById('editProductId').value = '';
+  document.getElementById('productName').value = '';
+  document.getElementById('productUnit').value = 'шт.';
+  document.getElementById('productPrice').value = '0';
+  document.getElementById('productSubmitBtn').textContent = 'Добавить';
+  document.getElementById('productCancelBtn').classList.add('d-none');
+}
+</script>
+{% endblock %}

@@ -16,6 +16,9 @@ class Incident(Base):
     shift_schedule_id = Column(Integer, ForeignKey("shift_schedules.id"), nullable=True, index=True)
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
+    # Тип тикета: "deduction" (Удержания) / "request" (Обращения)
+    incident_type = Column(String(50), nullable=False, default="deduction", index=True)
+
     category = Column(String(100), nullable=False)  # e.g., 'late_arrival', 'task_non_completion', 'damage', 'violation'
     severity = Column(String(50), nullable=True)  # e.g., 'low', 'medium', 'high', 'critical'
     status = Column(String(50), nullable=False, default="new")  # 'new', 'in_review', 'resolved', 'rejected'
@@ -28,6 +31,9 @@ class Incident(Base):
     custom_number = Column(String(100), nullable=True, index=True)
     custom_date = Column(Date, nullable=True, index=True)
     damage_amount = Column(Numeric(10, 2), nullable=True)
+
+    # Компенсация расходных материалов (только для incident_type="request")
+    compensate_purchase = Column(Boolean, default=False, nullable=False)
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

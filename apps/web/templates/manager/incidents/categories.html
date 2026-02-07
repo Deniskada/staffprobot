@@ -1,8 +1,18 @@
 {% extends "manager/base_manager.html" %}
-{% block title %}Категории инцидентов{% endblock %}
+{% block title %}Категории тикетов{% endblock %}
 {% block manager_content %}
 <div class="container mt-4">
-  <h2>Категории инцидентов</h2>
+  <h2>Категории тикетов</h2>
+
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+      <a class="nav-link {{ 'active' if incident_type == 'deduction' }}" href="/manager/incidents/categories?incident_type=deduction">Удержания</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {{ 'active' if incident_type == 'request' }}" href="/manager/incidents/categories?incident_type=request">Обращения</a>
+    </li>
+  </ul>
+
   {% if categories_by_owner %}
   {% for owner_id, cats in categories_by_owner.items() %}
   <div class="card mt-3">
@@ -10,6 +20,7 @@
     <div class="card-body">
       <form class="row g-2" method="post" action="/manager/incidents/categories">
         <input type="hidden" name="owner_id" value="{{ owner_id }}">
+        <input type="hidden" name="incident_type" value="{{ incident_type }}">
         <div class="col-md-4">
           <input type="text" class="form-control" name="name" placeholder="Новая категория" required>
         </div>
@@ -28,6 +39,7 @@
               <form method="post" action="/manager/incidents/categories" class="d-inline">
                 <input type="hidden" name="owner_id" value="{{ owner_id }}">
                 <input type="hidden" name="category_id" value="{{ c.id }}">
+                <input type="hidden" name="incident_type" value="{{ incident_type }}">
                 <input type="hidden" name="action" value="delete">
                 <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i> Деактивировать</button>
               </form>

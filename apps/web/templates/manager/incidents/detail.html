@@ -1,9 +1,9 @@
 {% extends "manager/base_manager.html" %}
-{% block title %}Инцидент #{{ incident.id }}{% endblock %}
+{% block title %}Тикет #{{ incident.id }}{% endblock %}
 {% block manager_content %}
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0">Инцидент #{{ incident.id }}</h2>
+    <h2 class="mb-0">Тикет #{{ incident.id }}</h2>
     <div class="d-flex gap-2">
       <a href="/manager/incidents/{{ incident.id }}/edit" class="btn btn-primary"><i class="bi bi-pencil"></i> Редактировать</a>
       <a href="/manager/incidents" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
