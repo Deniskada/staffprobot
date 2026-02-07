@@ -1,0 +1,143 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}Тикет #{{ incident.id }} - StaffProBot{% endblock %}
+
+{% block extra_css %}
+<style>
+.history-item { border-left: 3px solid #dee2e6; padding-left: 12px; margin-bottom: 10px; }
+.history-item.item-change { border-left-color: #0d6efd; }
+.history-item.status-change { border-left-color: #198754; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="d-flex align-items-center">
+            <a href="/employee/incidents" class="btn btn-outline-secondary btn-sm me-2"><i class="bi bi-arrow-left"></i></a>
+            <h4 class="mb-0">
+            Тикет #{{ incident.id }}
+            <span class="badge {{ 'bg-danger' if incident.incident_type == 'deduction' else 'bg-primary' }} ms-2" style="font-size:.7rem;">
+                {{ 'Удержание' if incident.incident_type == 'deduction' else 'Обращение' }}
+            </span>
+        </h4>
+        </div>
+        {% if can_edit %}
+        <a href="/employee/incidents/{{ incident.id }}/edit" class="btn btn-primary btn-sm"><i class="bi bi-pencil"></i> Редактировать</a>
+        {% endif %}
+    </div>
+
+    <!-- Основная информация -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-6 col-md-3 mb-2">
+                    <small class="text-muted">Статус</small><br>
+                    {% if incident.status == 'new' %}
+                        <span class="badge bg-warning text-dark">Новый</span>
+                    {% elif incident.status == 'in_review' %}
+                        <span class="badge bg-info">В работе</span>
+                    {% elif incident.status == 'resolved' %}
+                        <span class="badge bg-success">Решён</span>
+                    {% elif incident.status == 'rejected' %}
+                        <span class="badge bg-secondary">Отклонён</span>
+                    {% else %}
+                        <span class="badge bg-dark">{{ incident.status }}</span>
+                    {% endif %}
+                </div>
+                <div class="col-6 col-md-3 mb-2">
+                    <small class="text-muted">Категория</small><br>
+                    <strong>{{ incident.category }}</strong>
+                </div>
+                {% if incident.object %}
+                <div class="col-6 col-md-3 mb-2">
+                    <small class="text-muted">Объект</small><br>
+                    {{ incident.object.name }}
+                </div>
+                {% endif %}
+                <div class="col-6 col-md-3 mb-2">
+                    <small class="text-muted">Дата создания</small><br>
+                    {{ incident.created_at.strftime('%d.%m.%Y %H:%M') }}
+                </div>
+            </div>
+            {% if incident.notes %}
+            <hr class="my-2">
+            <small class="text-muted">Комментарий</small>
+            <p class="mb-0">{{ incident.notes }}</p>
+            {% endif %}
+
+            {% if incident.incident_type == 'request' and incident.compensate_purchase %}
+            <hr class="my-2">
+            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Компенсация одобрена</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Позиции товаров -->
+    {% if incident_items %}
+    <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-cart3"></i> Позиции обращения</div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Товар</th>
+                        <th class="text-center">Кол-во</th>
+                        <th class="text-end">Цена</th>
+                        <th class="text-end">Сумма</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set ns = namespace(total=0) %}
+                    {% for item in incident_items %}
+                    <tr>
+                        <td>{{ item.product_name }}</td>
+                        <td class="text-center">{{ item.quantity }}</td>
+                        <td class="text-end">{{ "%.2f"|format(item.price) }} ₽</td>
+                        <td class="text-end">{{ "%.2f"|format(item.total) }} ₽</td>
+                    </tr>
+                    {% set ns.total = ns.total + item.total %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-light">
+                        <td colspan="3" class="text-end fw-bold">Итого:</td>
+                        <td class="text-end fw-bold">{{ "%.2f"|format(ns.total) }} ₽</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- История изменений -->
+    {% if history %}
+    <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-clock-history"></i> История изменений</div>
+        <div class="card-body">
+            {% for h in history %}
+            <div class="history-item {{ 'status-change' if h.field == 'status' else 'item-change' if h.field and 'item' in h.field else '' }}">
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">
+                        {{ h.changed_at.strftime('%d.%m.%Y %H:%M') }}
+                        {% if h.changer %}
+                            — {{ h.changer.first_name or '' }} {{ h.changer.last_name or '' }}
+                        {% endif %}
+                    </small>
+                </div>
+                <div>
+                    {% if h.field == 'status' %}
+                        Статус: <del>{{ h.old_value }}</del> → <strong>{{ h.new_value }}</strong>
+                    {% elif h.field %}
+                        {{ h.field }}: <del>{{ h.old_value or '—' }}</del> → {{ h.new_value or '—' }}
+                    {% else %}
+                        {{ h.new_value or h.old_value or '—' }}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

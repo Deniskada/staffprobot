@@ -576,3 +576,31 @@ class PayrollAdjustmentService:
         logger.info("Создан возврат удержания по инциденту", employee_id=employee_id, incident_id=incident_id, amount=float(abs(Decimal(amount))))
         return adjustment
 
+    async def create_expense_compensation(
+        self,
+        *,
+        employee_id: int,
+        object_id: Optional[int],
+        amount: Decimal,
+        description: str,
+        created_by: int,
+        incident_id: int
+    ) -> PayrollAdjustment:
+        """Компенсация расходных материалов (положительная сумма — доплата сотруднику)."""
+        adjustment = PayrollAdjustment(
+            employee_id=employee_id,
+            object_id=object_id,
+            adjustment_type='expense_compensation',
+            amount=abs(Decimal(amount)),
+            description=description,
+            details={'incident_id': incident_id},
+            created_by=created_by,
+            is_applied=False
+        )
+        self.session.add(adjustment)
+        logger.info(
+            "Создана компенсация расходных материалов",
+            employee_id=employee_id, incident_id=incident_id, amount=float(abs(Decimal(amount)))
+        )
+        return adjustment
+

@@ -1,31 +1,57 @@
 {% extends "owner/base_owner.html" %}
-{% block title %}Категории инцидентов{% endblock %}
+{% block title %}Категории тикетов{% endblock %}
 {% block content %}
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3>Категории инцидентов</h3>
+    <h3>Категории тикетов</h3>
+    <a href="/owner/incidents" class="btn btn-outline-secondary btn-sm">← К тикетам</a>
   </div>
+
+  <!-- Табы типов -->
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+      <a class="nav-link {{ 'active' if incident_type == 'deduction' }}" href="/owner/incidents/categories?incident_type=deduction">
+        Удержания <span class="badge bg-secondary">{{ deduction_categories|length }}</span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {{ 'active' if incident_type == 'request' }}" href="/owner/incidents/categories?incident_type=request">
+        Обращения <span class="badge bg-secondary">{{ request_categories|length }}</span>
+      </a>
+    </li>
+  </ul>
+
+  <!-- Форма добавления -->
   <form method="post" class="row g-2 mb-3" action="/owner/incidents/categories">
+    <input type="hidden" name="incident_type" value="{{ incident_type }}">
+    <input type="hidden" name="category_id" id="editCategoryId" value="">
+    <input type="hidden" name="action" id="categoryAction" value="save">
     <div class="col-md-6">
-      <input type="text" name="name" class="form-control" placeholder="Новая категория" required>
+      <input type="text" name="name" id="categoryName" class="form-control" placeholder="Новая категория" required>
     </div>
-    <div class="col-md-3">
-      <button class="btn btn-primary" type="submit">Добавить</button>
+    <div class="col-md-4 d-flex gap-2">
+      <button class="btn btn-primary" type="submit" id="categorySubmitBtn">Добавить</button>
+      <button type="button" class="btn btn-secondary d-none" id="categoryCancelBtn" onclick="cancelCatEdit()">Отмена</button>
     </div>
   </form>
 
+  {% set cats = deduction_categories if incident_type == 'deduction' else request_categories %}
   <table class="table table-sm table-hover">
-    <thead><tr><th>Название</th><th style="width:160px;" class="text-end">Действия</th></tr></thead>
+    <thead><tr><th>Название</th><th style="width:220px;" class="text-end">Действия</th></tr></thead>
     <tbody>
-      {% for c in categories %}
+      {% for c in cats %}
         <tr>
           <td>{{ c.name }}</td>
           <td class="text-end">
+            <button class="btn btn-sm btn-outline-primary" onclick="startCatEdit({{ c.id }}, '{{ c.name | e }}')">
+              <i class="bi bi-pencil"></i>
+            </button>
             <form method="post" action="/owner/incidents/categories" class="d-inline">
               <input type="hidden" name="category_id" value="{{ c.id }}">
               <input type="hidden" name="name" value="{{ c.name }}">
+              <input type="hidden" name="incident_type" value="{{ incident_type }}">
               <input type="hidden" name="action" value="deactivate">
-              <button class="btn btn-outline-danger btn-sm" onclick="return confirm('Отключить категорию?')">Деактивировать</button>
+              <button class="btn btn-outline-danger btn-sm" onclick="return confirm('Деактивировать категорию?')">Деактивировать</button>
             </form>
           </td>
         </tr>
@@ -35,6 +61,19 @@
     </tbody>
   </table>
 </div>
+
+<script>
+function startCatEdit(id, name) {
+  document.getElementById('editCategoryId').value = id;
+  document.getElementById('categoryName').value = name;
+  document.getElementById('categorySubmitBtn').textContent = 'Сохранить';
+  document.getElementById('categoryCancelBtn').classList.remove('d-none');
+}
+function cancelCatEdit() {
+  document.getElementById('editCategoryId').value = '';
+  document.getElementById('categoryName').value = '';
+  document.getElementById('categorySubmitBtn').textContent = 'Добавить';
+  document.getElementById('categoryCancelBtn').classList.add('d-none');
+}
+</script>
 {% endblock %}
-
-

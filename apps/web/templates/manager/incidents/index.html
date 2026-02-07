@@ -1,5 +1,5 @@
 {% extends "manager/base_manager.html" %}
-{% block title %}Инциденты{% endblock %}
+{% block title %}Тикеты{% endblock %}
 {% block extra_css %}
 <style>
   table thead th a {
@@ -16,11 +16,12 @@
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-end mb-3">
     <div class="d-flex align-items-center gap-2">
-      <h2 class="mb-0">Инциденты</h2>
-      <a href="/manager/incidents/categories" class="btn btn-outline-secondary btn-sm"><i class="bi bi-tags"></i> Категории</a>
-      <a href="/manager/incidents/create" class="btn btn-danger btn-sm"><i class="fas fa-exclamation-triangle"></i> Создать инцидент</a>
+      <h2 class="mb-0">Тикеты</h2>
+      <a href="/manager/incidents/categories?incident_type={{ incident_type }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-tags"></i> Категории</a>
+      <a href="/manager/incidents/create?incident_type={{ incident_type }}" class="btn btn-danger btn-sm"><i class="fas fa-exclamation-triangle"></i> Создать тикет</a>
     </div>
     <form method="get" class="d-flex gap-2">
+      <input type="hidden" name="incident_type" value="{{ incident_type }}">
       <div>
         <label for="object_id" class="form-label">Объект</label>
         <select name="object_id" id="object_id" class="form-select" onchange="this.form.submit()">
@@ -43,42 +44,58 @@
     </form>
   </div>
 
+  <!-- Табы по типу -->
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+      <a class="nav-link {{ 'active' if incident_type == 'deduction' }}"
+         href="/manager/incidents?incident_type=deduction">Удержания <span class="badge bg-secondary">{{ type_counts.deduction }}</span></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {{ 'active' if incident_type == 'request' }}"
+         href="/manager/incidents?incident_type=request">Обращения <span class="badge bg-secondary">{{ type_counts.request }}</span></a>
+    </li>
+  </ul>
+
   <table class="table table-sm table-hover">
     <thead>
       <tr>
         {% set toggle = 'desc' if order == 'asc' else 'asc' %}
         <th>
-          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=number&order={{ 'asc' if sort != 'number' else toggle }}&page=1&per_page={{ pagination.per_page }}">Номер</a>
+          <a href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=number&order={{ 'asc' if sort != 'number' else toggle }}&page=1&per_page={{ pagination.per_page }}">Номер</a>
           {% if sort == 'number' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
         </th>
         <th>
-          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=date&order={{ 'asc' if sort != 'date' else toggle }}&page=1&per_page={{ pagination.per_page }}">Дата</a>
+          <a href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=date&order={{ 'asc' if sort != 'date' else toggle }}&page=1&per_page={{ pagination.per_page }}">Дата</a>
           {% if sort == 'date' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
         </th>
         <th>
-          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=object&order={{ 'asc' if sort != 'object' else toggle }}&page=1&per_page={{ pagination.per_page }}">Объект</a>
+          <a href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=object&order={{ 'asc' if sort != 'object' else toggle }}&page=1&per_page={{ pagination.per_page }}">Объект</a>
           {% if sort == 'object' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
         </th>
         <th>
-          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=employee&order={{ 'asc' if sort != 'employee' else toggle }}&page=1&per_page={{ pagination.per_page }}">Сотрудник</a>
+          <a href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=employee&order={{ 'asc' if sort != 'employee' else toggle }}&page=1&per_page={{ pagination.per_page }}">Сотрудник</a>
           {% if sort == 'employee' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
         </th>
         <th>
-          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=category&order={{ 'asc' if sort != 'category' else toggle }}&page=1&per_page={{ pagination.per_page }}">Категория</a>
+          <a href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=category&order={{ 'asc' if sort != 'category' else toggle }}&page=1&per_page={{ pagination.per_page }}">Категория</a>
           {% if sort == 'category' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
         </th>
         <th>
-          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=status&order={{ 'asc' if sort != 'status' else toggle }}&page=1&per_page={{ pagination.per_page }}">Статус</a>
+          <a href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=status&order={{ 'asc' if sort != 'status' else toggle }}&page=1&per_page={{ pagination.per_page }}">Статус</a>
           {% if sort == 'status' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
         </th>
+        {% if incident_type == 'deduction' %}
         <th>
-          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=damage&order={{ 'asc' if sort != 'damage' else toggle }}&page=1&per_page={{ pagination.per_page }}">Ущерб</a>
+          <a href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=damage&order={{ 'asc' if sort != 'damage' else toggle }}&page=1&per_page={{ pagination.per_page }}">Ущерб</a>
           {% if sort == 'damage' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
         </th>
         <th>
-          <a href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=retention_date&order={{ 'asc' if sort != 'retention_date' else toggle }}&page=1&per_page={{ pagination.per_page }}">Дата удержания</a>
+          <a href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort=retention_date&order={{ 'asc' if sort != 'retention_date' else toggle }}&page=1&per_page={{ pagination.per_page }}">Дата удержания</a>
           {% if sort == 'retention_date' %} <i class="bi bi-arrow-{{ 'down' if order=='desc' else 'up' }}"></i>{% endif %}
         </th>
+        {% else %}
+        <th class="text-center">Компенсация</th>
+        {% endif %}
         <th>Действия</th>
       </tr>
     </thead>
@@ -103,8 +120,14 @@
             {{ i.status or '—' }}
           {% endif %}
         </td>
+        {% if incident_type == 'deduction' %}
         <td>{{ '{:,.2f}'.format(i.damage_amount).replace(',', ' ') if i.damage_amount is not none else '—' }}</td>
         <td>{{ i.custom_date.strftime('%d.%m.%Y') if i.custom_date else '—' }}</td>
+        {% else %}
+        <td class="text-center">
+          {% if i.compensate_purchase %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-x-circle text-muted"></i>{% endif %}
+        </td>
+        {% endif %}
         <td>
           <a href="/manager/incidents/{{ i.id }}/edit" class="btn btn-sm btn-outline-primary me-1" title="Редактировать">
             <i class="bi bi-pencil"></i>
@@ -133,7 +156,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="9" class="text-center text-muted">Инциденты не найдены</td></tr>
+      <tr><td colspan="{{ 9 if incident_type == 'deduction' else 8 }}" class="text-center text-muted">Тикеты не найдены</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -141,7 +164,7 @@
   <div class="d-flex justify-content-between align-items-center mt-3">
     <div>
       На странице:
-      <select class="form-select d-inline-block w-auto" onchange="location.href='?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page=1&per_page='+this.value">
+      <select class="form-select d-inline-block w-auto" onchange="location.href='?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page=1&per_page='+this.value">
         <option value="25" {% if pagination.per_page == 25 %}selected{% endif %}>25</option>
         <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50</option>
         <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100</option>
@@ -149,14 +172,14 @@
     </div>
     <div class="pagination d-flex align-items-center gap-2">
       <a class="btn btn-outline-secondary btn-sm {% if pagination.page <= 1 %}disabled{% endif %}"
-         href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page=1&per_page={{ pagination.per_page }}">Первая</a>
+         href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page=1&per_page={{ pagination.per_page }}">Первая</a>
       <a class="btn btn-outline-secondary btn-sm {% if pagination.page <= 1 %}disabled{% endif %}"
-         href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}">Назад</a>
+         href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.page - 1 }}&per_page={{ pagination.per_page }}">Назад</a>
       <span>{{ pagination.page }} / {{ pagination.pages or 1 }}</span>
       <a class="btn btn-outline-secondary btn-sm {% if pagination.page >= pagination.pages %}disabled{% endif %}"
-         href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}">Вперёд</a>
+         href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.page + 1 }}&per_page={{ pagination.per_page }}">Вперёд</a>
       <a class="btn btn-outline-secondary btn-sm {% if pagination.page >= pagination.pages %}disabled{% endif %}"
-         href="?object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.pages }}&per_page={{ pagination.per_page }}">Последняя</a>
+         href="?incident_type={{ incident_type }}&object_id={{ selected_object_id or '' }}&status={{ status_filter or '' }}&sort={{ sort }}&order={{ order }}&page={{ pagination.pages }}&per_page={{ pagination.per_page }}">Последняя</a>
     </div>
     <div>
       {{ pagination.start }}-{{ pagination.end }} из {{ pagination.total }}

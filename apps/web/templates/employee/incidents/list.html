@@ -1,0 +1,82 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}Мои тикеты - StaffProBot{% endblock %}
+
+{% block extra_css %}
+<style>
+.incident-card {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    margin-bottom: 12px;
+    transition: transform .2s;
+}
+.incident-card:hover { transform: translateY(-2px); }
+.status-badge { font-size: .8rem; }
+.type-badge-deduction { background-color: #dc3545; }
+.type-badge-request  { background-color: #0d6efd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-ticket-detailed"></i> Мои тикеты</h4>
+        <a href="/employee/incidents/create" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> Новое обращение
+        </a>
+    </div>
+
+    <!-- Фильтр по статусу -->
+    <div class="btn-group btn-group-sm mb-3">
+        <a href="/employee/incidents" class="btn {{ 'btn-primary' if not status_filter else 'btn-outline-primary' }}">Все</a>
+        <a href="/employee/incidents?status=new" class="btn {{ 'btn-primary' if status_filter == 'new' else 'btn-outline-primary' }}">Новые</a>
+        <a href="/employee/incidents?status=in_review" class="btn {{ 'btn-primary' if status_filter == 'in_review' else 'btn-outline-primary' }}">В работе</a>
+        <a href="/employee/incidents?status=resolved" class="btn {{ 'btn-primary' if status_filter == 'resolved' else 'btn-outline-primary' }}">Решённые</a>
+        <a href="/employee/incidents?status=rejected" class="btn {{ 'btn-primary' if status_filter == 'rejected' else 'btn-outline-primary' }}">Отклонённые</a>
+    </div>
+
+    {% if incidents %}
+    {% for inc in incidents %}
+    <a href="/employee/incidents/{{ inc.id }}" class="text-decoration-none text-dark">
+        <div class="card incident-card">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge type-badge-{{ inc.incident_type }} me-1">
+                            {{ 'Удержание' if inc.incident_type == 'deduction' else 'Обращение' }}
+                        </span>
+                        <strong>{{ inc.category }}</strong>
+                        {% if inc.object %}
+                            <small class="text-muted ms-2"><i class="bi bi-geo-alt"></i> {{ inc.object.name }}</small>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if inc.status == 'new' %}
+                            <span class="badge bg-warning text-dark status-badge">Новый</span>
+                        {% elif inc.status == 'in_review' %}
+                            <span class="badge bg-info status-badge">В работе</span>
+                        {% elif inc.status == 'resolved' %}
+                            <span class="badge bg-success status-badge">Решён</span>
+                        {% elif inc.status == 'rejected' %}
+                            <span class="badge bg-secondary status-badge">Отклонён</span>
+                        {% else %}
+                            <span class="badge bg-dark status-badge">{{ inc.status }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if inc.notes %}
+                <small class="text-muted d-block mt-1">{{ inc.notes[:120] }}{% if inc.notes|length > 120 %}…{% endif %}</small>
+                {% endif %}
+                <small class="text-muted">{{ inc.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+    {% else %}
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-inbox" style="font-size:3rem;"></i>
+        <p class="mt-2">Тикетов пока нет</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

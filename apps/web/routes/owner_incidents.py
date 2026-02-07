@@ -57,6 +57,7 @@ async def _get_owner_template_context(owner_id: int, session: AsyncSession):
 @router.get("/owner/incidents")
 async def owner_incidents_list(
     request: Request,
+    incident_type: str = Query("deduction"),
     status: str = Query(None),
     statuses: str = Query(None),  # Множественный фильтр через запятую: "new,in_review"
     category: str = Query(None),
@@ -70,7 +71,7 @@ async def owner_incidents_list(
     _: User = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Список инцидентов с пагинацией, сортировкой и множественными фильтрами."""
+    """Список тикетов с пагинацией, сортировкой и множественными фильтрами."""
     if not settings.enable_incidents:
         raise HTTPException(
             status_code=404,
@@ -81,8 +82,11 @@ async def owner_incidents_list(
     
     owner_id = await _get_db_user_id(current_user, session)
     
-    # Базовый запрос
-    query = select(Incident).where(Incident.owner_id == owner_id).options(
+    # Базовый запрос — фильтр по типу тикета
+    query = select(Incident).where(
+        Incident.owner_id == owner_id,
+        Incident.incident_type == incident_type
+    ).options(
         selectinload(Incident.object),
         selectinload(Incident.employee),
         selectinload(Incident.shift_schedule),
@@ -127,7 +131,10 @@ async def owner_incidents_list(
         query = query.order_by(desc(sort_column))
     
     # Подсчет общего количества для пагинации (применяем те же фильтры)
-    count_query = select(func.count(Incident.id)).where(Incident.owner_id == owner_id)
+    count_query = select(func.count(Incident.id)).where(
+        Incident.owner_id == owner_id,
+        Incident.incident_type == incident_type
+    )
     
     # Применяем те же фильтры к подсчету
     if statuses:
@@ -157,8 +164,8 @@ async def owner_incidents_list(
     # Вычисляем параметры пагинации
     total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
 
-    # Категории владельца
-    categories = await IncidentCategoryService(session).list_categories(owner_id)
+    # Категории владельца (по типу тикета)
+    categories = await IncidentCategoryService(session).list_categories(owner_id, incident_type=incident_type)
 
     # Объекты владельца
     from domain.entities.object import Object
@@ -185,9 +192,17 @@ async def owner_incidents_list(
             .order_by(UserEntity.last_name, UserEntity.first_name)
         )
         employees = emp_res.scalars().all()
+
+    # Счётчики по типам для табов
+    for_tabs_query = select(
+        Incident.incident_type, func.count(Incident.id)
+    ).where(Incident.owner_id == owner_id).group_by(Incident.incident_type)
+    tabs_result = await session.execute(for_tabs_query)
+    type_counts = dict(tabs_result.all())
     
     # Формируем параметры для сохранения фильтров в URL
     filter_params = {}
+    filter_params["incident_type"] = incident_type
     if statuses:
         filter_params["statuses"] = statuses
     elif status:
@@ -216,6 +231,8 @@ async def owner_incidents_list(
             "available_interfaces": owner_context.get("available_interfaces", []),
             "new_applications_count": owner_context.get("new_applications_count", 0),
             "incidents": incidents,
+            "incident_type": incident_type,
+            "type_counts": type_counts,
             "status_filter": status,
             "statuses_filter": statuses,
             "category_filter": category,
@@ -238,15 +255,23 @@ async def owner_incidents_list(
 @router.get("/owner/incidents/create")
 async def owner_incident_create_page(
     request: Request,
+    incident_type: str = Query("deduction"),
     current_user: User = Depends(get_current_user_dependency()),
     _: User = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
     owner_id = await _get_db_user_id(current_user, session)
-    categories = await IncidentCategoryService(session).list_categories(owner_id)
+    categories = await IncidentCategoryService(session).list_categories(owner_id, incident_type=incident_type)
     from domain.entities.object import Object
     obj_res = await session.execute(select(Object).where(Object.owner_id == owner_id, Object.is_active == True).order_by(Object.name))
     objects = obj_res.scalars().all()
+
+    # Для типа "request" — справочник товаров
+    products = []
+    if incident_type == "request":
+        from shared.services.product_service import ProductService
+        products = await ProductService(session).list_products(owner_id)
+
     owner_context = await _get_owner_template_context(owner_id, session)
     return templates.TemplateResponse(
         "owner/incidents/create.html",
@@ -255,8 +280,10 @@ async def owner_incident_create_page(
             "current_user": current_user,
             "available_interfaces": owner_context.get("available_interfaces", []),
             "new_applications_count": owner_context.get("new_applications_count", 0),
+            "incident_type": incident_type,
             "categories": categories,
-            "objects": objects
+            "objects": objects,
+            "products": products,
         }
     )
 
@@ -264,6 +291,7 @@ async def owner_incident_create_page(
 @router.post("/owner/incidents/create")
 async def owner_incidents_create(
     request: Request,
+    incident_type: str = Form("deduction"),
     category: str = Form(...),
     severity: str = Form("medium"),
     object_id: int = Form(None),
@@ -277,7 +305,7 @@ async def owner_incidents_create(
     _: User = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Создать инцидент вручную."""
+    """Создать тикет вручную."""
     incident_service = IncidentService(session)
     from datetime import datetime
     from decimal import Decimal
@@ -295,8 +323,9 @@ async def owner_incidents_create(
             parsed_damage = None
 
     owner_db_id = await _get_db_user_id(current_user, session)
-    await incident_service.create_incident(
+    incident = await incident_service.create_incident(
         owner_id=owner_db_id,
+        incident_type=incident_type,
         category=category,
         severity=severity,
         object_id=object_id,
@@ -308,8 +337,44 @@ async def owner_incidents_create(
         custom_date=parsed_date,
         damage_amount=parsed_damage
     )
+
+    # Для обращений — добавить позиции товаров из формы
+    if incident_type == "request":
+        form_data = await request.form()
+        await _save_incident_items_from_form(session, incident.id, form_data, owner_db_id)
     
-    return RedirectResponse(url="/owner/incidents", status_code=303)
+    return RedirectResponse(url=f"/owner/incidents?incident_type={incident_type}", status_code=303)
+
+
+async def _save_incident_items_from_form(
+    session: AsyncSession, incident_id: int, form_data, added_by: int
+):
+    """Извлечь позиции товаров из формы и сохранить."""
+    from shared.services.incident_item_service import IncidentItemService
+    item_service = IncidentItemService(session)
+
+    idx = 0
+    while True:
+        product_id_key = f"items[{idx}][product_id]"
+        if product_id_key not in form_data:
+            break
+        try:
+            product_id = int(form_data[product_id_key]) if form_data[product_id_key] else None
+            product_name = form_data.get(f"items[{idx}][product_name]", "")
+            quantity = float(form_data.get(f"items[{idx}][quantity]", 1))
+            price = float(form_data.get(f"items[{idx}][price]", 0))
+            if product_name and quantity > 0:
+                await item_service.add_item(
+                    incident_id=incident_id,
+                    product_id=product_id,
+                    product_name=product_name,
+                    quantity=quantity,
+                    price=price,
+                    added_by=added_by,
+                )
+        except (ValueError, TypeError):
+            pass
+        idx += 1
 
 
 @router.post("/owner/incidents/{incident_id}/status")
@@ -390,9 +455,18 @@ async def owner_incident_edit_page(
         selector = EmployeeSelectorService(session)
         employee_groups = await selector.get_employees_for_owner(owner_db_id, object_id=incident.object_id)
     adjustments = await IncidentService(session).get_adjustments_by_incident(incident.id)
+
+    # Позиции и товары (для обращений)
+    incident_items = []
+    products = []
+    if incident.incident_type == "request":
+        from shared.services.incident_item_service import IncidentItemService
+        from shared.services.product_service import ProductService
+        incident_items = await IncidentItemService(session).list_items(incident.id)
+        products = await ProductService(session).list_products(owner_db_id)
     
     # Формируем URL возврата к списку
-    back_url = return_url or "/owner/incidents"
+    back_url = return_url or f"/owner/incidents?incident_type={incident.incident_type}"
     
     # Получаем контекст для owner базового шаблона
     owner_context = await _get_owner_template_context(owner_db_id, session)
@@ -410,6 +484,8 @@ async def owner_incident_edit_page(
             "objects": objects,
             "employee_groups": employee_groups,
             "adjustments": adjustments,
+            "incident_items": incident_items,
+            "products": products,
             "back_url": back_url,
         }
     )
@@ -436,6 +512,122 @@ async def owner_incident_employees(
     return JSONResponse(grouped)
 
 
+@router.get("/owner/incidents/{incident_id}/items", response_class=JSONResponse)
+async def owner_incident_items_list(
+    incident_id: int,
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Получить позиции тикета (JSON)."""
+    from shared.services.incident_item_service import IncidentItemService
+    from domain.entities.incident import Incident
+    owner_db_id = await _get_db_user_id(current_user, session)
+    incident = await session.get(Incident, incident_id)
+    if not incident or incident.owner_id != owner_db_id:
+        raise HTTPException(status_code=404, detail="Тикет не найден")
+    items = await IncidentItemService(session).list_items(incident_id)
+    return JSONResponse([{
+        "id": i.id,
+        "product_id": i.product_id,
+        "product_name": i.product_name,
+        "quantity": float(i.quantity),
+        "price": float(i.price),
+        "total": i.total,
+    } for i in items])
+
+
+@router.post("/owner/incidents/{incident_id}/items", response_class=JSONResponse)
+async def owner_incident_item_add(
+    request: Request,
+    incident_id: int,
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Добавить позицию к тикету (JSON)."""
+    from shared.services.incident_item_service import IncidentItemService
+    from domain.entities.incident import Incident
+    owner_db_id = await _get_db_user_id(current_user, session)
+    incident = await session.get(Incident, incident_id)
+    if not incident or incident.owner_id != owner_db_id:
+        raise HTTPException(status_code=404, detail="Тикет не найден")
+    body = await request.json()
+    item_svc = IncidentItemService(session)
+    item = await item_svc.add_item(
+        incident_id=incident_id,
+        product_id=body.get("product_id"),
+        product_name=body.get("product_name", ""),
+        quantity=float(body.get("quantity", 1)),
+        price=float(body.get("price", 0)),
+        added_by=owner_db_id,
+    )
+    total = await item_svc.calculate_total(incident_id)
+    return JSONResponse({
+        "id": item.id, "product_name": item.product_name,
+        "quantity": float(item.quantity), "price": float(item.price),
+        "total": item.total, "incident_total": float(total),
+    })
+
+
+@router.put("/owner/incidents/{incident_id}/items/{item_id}", response_class=JSONResponse)
+async def owner_incident_item_update(
+    request: Request,
+    incident_id: int,
+    item_id: int,
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Обновить позицию тикета (JSON)."""
+    from shared.services.incident_item_service import IncidentItemService
+    from domain.entities.incident import Incident
+    owner_db_id = await _get_db_user_id(current_user, session)
+    incident = await session.get(Incident, incident_id)
+    if not incident or incident.owner_id != owner_db_id:
+        raise HTTPException(status_code=404, detail="Тикет не найден")
+    body = await request.json()
+    item_svc = IncidentItemService(session)
+    item = await item_svc.update_item(
+        item_id=item_id,
+        modified_by=owner_db_id,
+        quantity=body.get("quantity"),
+        price=body.get("price"),
+        product_name=body.get("product_name"),
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Позиция не найдена")
+    total = await item_svc.calculate_total(incident_id)
+    return JSONResponse({
+        "id": item.id, "product_name": item.product_name,
+        "quantity": float(item.quantity), "price": float(item.price),
+        "total": item.total, "incident_total": float(total),
+    })
+
+
+@router.delete("/owner/incidents/{incident_id}/items/{item_id}", response_class=JSONResponse)
+async def owner_incident_item_delete(
+    incident_id: int,
+    item_id: int,
+    current_user: User = Depends(get_current_user_dependency()),
+    _: User = Depends(require_role(["owner", "superadmin"])),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Удалить позицию тикета (JSON)."""
+    from shared.services.incident_item_service import IncidentItemService
+    from domain.entities.incident import Incident
+    owner_db_id = await _get_db_user_id(current_user, session)
+    incident = await session.get(Incident, incident_id)
+    if not incident or incident.owner_id != owner_db_id:
+        raise HTTPException(status_code=404, detail="Тикет не найден")
+    item_svc = IncidentItemService(session)
+    ok = await item_svc.remove_item(item_id, removed_by=owner_db_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Позиция не найдена")
+    total = await item_svc.calculate_total(incident_id)
+    return JSONResponse({"ok": True, "incident_total": float(total)})
+
+
 @router.post("/owner/incidents/{incident_id}/edit")
 async def owner_incident_edit_save(
     request: Request,
@@ -450,6 +642,7 @@ async def owner_incident_edit_save(
     custom_date: str = Form(None),
     damage_amount: str = Form(None),
     status: str = Form(None),
+    compensate_purchase: str = Form(None),
     return_url: str = Form(None),
     current_user: User = Depends(get_current_user_dependency()),
     _: User = Depends(require_role(["owner", "superadmin"])),
@@ -510,29 +703,35 @@ async def owner_incident_edit_save(
             data["damage_amount"] = Decimal(damage_amount)
         except Exception:
             pass
+
+    # Обработка compensate_purchase (checkbox — приходит "on" или отсутствует)
+    if incident.incident_type == "request":
+        data["compensate_purchase"] = compensate_purchase == "on"
     
     try:
         await service.update_incident(incident_id, data, changed_by_id)
     except ValueError as e:
-        # Ошибка при попытке редактировать resolved/rejected инцидент
         raise HTTPException(status_code=400, detail=str(e))
     
     # Возвращаемся на указанную страницу или на список
     if return_url:
         return RedirectResponse(url=return_url, status_code=303)
     
-    return RedirectResponse(url="/owner/incidents", status_code=303)
+    return RedirectResponse(url=f"/owner/incidents?incident_type={incident.incident_type}", status_code=303)
 
 
 @router.get("/owner/incidents/categories")
 async def owner_incident_categories(
     request: Request,
+    incident_type: str = Query("deduction"),
     current_user: User = Depends(get_current_user_dependency()),
     _: User = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
     owner_id = await _get_db_user_id(current_user, session)
-    cats = await IncidentCategoryService(session).list_categories(owner_id)
+    cat_svc = IncidentCategoryService(session)
+    deduction_cats = await cat_svc.list_categories(owner_id, incident_type="deduction")
+    request_cats = await cat_svc.list_categories(owner_id, incident_type="request")
     owner_context = await _get_owner_template_context(owner_id, session)
     return templates.TemplateResponse(
         "owner/incidents/categories.html",
@@ -541,7 +740,9 @@ async def owner_incident_categories(
             "current_user": current_user,
             "available_interfaces": owner_context.get("available_interfaces", []),
             "new_applications_count": owner_context.get("new_applications_count", 0),
-            "categories": cats
+            "deduction_categories": deduction_cats,
+            "request_categories": request_cats,
+            "incident_type": incident_type,
         }
     )
 
@@ -550,6 +751,7 @@ async def owner_incident_categories(
 async def owner_incident_categories_save(
     request: Request,
     name: str = Form(...),
+    incident_type: str = Form("deduction"),
     category_id: int = Form(None),
     action: str = Form("save"),
     current_user: User = Depends(get_current_user_dependency()),
@@ -559,27 +761,141 @@ async def owner_incident_categories_save(
     svc = IncidentCategoryService(session)
     if action == "deactivate" and category_id:
         await svc.deactivate(category_id)
+    elif action == "activate" and category_id:
+        await svc.activate(category_id)
     else:
-        await svc.create_or_update(current_user.id, name=name, category_id=category_id)
-    return RedirectResponse(url="/owner/incidents/categories", status_code=303)
+        await svc.create_or_update(current_user.id, name=name, category_id=category_id, incident_type=incident_type)
+    return RedirectResponse(url=f"/owner/incidents/categories?incident_type={incident_type}", status_code=303)
 
 
 @router.get("/owner/incidents/reports")
 async def owner_incidents_reports_page(
     request: Request,
+    report_type: str = Query("deductions"),
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+    object_id: int = Query(None),
+    employee_id: int = Query(None),
     current_user: User = Depends(get_current_user_dependency()),
     _: User = Depends(require_role(["owner", "superadmin"])),
     session: AsyncSession = Depends(get_db_session)
 ):
+    from domain.entities.incident import Incident
+    from domain.entities.incident_item import IncidentItem
+    from decimal import Decimal
+
     owner_id = await _get_db_user_id(current_user, session)
     owner_context = await _get_owner_template_context(owner_id, session)
+
+    # Объекты и сотрудники для фильтров
+    obj_res = await session.execute(
+        select(Object).where(Object.owner_id == owner_id, Object.is_active == True).order_by(Object.name)
+    )
+    objects = obj_res.scalars().all()
+
+    emp_grouped = await EmployeeSelectorService(session).get_employees_for_owner(owner_id)
+    employees = emp_grouped.get("active", []) + emp_grouped.get("former", [])
+
+    # Разбор дат
+    from datetime import date as date_type, timedelta
+    d_from = None
+    d_to = None
+    try:
+        if date_from:
+            d_from = datetime.strptime(date_from, "%Y-%m-%d")
+        if date_to:
+            d_to = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    except ValueError:
+        pass
+
+    report_data = []
+    summary = {}
+
+    if report_type == "requests":
+        # Отчёт по заявкам (обращения)
+        q = select(Incident).where(
+            Incident.owner_id == owner_id,
+            Incident.incident_type == "request",
+        ).options(
+            selectinload(Incident.object),
+            selectinload(Incident.employee),
+        ).order_by(Incident.created_at.desc())
+
+        if d_from:
+            q = q.where(Incident.created_at >= d_from)
+        if d_to:
+            q = q.where(Incident.created_at <= d_to)
+        if object_id:
+            q = q.where(Incident.object_id == object_id)
+        if employee_id:
+            q = q.where(Incident.employee_id == employee_id)
+
+        res = await session.execute(q)
+        incidents = res.scalars().all()
+
+        total_all = Decimal("0")
+        total_compensated = Decimal("0")
+        total_not_compensated = Decimal("0")
+        count_compensated = 0
+        count_not_compensated = 0
+
+        for inc in incidents:
+            # Получить позиции
+            items_res = await session.execute(
+                select(IncidentItem).where(IncidentItem.incident_id == inc.id)
+            )
+            items = items_res.scalars().all()
+            inc_total = sum((it.quantity or 0) * (it.price or 0) for it in items)
+
+            emp_name = ""
+            if inc.employee:
+                emp_name = f"{inc.employee.first_name or ''} {inc.employee.last_name or ''}".strip()
+
+            row = {
+                "id": inc.id,
+                "date": inc.created_at,
+                "employee": emp_name,
+                "object": inc.object.name if inc.object else "—",
+                "category": inc.category,
+                "status": inc.status,
+                "compensated": inc.compensate_purchase,
+                "items_count": len(items),
+                "total": float(inc_total),
+            }
+            report_data.append(row)
+            total_all += Decimal(str(inc_total))
+            if inc.compensate_purchase:
+                total_compensated += Decimal(str(inc_total))
+                count_compensated += 1
+            else:
+                total_not_compensated += Decimal(str(inc_total))
+                count_not_compensated += 1
+
+        summary = {
+            "total_count": len(incidents),
+            "total_all": float(total_all),
+            "count_compensated": count_compensated,
+            "total_compensated": float(total_compensated),
+            "count_not_compensated": count_not_compensated,
+            "total_not_compensated": float(total_not_compensated),
+        }
+
     return templates.TemplateResponse(
         "owner/incidents/reports.html",
         {
             "request": request,
             "current_user": current_user,
             "available_interfaces": owner_context.get("available_interfaces", []),
-            "new_applications_count": owner_context.get("new_applications_count", 0)
+            "new_applications_count": owner_context.get("new_applications_count", 0),
+            "report_type": report_type,
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+            "object_id": object_id,
+            "employee_id": employee_id,
+            "objects": objects,
+            "employees": employees,
+            "report_data": report_data,
+            "summary": summary,
         }
     )
 

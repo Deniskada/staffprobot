@@ -48,6 +48,7 @@ async def manager_incidents_index(
     request: Request,
     status: Optional[str] = Query(None),
     object_id: Optional[str] = Query(None),
+    incident_type: Optional[str] = Query("deduction"),
     sort: Optional[str] = Query(None),
     order: Optional[str] = Query("desc"),
     page: int = Query(1, ge=1),
@@ -64,6 +65,8 @@ async def manager_incidents_index(
         from sqlalchemy.orm import selectinload
         from domain.entities.incident import Incident
         conditions = [Incident.object_id.in_(accessible_ids)]
+        if incident_type:
+            conditions.append(Incident.incident_type == incident_type)
         if status:
             conditions.append(Incident.status == status)
         if object_id:
@@ -72,7 +75,6 @@ async def manager_incidents_index(
                 if oid in accessible_ids:
                     conditions.append(Incident.object_id == oid)
                 else:
-                    # Нет доступа — пустой список
                     manager_context = await get_manager_context(user_id, db)
                     return templates.TemplateResponse("manager/incidents/index.html", {
                         "request": request,
@@ -81,10 +83,23 @@ async def manager_incidents_index(
                         "objects": accessible_objects,
                         "status_filter": status,
                         "selected_object_id": None,
+                        "incident_type": incident_type,
+                        "type_counts": {"deduction": 0, "request": 0},
                         **manager_context
                     })
             except ValueError:
                 pass
+
+        # Подсчёт по типам для табов
+        from sqlalchemy import func as sa_func
+        count_q = select(
+            Incident.incident_type, sa_func.count(Incident.id)
+        ).where(Incident.object_id.in_(accessible_ids)).group_by(Incident.incident_type)
+        count_res = await db.execute(count_q)
+        type_counts = {"deduction": 0, "request": 0}
+        for row in count_res.all():
+            type_counts[row[0]] = row[1]
+
         query = select(Incident).where(and_(*conditions)).options(
             selectinload(Incident.object),
             selectinload(Incident.employee),
@@ -148,6 +163,8 @@ async def manager_incidents_index(
             "objects": accessible_objects,
             "status_filter": status,
             "selected_object_id": object_id,
+            "incident_type": incident_type,
+            "type_counts": type_counts,
             "sort": sort_key,
             "order": "desc" if reverse else "asc",
             "pagination": {
@@ -165,6 +182,7 @@ async def manager_incidents_index(
 @router.get("/incidents/create", response_class=HTMLResponse)
 async def manager_incident_create_form(
     request: Request,
+    incident_type: Optional[str] = Query("deduction"),
     current_user: dict = Depends(require_manager_or_owner)
 ):
     if isinstance(current_user, RedirectResponse):
@@ -173,12 +191,23 @@ async def manager_incident_create_form(
         user_id = await get_user_id_from_current_user(current_user, db)
         perm = ManagerPermissionService(db)
         accessible_objects = await perm.get_user_accessible_objects(user_id)
-        # Получаем общий контекст для меню
+        # Товары для request-типа
+        products = []
+        if incident_type == "request":
+            owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
+            if owner_ids:
+                from shared.services.product_service import ProductService
+                ps = ProductService(db)
+                for oid in owner_ids:
+                    products.extend(await ps.list_products(oid))
+        products_json = [{"id": p.id, "name": p.name, "unit": p.unit, "price": float(p.price)} for p in products]
         manager_context = await get_manager_context(user_id, db)
         return templates.TemplateResponse("manager/incidents/create.html", {
             "request": request,
             "objects": accessible_objects,
             "current_user": current_user,
+            "incident_type": incident_type or "deduction",
+            "products": products_json,
             **manager_context
         })
 
@@ -191,6 +220,7 @@ async def manager_incident_create(
     if isinstance(current_user, RedirectResponse):
         return current_user
     form = await request.form()
+    incident_type = (form.get("incident_type") or "deduction").strip()
     category = (form.get("category") or "").strip()
     severity = (form.get("severity") or "medium").strip()
     notes = (form.get("notes") or "").strip()
@@ -212,19 +242,28 @@ async def manager_incident_create(
         perm = ManagerPermissionService(db)
         accessible_objects = await perm.get_user_accessible_objects(user_id)
         accessible_ids = [o.id for o in accessible_objects]
-        if not object_id_int or object_id_int not in accessible_ids:
+
+        # Для deduction объект обязателен, для request — нет
+        if incident_type == "deduction" and (not object_id_int or object_id_int not in accessible_ids):
             raise HTTPException(status_code=400, detail="Некорректный объект")
-        
-        # Получаем owner_id из объекта
+        if object_id_int and object_id_int not in accessible_ids:
+            raise HTTPException(status_code=400, detail="Нет доступа к объекту")
+
+        # Получаем owner_id из объекта или из доступных объектов
         from sqlalchemy import select
         from domain.entities.object import Object
-        obj_res = await db.execute(select(Object).where(Object.id == object_id_int))
-        obj = obj_res.scalar_one_or_none()
-        if not obj or not getattr(obj, 'owner_id', None):
-            raise HTTPException(status_code=400, detail="Объект не найден или не имеет владельца")
-        owner_id = obj.owner_id
+        owner_id = None
+        if object_id_int:
+            obj_res = await db.execute(select(Object).where(Object.id == object_id_int))
+            obj = obj_res.scalar_one_or_none()
+            if obj:
+                owner_id = obj.owner_id
+        if not owner_id:
+            owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
+            owner_id = owner_ids[0] if owner_ids else None
+        if not owner_id:
+            raise HTTPException(status_code=400, detail="Не удалось определить владельца")
         
-        # Парсим дату и сумму ущерба
         from datetime import datetime as dt
         from decimal import Decimal, InvalidOperation
         parsed_date = None
@@ -240,27 +279,56 @@ async def manager_incident_create(
             except InvalidOperation:
                 parsed_damage = None
         
-        # Используем IncidentService для создания инцидента с автоматическим созданием корректировки
         incident_service = IncidentService(db)
-        await incident_service.create_incident(
+        incident = await incident_service.create_incident(
             owner_id=owner_id,
+            incident_type=incident_type,
             category=category,
-            severity=severity,
+            severity=severity if incident_type == "deduction" else "low",
             object_id=object_id_int,
             employee_id=employee_id_int,
             notes=notes or None,
             created_by=user_id,
             custom_number=custom_number or None,
             custom_date=parsed_date,
-            damage_amount=parsed_damage
+            damage_amount=parsed_damage if incident_type == "deduction" else None
         )
+
+        # Для request — сохраняем позиции товаров
+        if incident_type == "request":
+            from shared.services.incident_item_service import IncidentItemService
+            item_service = IncidentItemService(db)
+            idx = 0
+            while True:
+                pid_key = f"items[{idx}][product_id]"
+                if pid_key not in form:
+                    break
+                try:
+                    product_id = int(form[pid_key]) if form[pid_key] else None
+                    product_name = form.get(f"items[{idx}][product_name]", "")
+                    quantity = float(form.get(f"items[{idx}][quantity]", 1))
+                    price = float(form.get(f"items[{idx}][price]", 0))
+                    if product_name and quantity > 0:
+                        await item_service.add_item(
+                            incident_id=incident.id,
+                            product_id=product_id,
+                            product_name=product_name,
+                            quantity=quantity,
+                            price=price,
+                            added_by=user_id,
+                        )
+                except (ValueError, TypeError):
+                    pass
+                idx += 1
+
         await db.commit()
-    return RedirectResponse(url="/manager/incidents", status_code=303)
+    return RedirectResponse(url=f"/manager/incidents?incident_type={incident_type}", status_code=303)
 
 
 @router.get("/incidents/api/categories", response_class=JSONResponse)
 async def manager_incident_categories_for_object(
     object_id: int = Query(...),
+    incident_type: str = Query("deduction"),
     current_user: dict = Depends(require_manager_or_owner)
 ):
     """Категории инцидентов по выбранному объекту (по владельцу объекта)."""
@@ -280,32 +348,32 @@ async def manager_incident_categories_for_object(
         if not obj or not getattr(obj, 'owner_id', None):
             return JSONResponse({"categories": []})
         cat_service = IncidentCategoryService(db)
-        cats = await cat_service.list_categories(obj.owner_id)
+        cats = await cat_service.list_categories(obj.owner_id, incident_type=incident_type)
         return JSONResponse({"categories": [{"id": c.id, "name": c.name} for c in cats]})
 
 @router.get("/incidents/categories", response_class=HTMLResponse)
 async def manager_incident_categories(
     request: Request,
+    incident_type: str = Query("deduction"),
     current_user: dict = Depends(require_manager_or_owner)
 ):
     if isinstance(current_user, RedirectResponse):
         return current_user
     async with get_async_session() as db:
         user_id = await get_user_id_from_current_user(current_user, db)
-        # Получаем доступные объекты и owner_ids
         perm = ManagerPermissionService(db)
         accessible_objects = await perm.get_user_accessible_objects(user_id)
         owner_ids = sorted({getattr(o, 'owner_id', None) for o in accessible_objects if getattr(o, 'owner_id', None) is not None})
         categories_by_owner = {}
         cat_service = IncidentCategoryService(db)
         for oid in owner_ids:
-            categories_by_owner[oid] = await cat_service.list_categories(oid)
-        # Получаем общий контекст для меню
+            categories_by_owner[oid] = await cat_service.list_categories(oid, incident_type=incident_type)
         manager_context = await get_manager_context(user_id, db)
         return templates.TemplateResponse("manager/incidents/categories.html", {
             "request": request,
             "current_user": current_user,
             "categories_by_owner": categories_by_owner,
+            "incident_type": incident_type,
             **manager_context
         })
 
@@ -321,6 +389,7 @@ async def manager_incident_categories_save(
     name = (form.get("name") or "").strip()
     owner_id = form.get("owner_id")
     category_id = form.get("category_id")
+    incident_type = (form.get("incident_type") or "deduction").strip()
     action = (form.get("action") or "save").strip()
     if not name and action == "save":
         raise HTTPException(status_code=400, detail="Название обязательно")
@@ -339,8 +408,8 @@ async def manager_incident_categories_save(
         else:
             if not owner_id_int:
                 raise HTTPException(status_code=400, detail="Не указан владелец для категории")
-            await cat_service.create_or_update(owner_id_int, name, category_id_int)
-    return RedirectResponse(url="/manager/incidents/categories", status_code=303)
+            await cat_service.create_or_update(owner_id_int, name, category_id_int, incident_type=incident_type)
+    return RedirectResponse(url=f"/manager/incidents/categories?incident_type={incident_type}", status_code=303)
 
 
 @router.get("/incidents/{incident_id}", response_class=HTMLResponse)
@@ -407,6 +476,17 @@ async def manager_incident_edit_form(
         # Получаем общий контекст для меню
         manager_context = await get_manager_context(user_id, db)
         adjustments = await IncidentService(db).get_adjustments_by_incident(incident.id)
+        # Позиции и товары для request
+        incident_items = []
+        products_json = []
+        if incident.incident_type == "request":
+            from shared.services.incident_item_service import IncidentItemService
+            incident_items = await IncidentItemService(db).list_items(incident.id)
+            from shared.services.product_service import ProductService
+            ps = ProductService(db)
+            for oid in owner_ids:
+                prods = await ps.list_products(oid)
+                products_json.extend([{"id": p.id, "name": p.name, "unit": p.unit, "price": float(p.price)} for p in prods])
         return templates.TemplateResponse("manager/incidents/edit.html", {
             "request": request,
             "current_user": current_user,
@@ -416,6 +496,8 @@ async def manager_incident_edit_form(
             "categories": categories,
             "history": history,
             "adjustments": adjustments,
+            "incident_items": incident_items,
+            "products": products_json,
             **manager_context
         })
 
@@ -513,6 +595,9 @@ async def manager_incident_edit(
             update_data['custom_number'] = custom_number
         if custom_date is not None:
             update_data['custom_date'] = custom_date
+        # compensate_purchase для request-типа
+        if incident.incident_type == "request":
+            update_data['compensate_purchase'] = bool(form.get("compensate_purchase"))
         
         try:
             await incident_service.update_incident(

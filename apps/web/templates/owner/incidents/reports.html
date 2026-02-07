@@ -1,10 +1,176 @@
 {% extends "owner/base_owner.html" %}
-{% block title %}Отчёты по инцидентам{% endblock %}
-{% block content %}
-<div class="container mt-4">
-  <h3>Отчёты по инцидентам</h3>
-  <div class="alert alert-info">Фильтры и экспорт будут добавлены в следующем обновлении.</div>
-</div>
+{% block title %}Отчёты по тикетам{% endblock %}
+
+{% block extra_css %}
+<style>
+.summary-card { border-radius: 10px; text-align: center; }
+.summary-card .display-6 { font-size: 1.8rem; font-weight: 700; }
+.tab-reports .nav-link.active { font-weight: 600; }
+</style>
 {% endblock %}
 
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-bar-chart-line"></i> Отчёты по тикетам</h4>
+        <a href="/owner/incidents" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> К тикетам</a>
+    </div>
 
+    <!-- Табы типов отчётов -->
+    <ul class="nav nav-tabs tab-reports mb-3">
+        <li class="nav-item">
+            <a class="nav-link {{ 'active' if report_type == 'deductions' }}"
+               href="/owner/incidents/reports?report_type=deductions">По удержаниям</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {{ 'active' if report_type == 'requests' }}"
+               href="/owner/incidents/reports?report_type=requests">По заявкам</a>
+        </li>
+    </ul>
+
+    {% if report_type == 'deductions' %}
+    <!-- Заглушка для удержаний -->
+    <div class="alert alert-info">Отчёт по удержаниям будет добавлен в следующем обновлении.</div>
+
+    {% elif report_type == 'requests' %}
+    <!-- Фильтры -->
+    <form method="GET" action="/owner/incidents/reports" class="card mb-3">
+        <div class="card-body py-2">
+            <input type="hidden" name="report_type" value="requests">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm mb-1">Дата с</label>
+                    <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm mb-1">Дата по</label>
+                    <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Объект</label>
+                    <select name="object_id" class="form-select form-select-sm">
+                        <option value="">Все объекты</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" {{ 'selected' if object_id == obj.id }}>{{ obj.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Сотрудник</label>
+                    <select name="employee_id" class="form-select form-select-sm">
+                        <option value="">Все сотрудники</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.id }}" {{ 'selected' if employee_id == emp.id }}>{{ emp.first_name or '' }} {{ emp.last_name or '' }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Показать</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Сводка -->
+    {% if summary %}
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card summary-card border-primary">
+                <div class="card-body py-2">
+                    <div class="text-muted small">Всего заявок</div>
+                    <div class="display-6 text-primary">{{ summary.total_count }}</div>
+                    <div class="text-muted small">на сумму {{ "%.2f"|format(summary.total_all) }} ₽</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card summary-card border-success">
+                <div class="card-body py-2">
+                    <div class="text-muted small">Компенсировано</div>
+                    <div class="display-6 text-success">{{ summary.count_compensated }}</div>
+                    <div class="text-muted small">на сумму {{ "%.2f"|format(summary.total_compensated) }} ₽</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card summary-card border-secondary">
+                <div class="card-body py-2">
+                    <div class="text-muted small">Без компенсации</div>
+                    <div class="display-6 text-secondary">{{ summary.count_not_compensated }}</div>
+                    <div class="text-muted small">на сумму {{ "%.2f"|format(summary.total_not_compensated) }} ₽</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Таблица данных -->
+    {% if report_data %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Дата</th>
+                        <th>Сотрудник</th>
+                        <th>Объект</th>
+                        <th>Категория</th>
+                        <th>Статус</th>
+                        <th class="text-center">Позиций</th>
+                        <th class="text-end">Сумма</th>
+                        <th class="text-center">Компенсация</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report_data %}
+                    <tr>
+                        <td>
+                            <a href="/owner/incidents/{{ row.id }}/edit">{{ row.id }}</a>
+                        </td>
+                        <td>{{ row.date.strftime('%d.%m.%Y') }}</td>
+                        <td>{{ row.employee }}</td>
+                        <td>{{ row.object }}</td>
+                        <td>{{ row.category }}</td>
+                        <td>
+                            {% if row.status == 'open' %}
+                                <span class="badge bg-warning text-dark">Открыт</span>
+                            {% elif row.status == 'in_progress' %}
+                                <span class="badge bg-info">В работе</span>
+                            {% elif row.status == 'resolved' %}
+                                <span class="badge bg-success">Решён</span>
+                            {% elif row.status == 'rejected' %}
+                                <span class="badge bg-secondary">Отклонён</span>
+                            {% else %}
+                                <span class="badge bg-dark">{{ row.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ row.items_count }}</td>
+                        <td class="text-end">{{ "%.2f"|format(row.total) }} ₽</td>
+                        <td class="text-center">
+                            {% if row.compensated %}
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                            {% else %}
+                                <i class="bi bi-x-circle text-muted"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% elif summary %}
+    <div class="text-center text-muted py-4">
+        <i class="bi bi-inbox" style="font-size:2.5rem;"></i>
+        <p class="mt-2">Нет данных по выбранным фильтрам</p>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">
+        <i class="bi bi-funnel" style="font-size:2.5rem;"></i>
+        <p class="mt-2">Выберите фильтры и нажмите «Показать»</p>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

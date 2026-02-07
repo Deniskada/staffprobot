@@ -13,6 +13,9 @@ class IncidentCategory(Base):
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
+    # Тип тикета: "deduction" (Удержания) / "request" (Обращения)
+    incident_type = Column(String(50), nullable=False, default="deduction", index=True)
+
     name = Column(String(100), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
 

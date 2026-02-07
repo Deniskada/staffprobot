@@ -35,6 +35,9 @@ from .task_plan import TaskPlanV2
 from .task_entry import TaskEntryV2
 from .rule import Rule
 from .incident import Incident
+from .incident_category import IncidentCategory
+from .incident_item import IncidentItem
+from .product import Product
 from .cancellation_reason import CancellationReason
 from .tariff_plan import TariffPlan
 from .user_subscription import UserSubscription, SubscriptionStatus, BillingPeriod
@@ -118,4 +121,7 @@ __all__ = [
     "ShiftCancellationMedia",
     "OwnerMediaStorageOption",
     "SubscriptionOptionLog",
+    "IncidentCategory",
+    "IncidentItem",
+    "Product",
 ]
