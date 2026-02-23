@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
 from sqlalchemy import create_engine
 from contextlib import contextmanager
 
@@ -35,7 +35,11 @@ class DatabaseManager:
             self.engine = create_async_engine(
                 database_url,
                 echo=settings.debug,
-                poolclass=NullPool,  # Отключаем пул для простоты
+                poolclass=AsyncAdaptedQueuePool,
+                pool_size=10,
+                max_overflow=20,
+                pool_timeout=30,
+                pool_recycle=1800,
                 future=True
             )
             

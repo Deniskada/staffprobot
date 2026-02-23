@@ -40,10 +40,9 @@ class JSONFormatter(logging.Formatter):
 
 class StructuredLogger:
     """Структурированный логгер с дополнительным контекстом"""
-    
+
     def __init__(self, name: str):
         self.logger = logging.getLogger(name)
-        self.logger.setLevel(logging.DEBUG)
     
     def _log_with_context(self, level: int, message: str, **kwargs: Any) -> None:
         """Логирует сообщение с дополнительным контекстом"""
@@ -85,17 +84,18 @@ class StructuredLogger:
 
 def setup_logging() -> None:
     """Настраивает логирование для приложения"""
-    # Создаем корневой логгер
+    import os
+    log_level_str = os.environ.get("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
+
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    
-    # Очищаем существующие handlers
+    root_logger.setLevel(log_level)
+
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
-    
-    # Создаем console handler
+
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(log_level)
     
     # Используем простой формат для MVP
     console_formatter = logging.Formatter(
