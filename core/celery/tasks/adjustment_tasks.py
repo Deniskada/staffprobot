@@ -209,8 +209,8 @@ def process_closed_shifts_adjustments():
                                         shift_id=shift.id
                                     )
                             else:
-                                # Спонтанная смена (без тайм-слота): штрафуем по умолчанию
-                                should_penalize = True
+                                # Спонтанная смена (без тайм-слота): штраф не начисляется
+                                should_penalize = False
                             
                             if should_penalize:
                                 # Сравниваем actual_start с planned_start (порог уже учтен при открытии смены)
