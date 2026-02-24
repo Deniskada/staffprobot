@@ -178,6 +178,7 @@ async def load_employee_earnings(
                 + (f": {adj.description}" if adj.description else ""),
                 "is_automatic": adj.adjustment_type
                 in ["late_start", "task_bonus", "task_penalty"],
+                "direct_entry_id": adj.payroll_entry_id,
                 "payment_date": None,
                 "payment_date_label": None,
             }
@@ -313,12 +314,25 @@ async def load_employee_earnings(
                 payment_date = entry_payment_date_map.get(entry_id)
         elif row["type"] == "adjustment":
             entry_id = adjustment_to_entry.get(row.get("adjustment_id"))
+            if entry_id is None:
+                # Fallback: корректировка привязана напрямую (payroll_entry_id),
+                # но не попала в calculation_details (напр. добавлена постфактум)
+                entry_id = row.get("direct_entry_id")
             if entry_id:
                 payment_date = entry_payment_date_map.get(entry_id)
 
         if payment_date:
             row["payment_date"] = payment_date.isoformat()
             row["payment_date_label"] = payment_date.strftime("%d.%m.%Y")
+
+    # Собираем даты, у которых есть хотя бы одна строка начислений
+    earnings_payment_dates: set = set()
+    for row in earnings:
+        if row.get("payment_date"):
+            try:
+                earnings_payment_dates.add(date.fromisoformat(row["payment_date"]))
+            except ValueError:
+                pass
 
     # Сортировка записей по дате (в формате dd.mm.YYYY нужно преобразовать назад)
     def parse_date_label(label: str) -> datetime:
@@ -336,6 +350,7 @@ async def load_employee_earnings(
         all_payment_dates,
         payments_by_date,
         payment_date_entries,
+        earnings_payment_dates,
     )
 
     return {
@@ -425,6 +440,7 @@ def build_employee_payment_rows(
     all_dates: set,
     payments_by_date: Dict[date, List[EmployeePayment]],
     payment_date_entries: Dict[date, set],
+    earnings_dates: Optional[set] = None,
 ) -> List[Dict[str, Any]]:
     """Формирует строки таблицы «Даты выплат»."""
     rows: List[Dict[str, Any]] = []
@@ -466,7 +482,8 @@ def build_employee_payment_rows(
                 "amount": amount,
                 "completed_at": completed_at_label,
                 "status": status,
-                "has_related_entries": bool(payment_date_entries.get(payment_date)),
+                "has_related_entries": bool(payment_date_entries.get(payment_date))
+                or bool(earnings_dates and payment_date in earnings_dates),
             }
         )
 
@@ -2015,6 +2032,20 @@ async def employee_profile(
             "Специализированные задачи"
         ]
         
+        # KYC-статус из дефолтного профиля
+        from domain.entities.profile import Profile
+        kyc_query = (
+            select(Profile.kyc_status)
+            .where(
+                Profile.user_id == user_id,
+                Profile.is_archived.is_(False),
+            )
+            .order_by(Profile.is_default.desc(), Profile.id)
+            .limit(1)
+        )
+        kyc_result = await db.execute(kyc_query)
+        kyc_status = kyc_result.scalar_one_or_none() or "unverified"
+
         return templates.TemplateResponse(
             "employee/profile.html",
             {
@@ -2026,6 +2057,7 @@ async def employee_profile(
                 "interviews_count": interviews_count,
                 "work_categories": work_categories,
                 "available_interfaces": available_interfaces,
+                "kyc_status": kyc_status,
             },
         )
     except Exception as e:
