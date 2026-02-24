@@ -325,6 +325,22 @@ async def load_employee_earnings(
             row["payment_date"] = payment_date.isoformat()
             row["payment_date_label"] = payment_date.strftime("%d.%m.%Y")
 
+    # Все возможные даты выплат (для назначения ближайшей даты непривязанным строкам)
+    all_payment_dates = set(payments_by_date.keys()) | schedule_dates
+    sorted_all_payment_dates = sorted(all_payment_dates)
+
+    # Для строк без payment_date назначаем ближайшую следующую дату выплаты
+    for row in earnings:
+        if not row.get("payment_date") and sorted_all_payment_dates:
+            try:
+                row_date = datetime.strptime(row["date_label"], "%d.%m.%Y").date()
+            except ValueError:
+                continue
+            next_date = next((d for d in sorted_all_payment_dates if d >= row_date), None)
+            if next_date:
+                row["payment_date"] = next_date.isoformat()
+                row["payment_date_label"] = next_date.strftime("%d.%m.%Y")
+
     # Собираем даты, у которых есть хотя бы одна строка начислений
     earnings_payment_dates: set = set()
     for row in earnings:
@@ -343,9 +359,6 @@ async def load_employee_earnings(
     summary_list = sorted(
         summary_by_object.values(), key=lambda item: item["amount"], reverse=True
     )
-
-    # Календарь выплат (объединяем даты из графиков и фактические выплаты)
-    all_payment_dates = set(payments_by_date.keys()) | schedule_dates
     payment_rows = build_employee_payment_rows(
         all_payment_dates,
         payments_by_date,
