@@ -105,6 +105,10 @@ def setup_logging() -> None:
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
 
+    # Подавляем DEBUG-шум от сторонних библиотек
+    for noisy in ("httpcore", "httpx", "telegram", "urllib3", "asyncio"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
 # Создаем основной логгер
 logger = StructuredLogger("staffprobot")
 
