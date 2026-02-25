@@ -82,41 +82,38 @@ def process_closed_shifts_adjustments():
     async def process():
         try:
             logger.info("Starting closed shifts adjustments processing")
-            
-            # Время последней обработки - 15 минут назад
-            cutoff_time = datetime.now() - timedelta(minutes=15)
-            
-            logger.info(f"[ADJUSTMENT_DEBUG] Starting adjustment processing", cutoff_time=cutoff_time, looking_for_status="completed")
-            
+
+            # Ищем все завершённые смены за последние 48 часов, у которых ещё нет
+            # ни одной корректировки (shift_base). Окно 48ч защищает от пропуска смен
+            # при перезапуске/падении воркера (раньше было 15 мин — слишком мало).
+            cutoff_time = datetime.now() - timedelta(hours=48)
+
             async with get_async_session() as session:
-                # Найти смены, закрытые за последние 15 минут (по updated_at)
+                from sqlalchemy import not_, exists as sa_exists
+
                 shifts_query = select(Shift).options(
                     selectinload(Shift.object).selectinload(Object.org_unit),
                     selectinload(Shift.time_slot)
                 ).where(
                     and_(
-                        Shift.status.in_(['closed', 'completed']),  # Искать оба статуса
-                        Shift.updated_at >= cutoff_time,  # Используем updated_at вместо end_time
-                        Shift.end_time.isnot(None)
+                        Shift.status.in_(['closed', 'completed']),
+                        Shift.end_time.isnot(None),
+                        Shift.end_time >= cutoff_time,
+                        ~sa_exists(
+                            select(PayrollAdjustment.id).where(
+                                PayrollAdjustment.shift_id == Shift.id
+                            )
+                        )
                     )
-                ).order_by(Shift.updated_at.desc())
-                
+                ).order_by(Shift.end_time.asc())
+
                 shifts_result = await session.execute(shifts_query)
                 shifts = shifts_result.scalars().all()
-                
-                logger.info(f"[ADJUSTMENT_DEBUG] Found {len(shifts)} shifts with status='completed'", 
-                           statuses_searched_for=['completed'], 
-                           cutoff_minutes=15)
-                
-                # ДОПОЛНИТЕЛЬНАЯ ДИАГНОСТИКА: проверить все статусы в БД
-                all_shifts_query = select(Shift.status, func.count(Shift.id).label('count')).group_by(Shift.status)
-                all_shifts_result = await session.execute(all_shifts_query)
-                status_counts = all_shifts_result.all()
-                
-                for status, count in status_counts:
-                    logger.info(f"[ADJUSTMENT_DEBUG] Shifts with status='{status}': {count}")
-                
-                logger.info(f"Found {len(shifts)} closed shifts for processing")
+
+                logger.info(
+                    f"Found {len(shifts)} completed shifts without adjustments",
+                    cutoff_hours=48
+                )
                 
                 if not shifts:
                     return {
@@ -131,19 +128,6 @@ def process_closed_shifts_adjustments():
                 
                 for shift in shifts:
                     try:
-                        # Проверить, уже созданы ли adjustments для этой смены
-                        from domain.entities.payroll_adjustment import PayrollAdjustment
-                        
-                        existing_query = select(PayrollAdjustment).where(
-                            PayrollAdjustment.shift_id == shift.id
-                        )
-                        existing_result = await session.execute(existing_query)
-                        existing = existing_result.scalars().first()
-                        
-                        if existing:
-                            logger.debug(f"Adjustments already exist for shift {shift.id}, skipping")
-                            continue
-                        
                         # 1. Создать базовую оплату за смену (напрямую без сервиса)
                         shift_base = PayrollAdjustment(
                             shift_id=shift.id,
