@@ -295,6 +295,31 @@ def process_closed_shifts_adjustments():
                         
                         logger.info(f"[ADJUSTMENT_DEBUG] Processing shift {shift.id}, time_slot_id={shift.time_slot_id}")
                         
+                        # TaskEntryV2: считаем количество для коррекции смещения индексов
+                        # Бот добавляет task_v2 ПЕРВЫМИ, поэтому индексы legacy задач
+                        # в shift.notes смещены на task_v2_count
+                        task_v2_count = 0
+                        task_v2_entries = []
+                        try:
+                            from domain.entities.task_entry import TaskEntryV2
+                            from sqlalchemy.orm import selectinload as _sl
+
+                            v2_query = (
+                                select(TaskEntryV2)
+                                .options(_sl(TaskEntryV2.template))
+                                .where(TaskEntryV2.shift_id == shift.id)
+                            )
+                            v2_result = await session.execute(v2_query)
+                            task_v2_entries = v2_result.scalars().all()
+                            task_v2_count = len(task_v2_entries)
+                            logger.info(
+                                f"[ADJUSTMENT_DEBUG] TaskEntryV2 for shift {shift.id}: {task_v2_count} entries"
+                            )
+                        except Exception as _e:
+                            logger.warning(
+                                f"Could not load TaskEntryV2 for shift {shift.id}: {_e}"
+                            )
+
                         if shift.time_slot_id and shift.time_slot:
                             # 1. Собственные задачи тайм-слота (из таблицы timeslot_task_templates)
                             from domain.entities.timeslot_task_template import TimeslotTaskTemplate
@@ -332,34 +357,113 @@ def process_closed_shifts_adjustments():
                                     task_copy['source'] = 'object'
                                     shift_tasks.append(task_copy)
                         
+                        # Читаем completed_tasks и task_media из shift.notes один раз
+                        # (нужно для legacy задач и для определения смещения индексов)
+                        import json
+
+                        completed_task_indices = []
+                        task_media = {}
+                        if shift.notes:
+                            marker = '[TASKS]'
+                            marker_pos = shift.notes.find(marker)
+                            if marker_pos != -1:
+                                json_str = shift.notes[marker_pos + len(marker):].strip()
+                                try:
+                                    tasks_data = json.loads(json_str)
+                                    completed_task_indices = tasks_data.get('completed_tasks', [])
+                                    task_media = tasks_data.get('task_media', {})
+                                    logger.info(
+                                        f"Parsed shift tasks data",
+                                        shift_id=shift.id,
+                                        completed_tasks=completed_task_indices,
+                                        media_count=len(task_media)
+                                    )
+                                except json.JSONDecodeError as e:
+                                    logger.warning(f"Failed to parse completed_tasks for shift {shift.id}: {e}")
+
+                        # Обрабатываем TaskEntryV2 задачи отдельно (статус — из БД)
+                        for v2_entry in task_v2_entries:
+                            v2_template = v2_entry.template
+                            if not v2_template:
+                                continue
+
+                            v2_text = v2_template.title or 'Задача'
+                            v2_mandatory = v2_template.is_mandatory
+                            v2_amount = float(v2_template.default_bonus_amount) if v2_template.default_bonus_amount else 0
+                            v2_requires_media = v2_template.requires_media
+                            v2_completed = v2_entry.is_completed
+
+                            if (not v2_amount or v2_amount == 0) and not v2_mandatory:
+                                continue
+
+                            if v2_requires_media and v2_completed:
+                                if not v2_entry.completion_media:
+                                    logger.warning(
+                                        f"TaskEntryV2 completed but no media",
+                                        shift_id=shift.id,
+                                        entry_id=v2_entry.id,
+                                        task=v2_text
+                                    )
+                                    continue
+
+                            if v2_mandatory and (not v2_amount or v2_amount == 0):
+                                v2_amount = -50
+
+                            v2_adj_amount = Decimal(str(v2_amount))
+                            v2_details = {
+                                'task_text': v2_text,
+                                'is_mandatory': v2_mandatory,
+                                'completed': v2_completed,
+                                'source': 'task_v2',
+                                'entry_id': v2_entry.id,
+                            }
+
+                            if v2_adj_amount > 0:
+                                if v2_completed:
+                                    session.add(PayrollAdjustment(
+                                        shift_id=shift.id,
+                                        employee_id=shift.user_id,
+                                        object_id=shift.object_id,
+                                        adjustment_type='task_bonus',
+                                        amount=v2_adj_amount,
+                                        description=f"Премия за задачу: {v2_text}",
+                                        details=v2_details,
+                                        created_by=shift.user_id,
+                                        is_applied=False
+                                    ))
+                                    total_adjustments += 1
+                            elif v2_adj_amount < 0:
+                                if v2_completed:
+                                    session.add(PayrollAdjustment(
+                                        shift_id=shift.id,
+                                        employee_id=shift.user_id,
+                                        object_id=shift.object_id,
+                                        adjustment_type='task_completed',
+                                        amount=Decimal('0.00'),
+                                        description=f"Выполнено: {v2_text} (штраф {abs(v2_adj_amount)}₽ избежан)",
+                                        details=v2_details,
+                                        created_by=shift.user_id,
+                                        is_applied=False
+                                    ))
+                                    total_adjustments += 1
+                                else:
+                                    session.add(PayrollAdjustment(
+                                        shift_id=shift.id,
+                                        employee_id=shift.user_id,
+                                        object_id=shift.object_id,
+                                        adjustment_type='task_penalty',
+                                        amount=v2_adj_amount,
+                                        description=f"Штраф за невыполнение задачи: {v2_text}",
+                                        details=v2_details,
+                                        created_by=shift.user_id,
+                                        is_applied=False
+                                    ))
+                                    total_adjustments += 1
+
                         if shift_tasks:
-                            import json
-                            import re
-                            
-                            # Получаем информацию о выполненных задачах и медиа из shift.notes
-                            completed_task_indices = []
-                            task_media = {}
-                            if shift.notes:
-                                # Ищем [TASKS]{...} в notes
-                                # Используем все после [TASKS], т.к. non-greedy {.*?} неправильно парсит вложенный JSON
-                                marker = '[TASKS]'
-                                marker_pos = shift.notes.find(marker)
-                                if marker_pos != -1:
-                                    json_str = shift.notes[marker_pos + len(marker):].strip()
-                                    try:
-                                        tasks_data = json.loads(json_str)
-                                        completed_task_indices = tasks_data.get('completed_tasks', [])
-                                        task_media = tasks_data.get('task_media', {})
-                                        logger.info(
-                                            f"Parsed shift tasks data",
-                                            shift_id=shift.id,
-                                            completed_tasks=completed_task_indices,
-                                            media_count=len(task_media)
-                                        )
-                                    except json.JSONDecodeError as e:
-                                        logger.warning(f"Failed to parse completed_tasks for shift {shift.id}: {e}")
-                            
-                            # Обрабатываем каждую задачу
+                            # Обрабатываем legacy задачи (timeslot + object)
+                            # Индексы в shift.notes смещены на task_v2_count (бот добавлял
+                            # task_v2 задачи ПЕРЕД legacy), поэтому используем adjusted_idx
                             for idx, task in enumerate(shift_tasks):
                                 # Поддержка старого и нового формата
                                 task_text = task.get('text') or task.get('description') or task.get('task_text', 'Задача')
@@ -386,12 +490,15 @@ def process_closed_shifts_adjustments():
                                 if (not amount_value or float(amount_value) == 0) and not is_mandatory:
                                     continue
                                 
+                                # Индекс в shift.notes смещён на количество task_v2 задач
+                                adjusted_idx = idx + task_v2_count
+
                                 # Проверяем выполнение
-                                is_completed = idx in completed_task_indices
+                                is_completed = adjusted_idx in completed_task_indices
                                 
                                 # Проверяем обязательность медиа
                                 if requires_media and is_completed:
-                                    media_info = task_media.get(str(idx))
+                                    media_info = task_media.get(str(adjusted_idx))
                                     if not media_info:
                                         logger.warning(
                                             f"Task marked complete but missing media",
@@ -418,8 +525,8 @@ def process_closed_shifts_adjustments():
                                 }
                                 
                                 # Добавляем медиа в details
-                                if is_completed and str(idx) in task_media:
-                                    media_info = task_media[str(idx)]
+                                if is_completed and str(adjusted_idx) in task_media:
+                                    media_info = task_media[str(adjusted_idx)]
                                     details['media_url'] = media_info.get('media_url')
                                     details['media_type'] = media_info.get('media_type')
                                 
@@ -427,7 +534,7 @@ def process_closed_shifts_adjustments():
                                 should_create_media_record = (
                                     requires_media and 
                                     is_completed and 
-                                    str(idx) in task_media and 
+                                    str(adjusted_idx) in task_media and 
                                     amount < 0  # Штраф был избежан
                                 )
                                 
