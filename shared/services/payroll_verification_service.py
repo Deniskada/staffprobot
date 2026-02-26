@@ -119,32 +119,15 @@ class PayrollVerificationService:
                 else:
                     start_local = obj_tz.localize(shift.start_time)
 
-                # Вычисляем planned_end по той же логике, что и auto_close_shifts
-                planned_end_utc: Optional[datetime] = None
-
-                if shift.is_planned and shift.time_slot_id:
-                    ts_result = await self.session.execute(
-                        select(TimeSlot).where(TimeSlot.id == shift.time_slot_id)
-                    )
-                    timeslot = ts_result.scalar_one_or_none()
-                    if timeslot and timeslot.end_time:
-                        end_local = obj_tz.localize(
-                            datetime.combine(start_local.date(), timeslot.end_time)
-                        )
-                        planned_end_utc = end_local.astimezone(pytz.UTC)
-
-                if planned_end_utc is None and obj and obj.closing_time:
-                    end_local = obj_tz.localize(
-                        datetime.combine(start_local.date(), obj.closing_time)
-                    )
-                    planned_end_utc = end_local.astimezone(pytz.UTC)
-
-                if planned_end_utc is None:
+                # Дедлайн = closing_time объекта + 60 мин (вне зависимости от тайм-слота)
+                if not obj.closing_time:
                     continue
 
-                # Дедлайн = planned_end + auto_close_minutes (или +60 мин по умолчанию)
-                grace_minutes = getattr(obj, "auto_close_minutes", None) or 60
-                deadline = planned_end_utc + timedelta(minutes=grace_minutes)
+                closing_local = obj_tz.localize(
+                    datetime.combine(start_local.date(), obj.closing_time)
+                )
+                planned_end_utc = closing_local.astimezone(pytz.UTC)
+                deadline = planned_end_utc + timedelta(minutes=60)
 
                 if now_utc < deadline:
                     continue  # Ещё не пора
@@ -203,11 +186,11 @@ class PayrollVerificationService:
     async def _fix_overclosed_shifts(
         self, owner_id: int, start_date: date, end_date: date
     ) -> Dict[str, Any]:
-        """Пересчитать завершённые смены, закрытые позже плановогo окончания более чем на 2 часа.
+        """Пересчитать завершённые смены, закрытые позже времени закрытия объекта более чем на 60 минут.
 
-        Такие смены закрылись не автоматически (задача не сработала), а другим механизмом
-        (например, при открытии следующей смены). Пересчитываем end_time, total_hours,
-        total_payment и корректировку shift_base.
+        Смена считается аномально длинной если фактический end_time превышает
+        closing_time объекта + 60 минут — вне зависимости от тайм-слота.
+        Пересчитываем end_time = closing_time, total_hours, total_payment и shift_base.
         """
         report: Dict[str, Any] = {"shifts_fixed": 0, "details": []}
 
@@ -230,7 +213,6 @@ class PayrollVerificationService:
                     Shift.end_time.isnot(None),
                     Shift.end_time >= datetime.combine(start_date, datetime.min.time()),
                     Shift.end_time <= datetime.combine(end_date, datetime.max.time()),
-                    Shift.time_slot_id.isnot(None),  # только плановые с тайм-слотом
                 )
             )
         )
@@ -240,6 +222,9 @@ class PayrollVerificationService:
         for shift in shifts:
             try:
                 obj = owner_objects[shift.object_id]
+                if not obj.closing_time:
+                    continue
+
                 tz_name = getattr(obj, "timezone", None) or "Europe/Moscow"
                 obj_tz = pytz.timezone(tz_name)
 
@@ -248,35 +233,28 @@ class PayrollVerificationService:
                 else:
                     start_local = obj_tz.localize(shift.start_time)
 
-                # Плановое окончание по тайм-слоту
-                ts_result = await self.session.execute(
-                    select(TimeSlot).where(TimeSlot.id == shift.time_slot_id)
+                # Время закрытия объекта в UTC (на дату начала смены)
+                closing_local = obj_tz.localize(
+                    datetime.combine(start_local.date(), obj.closing_time)
                 )
-                timeslot = ts_result.scalar_one_or_none()
-                if not timeslot or not timeslot.end_time:
-                    continue
-
-                planned_end_local = obj_tz.localize(
-                    datetime.combine(start_local.date(), timeslot.end_time)
-                )
-                planned_end_utc = planned_end_local.astimezone(pytz.UTC).replace(tzinfo=None)
+                closing_utc = closing_local.astimezone(pytz.UTC).replace(tzinfo=None)
 
                 # Фактическое окончание
                 actual_end = shift.end_time
                 if getattr(actual_end, "tzinfo", None):
                     actual_end = actual_end.astimezone(pytz.UTC).replace(tzinfo=None)
 
-                # Смена закрыта позже планового окончания более чем на 2 часа
-                overrun = (actual_end - planned_end_utc).total_seconds()
-                if overrun <= 7200:
+                # Аномалия: смена закрылась позже closing_time + 60 мин
+                overrun = (actual_end - closing_utc).total_seconds()
+                if overrun <= 3600:
                     continue
 
-                # Пересчитываем
+                # Пересчитываем по closing_time объекта
                 start_utc = shift.start_time
                 if getattr(start_utc, "tzinfo", None):
                     start_utc = start_utc.astimezone(pytz.UTC).replace(tzinfo=None)
 
-                duration = planned_end_utc - start_utc
+                duration = closing_utc - start_utc
                 new_hours = Decimal(duration.total_seconds()) / Decimal(3600)
                 new_hours = new_hours.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
@@ -289,7 +267,7 @@ class PayrollVerificationService:
                 old_hours = shift.total_hours
                 old_payment = shift.total_payment
 
-                shift.end_time = planned_end_utc
+                shift.end_time = closing_utc
                 shift.total_hours = float(new_hours)
                 shift.total_payment = float(new_payment) if new_payment is not None else None
 
@@ -320,7 +298,7 @@ class PayrollVerificationService:
                         "shift_id": shift.id,
                         "employee": employee_name,
                         "object": obj.name,
-                        "date": planned_end_utc.date().isoformat(),
+                        "date": closing_utc.date().isoformat(),
                         "amount": float(new_payment or 0),
                         "message": (
                             f"Пересчитана смена #{shift.id}: "
