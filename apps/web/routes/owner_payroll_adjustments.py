@@ -623,6 +623,7 @@ async def verify_and_fix_adjustments(
         return JSONResponse(content={
             "success": True,
             "report": {
+                "shifts_force_closed": report.get("shifts_force_closed", 0),
                 "shifts_checked": report["shifts_checked"],
                 "missing_adjustments_created": report["missing_adjustments_created"],
                 "penalties_corrected": report["penalties_corrected"],
@@ -630,7 +631,12 @@ async def verify_and_fix_adjustments(
                 "total_amount_corrected": float(report["total_amount_corrected"]),
                 "details": report["details"]
             },
-            "message": f"Проверка завершена. Создано начислений: {report['missing_adjustments_created']}, исправлено штрафов: {report['penalties_corrected']}"
+            "message": (
+                f"Проверка завершена. "
+                f"Закрыто незакрытых смен: {report.get('shifts_force_closed', 0)}, "
+                f"создано начислений: {report['missing_adjustments_created']}, "
+                f"исправлено штрафов: {report['penalties_corrected']}"
+            )
         })
         
     except Exception as e:

@@ -222,60 +222,67 @@ def auto_close_shifts(self):
                                                 user_result = await session.execute(user_query)
                                                 user = user_result.scalar_one_or_none()
                                                 
-                                                if user and shift.start_coordinates:
-                                                    # Вычисляем planned_start для новой смены
-                                                    # Используем late_threshold_minutes из объекта, без обхода иерархии
-                                                    late_threshold_minutes = 0
-                                                    if not obj.inherit_late_settings and obj.late_threshold_minutes is not None:
-                                                        late_threshold_minutes = obj.late_threshold_minutes
-                                                    
-                                                    base_time = datetime.combine(next_timeslot.slot_date, next_timeslot.start_time)
-                                                    base_time = obj_tz.localize(base_time)
-                                                    start_time_utc = base_time.astimezone(pytz.UTC)
-                                                    planned_start = base_time + timedelta(minutes=late_threshold_minutes)
-                                                    
-                                                    new_shift = Shift(
-                                                        user_id=shift.user_id,
-                                                        object_id=next_schedule.object_id,
-                                                        start_time=start_time_utc,
-                                                        actual_start=start_time_utc,
-                                                        planned_start=planned_start,
-                                                        status='active',
-                                                        start_coordinates=shift.start_coordinates,
-                                                        hourly_rate=next_schedule.hourly_rate,
-                                                        time_slot_id=next_schedule.time_slot_id,
-                                                        schedule_id=next_schedule.id,
-                                                        is_planned=True
-                                                    )
-                                                    
-                                                    session.add(new_shift)
-                                                    await session.flush()  # Получаем new_shift.id
-                                                    
-                                                    # Синхронизация статусов при открытии смены из расписания
-                                                    from shared.services.shift_status_sync_service import ShiftStatusSyncService
-                                                    sync_service = ShiftStatusSyncService(session)
-                                                    await sync_service.sync_on_shift_open(
-                                                        new_shift,
-                                                        actor_id=shift.user_id,
-                                                        actor_role="system",
-                                                        source="celery",
-                                                        payload={
-                                                            "auto_opened": True,
-                                                            "prev_shift_id": shift.id,
-                                                        },
-                                                    )
-                                                    
-                                                    logger.info(
-                                                        f"Auto-opened consecutive shift (from Shift): user_id={shift.user_id}, "
-                                                        f"user_telegram_id={user.telegram_id}, "
-                                                        f"prev_shift_id={shift.id}, next_schedule_id={next_schedule.id}, "
-                                                        f"prev_time={prev_timeslot.start_time}-{prev_timeslot.end_time}, "
-                                                        f"next_time={next_timeslot.start_time}-{next_timeslot.end_time}, "
-                                                        f"object_id={next_schedule.object_id}"
-                                                    )
-                                                    
-                                                else:
-                                                    logger.debug(f"User or coordinates not found for auto-opening: shift_id={shift.id}")
+                            if user and shift.start_coordinates:
+                                    # Вычисляем planned_start для новой смены
+                                    # Используем late_threshold_minutes из объекта, без обхода иерархии
+                                    late_threshold_minutes = 0
+                                    if not obj.inherit_late_settings and obj.late_threshold_minutes is not None:
+                                        late_threshold_minutes = obj.late_threshold_minutes
+                                    
+                                    base_time = datetime.combine(next_timeslot.slot_date, next_timeslot.start_time)
+                                    base_time = obj_tz.localize(base_time)
+                                    start_time_utc = base_time.astimezone(pytz.UTC)
+                                    planned_start = base_time + timedelta(minutes=late_threshold_minutes)
+                                    
+                                    new_shift = Shift(
+                                        user_id=shift.user_id,
+                                        object_id=next_schedule.object_id,
+                                        start_time=start_time_utc,
+                                        actual_start=start_time_utc,
+                                        planned_start=planned_start,
+                                        status='active',
+                                        start_coordinates=shift.start_coordinates,
+                                        hourly_rate=next_schedule.hourly_rate,
+                                        time_slot_id=next_schedule.time_slot_id,
+                                        schedule_id=next_schedule.id,
+                                        is_planned=True
+                                    )
+                                    
+                                    # Используем savepoint чтобы ошибка авто-открытия
+                                    # не откатила закрытие текущей смены
+                                    try:
+                                        async with session.begin_nested():
+                                            session.add(new_shift)
+                                            await session.flush()  # Получаем new_shift.id
+                                            
+                                            # Синхронизация статусов при открытии смены из расписания
+                                            from shared.services.shift_status_sync_service import ShiftStatusSyncService
+                                            sync_service = ShiftStatusSyncService(session)
+                                            await sync_service.sync_on_shift_open(
+                                                new_shift,
+                                                actor_id=shift.user_id,
+                                                actor_role="system",
+                                                source="celery",
+                                                payload={
+                                                    "auto_opened": True,
+                                                    "prev_shift_id": shift.id,
+                                                },
+                                            )
+                                        logger.info(
+                                            f"Auto-opened consecutive shift (from Shift): user_id={shift.user_id}, "
+                                            f"user_telegram_id={user.telegram_id}, "
+                                            f"prev_shift_id={shift.id}, next_schedule_id={next_schedule.id}, "
+                                            f"prev_time={prev_timeslot.start_time}-{prev_timeslot.end_time}, "
+                                            f"next_time={next_timeslot.start_time}-{next_timeslot.end_time}, "
+                                            f"object_id={next_schedule.object_id}"
+                                        )
+                                    except Exception as _open_err:
+                                        logger.error(
+                                            f"Auto-open consecutive shift (from Shift) failed (savepoint rolled back), "
+                                            f"shift {shift.id} close will still be saved: {_open_err}"
+                                        )
+                                else:
+                                    logger.debug(f"User or coordinates not found for auto-opening: shift_id={shift.id}")
                                             else:
                                                 logger.debug(f"Time mismatch for consecutive shifts: prev_end={prev_timeslot.end_time if prev_timeslot else None}, next_start={next_timeslot.start_time}")
                                         else:
@@ -496,21 +503,29 @@ def auto_close_shifts(self):
                                                     is_planned=True
                                                 )
                                                 
-                                                session.add(new_shift)
-                                                
-                                                # Обновляем статус следующего расписания
-                                                next_schedule.status = 'in_progress'
-                                                session.add(next_schedule)
-                                                
-                                                logger.info(
-                                                    f"Auto-opened consecutive shift: user_id={schedule.user_id}, "
-                                                    f"user_telegram_id={user.telegram_id}, "
-                                                    f"prev_schedule_id={schedule.id}, next_schedule_id={next_schedule.id}, "
-                                                    f"prev_time={prev_timeslot.start_time}-{prev_timeslot.end_time}, "
-                                                    f"next_time={next_timeslot.start_time}-{next_timeslot.end_time}, "
-                                                    f"object_id={next_schedule.object_id}"
-                                                )
-                                                
+                                                # Используем savepoint чтобы ошибка авто-открытия
+                                                # не откатила закрытие текущей смены
+                                                try:
+                                                    async with session.begin_nested():
+                                                        session.add(new_shift)
+                                                        
+                                                        # Обновляем статус следующего расписания
+                                                        next_schedule.status = 'in_progress'
+                                                        session.add(next_schedule)
+                                                    
+                                                    logger.info(
+                                                        f"Auto-opened consecutive shift: user_id={schedule.user_id}, "
+                                                        f"user_telegram_id={user.telegram_id}, "
+                                                        f"prev_schedule_id={schedule.id}, next_schedule_id={next_schedule.id}, "
+                                                        f"prev_time={prev_timeslot.start_time}-{prev_timeslot.end_time}, "
+                                                        f"next_time={next_timeslot.start_time}-{next_timeslot.end_time}, "
+                                                        f"object_id={next_schedule.object_id}"
+                                                    )
+                                                except Exception as _open_err:
+                                                    logger.error(
+                                                        f"Auto-open consecutive shift (from Schedule) failed (savepoint rolled back), "
+                                                        f"schedule {schedule.id} close will still be saved: {_open_err}"
+                                                    )
                                             else:
                                                 logger.warning(f"User not found for auto-opening consecutive shift: user_id={schedule.user_id}")
                                         else:

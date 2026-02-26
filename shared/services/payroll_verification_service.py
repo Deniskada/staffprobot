@@ -1,16 +1,18 @@
 """Сервис для проверки и корректировки начислений."""
 
-from datetime import datetime, date
-from decimal import Decimal
-from typing import Dict, List, Any
+from datetime import datetime, date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Dict, List, Any, Optional
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+import pytz
 
 from domain.entities.shift import Shift
 from domain.entities.payroll_adjustment import PayrollAdjustment
 from domain.entities.object import Object
 from domain.entities.user import User
+from domain.entities.time_slot import TimeSlot
 from domain.entities.timeslot_task_template import TimeslotTaskTemplate
 from core.logging.logger import logger
 
@@ -40,6 +42,7 @@ class PayrollVerificationService:
         """
         report = {
             "shifts_checked": 0,
+            "shifts_force_closed": 0,
             "missing_adjustments_created": 0,
             "penalties_corrected": 0,
             "total_amount_added": Decimal("0"),
@@ -51,6 +54,11 @@ class PayrollVerificationService:
             end_date = date.today()
         if not start_date:
             start_date = date(2024, 10, 1)  # С начала октября
+        
+        # 0. Принудительно закрыть незакрытые автоматически смены
+        force_close_report = await self._force_close_unclosed_shifts(owner_id)
+        report["shifts_force_closed"] = force_close_report["shifts_closed"]
+        report["details"].extend(force_close_report["details"])
         
         # 1. Найти все завершенные смены владельца без начислений
         missing_report = await self._create_missing_adjustments(owner_id, start_date, end_date)
@@ -69,6 +77,124 @@ class PayrollVerificationService:
         
         return report
     
+    async def _force_close_unclosed_shifts(self, owner_id: int) -> Dict[str, Any]:
+        """Принудительно закрыть активные смены, которые должны были закрыться автоматически."""
+        report: Dict[str, Any] = {"shifts_closed": 0, "details": []}
+
+        objects_query = select(Object).where(Object.owner_id == owner_id)
+        objects_result = await self.session.execute(objects_query)
+        owner_objects = {obj.id: obj for obj in objects_result.scalars().all()}
+
+        if not owner_objects:
+            return report
+
+        active_shifts_query = (
+            select(Shift)
+            .options(selectinload(Shift.user))
+            .where(
+                and_(
+                    Shift.object_id.in_(owner_objects.keys()),
+                    Shift.status == "active",
+                )
+            )
+        )
+        result = await self.session.execute(active_shifts_query)
+        active_shifts = result.scalars().all()
+
+        now_utc = datetime.now(pytz.UTC)
+
+        for shift in active_shifts:
+            try:
+                obj = owner_objects[shift.object_id]
+                tz_name = getattr(obj, "timezone", None) or "Europe/Moscow"
+                obj_tz = pytz.timezone(tz_name)
+
+                if getattr(shift.start_time, "tzinfo", None):
+                    start_local = shift.start_time.astimezone(obj_tz)
+                else:
+                    start_local = obj_tz.localize(shift.start_time)
+
+                # Вычисляем planned_end по той же логике, что и auto_close_shifts
+                planned_end_utc: Optional[datetime] = None
+
+                if shift.is_planned and shift.time_slot_id:
+                    ts_result = await self.session.execute(
+                        select(TimeSlot).where(TimeSlot.id == shift.time_slot_id)
+                    )
+                    timeslot = ts_result.scalar_one_or_none()
+                    if timeslot and timeslot.end_time:
+                        end_local = obj_tz.localize(
+                            datetime.combine(start_local.date(), timeslot.end_time)
+                        )
+                        planned_end_utc = end_local.astimezone(pytz.UTC)
+
+                if planned_end_utc is None and obj and obj.closing_time:
+                    end_local = obj_tz.localize(
+                        datetime.combine(start_local.date(), obj.closing_time)
+                    )
+                    planned_end_utc = end_local.astimezone(pytz.UTC)
+
+                if planned_end_utc is None:
+                    continue
+
+                # Дедлайн = planned_end + auto_close_minutes (или +60 мин по умолчанию)
+                grace_minutes = getattr(obj, "auto_close_minutes", None) or 60
+                deadline = planned_end_utc + timedelta(minutes=grace_minutes)
+
+                if now_utc < deadline:
+                    continue  # Ещё не пора
+
+                # Закрываем смену
+                close_at = planned_end_utc
+                duration = close_at - (
+                    shift.start_time
+                    if getattr(shift.start_time, "tzinfo", None)
+                    else pytz.UTC.localize(shift.start_time)
+                )
+                total_hours = Decimal(duration.total_seconds()) / Decimal(3600)
+                total_hours = total_hours.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                total_payment = None
+                if shift.hourly_rate is not None:
+                    total_payment = (total_hours * Decimal(str(shift.hourly_rate))).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+
+                shift.end_time = close_at
+                shift.status = "completed"
+                shift.total_hours = float(total_hours)
+                shift.total_payment = float(total_payment) if total_payment is not None else None
+
+                employee_name = (
+                    f"{shift.user.last_name} {shift.user.first_name}"
+                    if shift.user
+                    else f"ID {shift.user_id}"
+                )
+                report["shifts_closed"] += 1
+                report["details"].append(
+                    {
+                        "type": "force_closed_shift",
+                        "shift_id": shift.id,
+                        "employee": employee_name,
+                        "object": obj.name,
+                        "date": close_at.date().isoformat(),
+                        "amount": float(total_payment or 0),
+                        "message": (
+                            f"Принудительно закрыта смена #{shift.id} "
+                            f"от {close_at.date().isoformat()}, "
+                            f"{float(total_hours):.2f} ч."
+                        ),
+                    }
+                )
+                logger.info(
+                    f"Force-closed shift {shift.id} (owner_id={owner_id}), "
+                    f"close_at={close_at}, hours={total_hours}"
+                )
+            except Exception as e:
+                logger.error(f"Error force-closing shift {shift.id}: {e}")
+
+        return report
+
     async def _create_missing_adjustments(
         self,
         owner_id: int,
