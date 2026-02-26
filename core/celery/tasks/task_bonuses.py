@@ -10,7 +10,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.celery.celery_app import celery_app
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from core.logging.logger import logger
 from domain.entities.task_entry import TaskEntryV2
 from domain.entities.payroll_adjustment import PayrollAdjustment
@@ -110,7 +110,7 @@ def process_task_bonuses_celery():
     import asyncio
     
     async def _run():
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             count = await process_completed_tasks_bonuses(session)
             logger.info(f"Processed task bonuses: {count} adjustments created")
             return count

@@ -6,7 +6,7 @@ from celery import Celery
 from datetime import datetime, timedelta
 from typing import Dict, Any
 from core.logging.logger import logger
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from apps.web.services.system_settings_service import SystemSettingsService
 from apps.web.services.ssl_service import SSLService
 from shared.services.notification_service import NotificationService
@@ -20,7 +20,7 @@ async def _renew_ssl_certificates_async() -> Dict[str, Any]:
     try:
         logger.info("Starting SSL certificate renewal task")
         
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             settings_service = SystemSettingsService(session)
             ssl_service = SSLService(settings_service)
             
@@ -98,7 +98,7 @@ async def _check_certificate_expiry_async() -> Dict[str, Any]:
     try:
         logger.info("Starting SSL certificate expiry check task")
         
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             settings_service = SystemSettingsService(session)
             ssl_service = SSLService(settings_service)
             
@@ -188,7 +188,7 @@ async def setup_ssl_for_domain(domain: str, email: str) -> Dict[str, Any]:
     try:
         logger.info(f"Starting SSL setup task for domain: {domain}")
         
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             settings_service = SystemSettingsService(session)
             ssl_service = SSLService(settings_service)
             
@@ -237,7 +237,7 @@ async def _validate_ssl_configuration_async() -> Dict[str, Any]:
     try:
         logger.info("Starting SSL configuration validation task")
         
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             settings_service = SystemSettingsService(session)
             ssl_service = SSLService(settings_service)
             
@@ -309,7 +309,7 @@ async def _send_ssl_notification(notification_type: str, message: str, data: Dic
         from domain.entities.notification import NotificationType, NotificationChannel, NotificationPriority
         from sqlalchemy import select, or_
         
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             notification_service = NotificationService()
             
             # Находим всех суперадминов

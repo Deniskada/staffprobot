@@ -9,7 +9,7 @@ import pytz
 
 from core.celery.celery_app import celery_app
 from core.logging.logger import logger
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.object import Object
@@ -56,7 +56,7 @@ async def _create_shift_reminders_async() -> Dict[str, Any]:
     error_count = 0
     
     try:
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             # Время проверки: через 1 час (окно 50-75 минут для учета погрешности)
             # Задача запускается каждые 5 минут, поэтому окно должно быть шире, чтобы не пропустить смены
             now = datetime.now(timezone.utc)
@@ -174,7 +174,7 @@ async def _check_shifts_did_not_start_async() -> Dict[str, Any]:
     }
     
     try:
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             now = datetime.now(timezone.utc)
             # Проверяем смены, которые должны были начаться более часа назад
             # но не более 24 часов назад (чтобы не проверять старые смены)
@@ -384,7 +384,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
         today_local = timezone_helper.utc_to_local(now).date()
         
         # Получить ID всех активных объектов
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             query = select(Object.id).where(Object.is_active == True)
             result = await session.execute(query)
             object_ids = [row[0] for row in result.all()]
@@ -393,7 +393,7 @@ async def _check_object_openings_async() -> Dict[str, Any]:
         for obj_id in object_ids:
             current_obj_id = obj_id  # Сохраняем для обработки ошибок
             try:
-                async with get_async_session() as session:
+                async with get_celery_session() as session:
                     # Загружаем объект заново с owner в текущей сессии
                     obj_query = select(Object).options(
                         selectinload(Object.owner)

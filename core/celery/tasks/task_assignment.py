@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import JSONB
 
 from core.celery.celery_app import celery_app
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from core.logging.logger import logger
 from domain.entities.task_plan import TaskPlanV2
 from domain.entities.task_entry import TaskEntryV2
@@ -267,7 +267,7 @@ def auto_assign_tasks_celery():
     import asyncio
     
     async def _run():
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             # Создаём задачи на сегодня и завтра
             today = datetime.utcnow().date()
             tomorrow = today + timedelta(days=1)

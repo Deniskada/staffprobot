@@ -10,7 +10,7 @@ from sqlalchemy import select, or_
 from core.celery.celery_app import celery_app
 from core.cache.redis_cache import cache
 from core.logging.logger import logger
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from domain.entities.user import User, UserRole
 from domain.entities.notification import (
     NotificationType,
@@ -81,7 +81,7 @@ async def _monitor_bot_heartbeat() -> None:
 
 async def _send_bot_alert(payload: Optional[dict], age_seconds: Optional[float]) -> None:
     """Отправка уведомлений суперадминам / DevOps."""
-    async with get_async_session() as session:
+    async with get_celery_session() as session:
         superadmin_ids = await _get_superadmin_ids(session)
 
     if not superadmin_ids:

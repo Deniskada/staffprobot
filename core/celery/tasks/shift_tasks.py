@@ -32,7 +32,7 @@ def auto_close_shifts(self):
     """Автоматическое закрытие просроченных смен."""
     try:
         import asyncio
-        from core.database.session import get_async_session
+        from core.database.session import get_celery_session
         from datetime import datetime, time, timedelta
         from sqlalchemy import select, and_
         from domain.entities.shift import Shift
@@ -42,7 +42,7 @@ def auto_close_shifts(self):
         from sqlalchemy.orm import selectinload
         
         async def _auto_close_shifts():
-            async with get_async_session() as session:
+            async with get_celery_session() as session:
                 now_utc = datetime.now(pytz.UTC)
                 closed_count = 0
                 errors = []
@@ -812,14 +812,14 @@ def sync_shift_schedules(self):
 def plan_next_year_timeslots(self):
     """1 декабря — автогенерация тайм-слотов объектов на следующий год по графику работы."""
     try:
-        from core.database.session import get_async_session
+        from core.database.session import get_celery_session
         from sqlalchemy import select, and_
         from domain.entities.object import Object
         from domain.entities.time_slot import TimeSlot
         from datetime import date, timedelta
 
         async def _plan_next_year():
-            async with get_async_session() as session:
+            async with get_celery_session() as session:
                 next_year = date.today().year + 1
                 start_date = date(next_year, 1, 1)
                 end_date = date(next_year, 12, 31)

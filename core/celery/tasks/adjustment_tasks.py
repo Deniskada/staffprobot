@@ -5,7 +5,7 @@ from decimal import Decimal
 import asyncio
 
 from core.celery.celery_app import celery_app
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from core.logging.logger import logger
 from sqlalchemy import select, and_, func
 from sqlalchemy.orm import selectinload
@@ -88,7 +88,7 @@ def process_closed_shifts_adjustments():
             # при перезапуске/падении воркера (раньше было 15 мин — слишком мало).
             cutoff_time = datetime.now() - timedelta(hours=48)
 
-            async with get_async_session() as session:
+            async with get_celery_session() as session:
                 from sqlalchemy import not_, exists as sa_exists
 
                 shifts_query = select(Shift).options(

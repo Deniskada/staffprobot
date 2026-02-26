@@ -118,6 +118,24 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         await session.close()
 
 
+@asynccontextmanager
+async def get_celery_session() -> AsyncGenerator[AsyncSession, None]:
+    """Сессия для Celery-задач.
+
+    Каждый вызов создаёт свежее соединение (NullPool), чтобы избежать
+    конфликта asyncpg с закрытыми event loop'ами при повторных asyncio.run().
+    """
+    database_url = settings.database_url.replace('postgresql://', 'postgresql+asyncpg://')
+    engine = create_async_engine(database_url, poolclass=NullPool, future=True)
+    session_factory = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    session = session_factory()
+    try:
+        yield session
+    finally:
+        await session.close()
+        await engine.dispose()
+
+
 # Синхронная сессия для Celery задач
 _sync_engine = None
 _sync_session_factory = None

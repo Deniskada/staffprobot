@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.celery.celery_app import celery_app
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from core.logging.logger import logger
 
 
@@ -111,7 +111,7 @@ def check_overdue_tasks() -> dict:
     import asyncio
     
     async def _check_overdue() -> dict:
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             from domain.entities.task_entry import TaskEntryV2
             from domain.entities.task_plan import TaskPlanV2
             from domain.entities.shift import Shift

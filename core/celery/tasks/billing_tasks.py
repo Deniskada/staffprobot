@@ -6,7 +6,7 @@ from sqlalchemy import select, and_, cast, String
 from sqlalchemy.orm import selectinload
 
 from core.celery.celery_app import celery_app
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from domain.entities.user_subscription import UserSubscription, SubscriptionStatus
 from domain.entities.billing_transaction import BillingTransaction, TransactionStatus
 from domain.entities.notification import Notification, NotificationType, NotificationChannel
@@ -36,7 +36,7 @@ def check_expiring_subscriptions():
     3. Для подписок с auto_renewal=True создает транзакцию и платеж через YooKassa
     """
     async def _check_expiring_subscriptions_async():
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             billing_service = BillingService(session)
             
             # Получаем сегодняшнюю дату
@@ -232,7 +232,7 @@ def check_expired_subscriptions():
     3. Создает уведомление SUBSCRIPTION_EXPIRED
     """
     async def _check_expired_subscriptions_async():
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             # Получаем текущее время в UTC
             now = datetime.now(timezone.utc)
             
@@ -311,7 +311,7 @@ def check_expired_subscriptions():
 def activate_scheduled_subscriptions():
     """Активация подписок с отложенным стартом (когда наступает их started_at)."""
     async def _activate_scheduled_subscriptions_async():
-        async with get_async_session() as session:
+        async with get_celery_session() as session:
             try:
                 now = datetime.now(timezone.utc)
                 

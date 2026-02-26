@@ -6,7 +6,7 @@ from typing import List, Dict, Any
 import asyncio
 
 from core.celery.celery_app import celery_app
-from core.database.session import get_async_session
+from core.database.session import get_celery_session
 from core.logging.logger import logger
 from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
@@ -51,7 +51,7 @@ def create_payroll_entries_by_schedule(target_date: str = None):
                 today = date.today()
             logger.info(f"Starting payroll entries creation for {today}")
             
-            async with get_async_session() as session:
+            async with get_celery_session() as session:
                 # 1. Найти все schedules с датой выплаты сегодня
                 schedules_query = select(PaymentSchedule).where(
                     PaymentSchedule.is_active == True   # Только активные графики
@@ -793,7 +793,7 @@ def create_final_settlements_by_termination_date():
             today = date.today()
             logger.info(f"Starting final settlements for termination_date={today}")
             
-            async with get_async_session() as session:
+            async with get_celery_session() as session:
                 # 1. Найти все контракты с termination_date=сегодня и settlement_policy='termination_date'
                 contracts_query = select(Contract).where(
                     Contract.status == 'terminated',
