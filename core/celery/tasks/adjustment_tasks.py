@@ -381,8 +381,8 @@ def process_closed_shifts_adjustments():
                                 except json.JSONDecodeError as e:
                                     logger.warning(f"Failed to parse completed_tasks for shift {shift.id}: {e}")
 
-                        # Обрабатываем TaskEntryV2 задачи отдельно (статус — из БД)
-                        for v2_entry in task_v2_entries:
+                        # Обрабатываем TaskEntryV2 задачи отдельно (статус — из БД или shift.notes)
+                        for v2_idx, v2_entry in enumerate(task_v2_entries):
                             v2_template = v2_entry.template
                             if not v2_template:
                                 continue
@@ -393,11 +393,17 @@ def process_closed_shifts_adjustments():
                             v2_requires_media = v2_template.requires_media
                             v2_completed = v2_entry.is_completed
 
+                            # Fallback: старый Telegram-флоу не ставил is_completed=True,
+                            # но фиксировал выполнение в shift.notes (completed_tasks + task_media)
+                            if not v2_completed and v2_idx in completed_task_indices:
+                                v2_completed = True
+
                             if (not v2_amount or v2_amount == 0) and not v2_mandatory:
                                 continue
 
                             if v2_requires_media and v2_completed:
-                                if not v2_entry.completion_media:
+                                has_media = bool(v2_entry.completion_media) or bool(task_media.get(str(v2_idx)))
+                                if not has_media:
                                     logger.warning(
                                         f"TaskEntryV2 completed but no media",
                                         shift_id=shift.id,
@@ -424,6 +430,7 @@ def process_closed_shifts_adjustments():
                                         shift_id=shift.id,
                                         employee_id=shift.user_id,
                                         object_id=shift.object_id,
+                                        task_entry_v2_id=v2_entry.id,
                                         adjustment_type='task_bonus',
                                         amount=v2_adj_amount,
                                         description=f"Премия за задачу: {v2_text}",
@@ -438,6 +445,7 @@ def process_closed_shifts_adjustments():
                                         shift_id=shift.id,
                                         employee_id=shift.user_id,
                                         object_id=shift.object_id,
+                                        task_entry_v2_id=v2_entry.id,
                                         adjustment_type='task_completed',
                                         amount=Decimal('0.00'),
                                         description=f"Выполнено: {v2_text} (штраф {abs(v2_adj_amount)}₽ избежан)",
@@ -451,6 +459,7 @@ def process_closed_shifts_adjustments():
                                         shift_id=shift.id,
                                         employee_id=shift.user_id,
                                         object_id=shift.object_id,
+                                        task_entry_v2_id=v2_entry.id,
                                         adjustment_type='task_penalty',
                                         amount=v2_adj_amount,
                                         description=f"Штраф за невыполнение задачи: {v2_text}",
