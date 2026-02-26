@@ -59,7 +59,12 @@ class PayrollVerificationService:
         force_close_report = await self._force_close_unclosed_shifts(owner_id)
         report["shifts_force_closed"] = force_close_report["shifts_closed"]
         report["details"].extend(force_close_report["details"])
-        
+
+        # 0б. Пересчитать уже закрытые смены с аномально большой длительностью
+        recalc_report = await self._fix_overclosed_shifts(owner_id, start_date, end_date)
+        report["shifts_force_closed"] += recalc_report["shifts_fixed"]
+        report["details"].extend(recalc_report["details"])
+
         # 1. Найти все завершенные смены владельца без начислений
         missing_report = await self._create_missing_adjustments(owner_id, start_date, end_date)
         report["shifts_checked"] = missing_report["shifts_checked"]
@@ -192,6 +197,144 @@ class PayrollVerificationService:
                 )
             except Exception as e:
                 logger.error(f"Error force-closing shift {shift.id}: {e}")
+
+        return report
+
+    async def _fix_overclosed_shifts(
+        self, owner_id: int, start_date: date, end_date: date
+    ) -> Dict[str, Any]:
+        """Пересчитать завершённые смены, закрытые позже плановогo окончания более чем на 2 часа.
+
+        Такие смены закрылись не автоматически (задача не сработала), а другим механизмом
+        (например, при открытии следующей смены). Пересчитываем end_time, total_hours,
+        total_payment и корректировку shift_base.
+        """
+        report: Dict[str, Any] = {"shifts_fixed": 0, "details": []}
+
+        objects_query = select(Object).where(Object.owner_id == owner_id)
+        objects_result = await self.session.execute(objects_query)
+        owner_objects = {obj.id: obj for obj in objects_result.scalars().all()}
+
+        if not owner_objects:
+            return report
+
+        from sqlalchemy import and_
+
+        shifts_query = (
+            select(Shift)
+            .options(selectinload(Shift.user))
+            .where(
+                and_(
+                    Shift.object_id.in_(owner_objects.keys()),
+                    Shift.status.in_(["completed", "closed"]),
+                    Shift.end_time.isnot(None),
+                    Shift.end_time >= datetime.combine(start_date, datetime.min.time()),
+                    Shift.end_time <= datetime.combine(end_date, datetime.max.time()),
+                    Shift.time_slot_id.isnot(None),  # только плановые с тайм-слотом
+                )
+            )
+        )
+        result = await self.session.execute(shifts_query)
+        shifts = result.scalars().all()
+
+        for shift in shifts:
+            try:
+                obj = owner_objects[shift.object_id]
+                tz_name = getattr(obj, "timezone", None) or "Europe/Moscow"
+                obj_tz = pytz.timezone(tz_name)
+
+                if getattr(shift.start_time, "tzinfo", None):
+                    start_local = shift.start_time.astimezone(obj_tz)
+                else:
+                    start_local = obj_tz.localize(shift.start_time)
+
+                # Плановое окончание по тайм-слоту
+                ts_result = await self.session.execute(
+                    select(TimeSlot).where(TimeSlot.id == shift.time_slot_id)
+                )
+                timeslot = ts_result.scalar_one_or_none()
+                if not timeslot or not timeslot.end_time:
+                    continue
+
+                planned_end_local = obj_tz.localize(
+                    datetime.combine(start_local.date(), timeslot.end_time)
+                )
+                planned_end_utc = planned_end_local.astimezone(pytz.UTC).replace(tzinfo=None)
+
+                # Фактическое окончание
+                actual_end = shift.end_time
+                if getattr(actual_end, "tzinfo", None):
+                    actual_end = actual_end.astimezone(pytz.UTC).replace(tzinfo=None)
+
+                # Смена закрыта позже планового окончания более чем на 2 часа
+                overrun = (actual_end - planned_end_utc).total_seconds()
+                if overrun <= 7200:
+                    continue
+
+                # Пересчитываем
+                start_utc = shift.start_time
+                if getattr(start_utc, "tzinfo", None):
+                    start_utc = start_utc.astimezone(pytz.UTC).replace(tzinfo=None)
+
+                duration = planned_end_utc - start_utc
+                new_hours = Decimal(duration.total_seconds()) / Decimal(3600)
+                new_hours = new_hours.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                new_payment = None
+                if shift.hourly_rate is not None:
+                    new_payment = (new_hours * Decimal(str(shift.hourly_rate))).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+
+                old_hours = shift.total_hours
+                old_payment = shift.total_payment
+
+                shift.end_time = planned_end_utc
+                shift.total_hours = float(new_hours)
+                shift.total_payment = float(new_payment) if new_payment is not None else None
+
+                # Обновляем корректировку shift_base если есть
+                adj_result = await self.session.execute(
+                    select(PayrollAdjustment).where(
+                        PayrollAdjustment.shift_id == shift.id,
+                        PayrollAdjustment.adjustment_type == "shift_base",
+                    )
+                )
+                adj = adj_result.scalar_one_or_none()
+                if adj and new_payment is not None:
+                    adj.amount = new_payment
+                    adj.description = (
+                        f"Базовое начисление за смену #{shift.id} "
+                        f"(пересчитано: {old_payment}→{float(new_payment)})"
+                    )
+
+                employee_name = (
+                    f"{shift.user.last_name} {shift.user.first_name}"
+                    if shift.user
+                    else f"ID {shift.user_id}"
+                )
+                report["shifts_fixed"] += 1
+                report["details"].append(
+                    {
+                        "type": "force_closed_shift",
+                        "shift_id": shift.id,
+                        "employee": employee_name,
+                        "object": obj.name,
+                        "date": planned_end_utc.date().isoformat(),
+                        "amount": float(new_payment or 0),
+                        "message": (
+                            f"Пересчитана смена #{shift.id}: "
+                            f"{old_hours:.2f}ч/{old_payment}₽ → "
+                            f"{float(new_hours):.2f}ч/{float(new_payment or 0):.2f}₽"
+                        ),
+                    }
+                )
+                logger.info(
+                    f"Fixed overclosed shift {shift.id}: hours {old_hours}→{float(new_hours)}, "
+                    f"payment {old_payment}→{float(new_payment or 0)}"
+                )
+            except Exception as e:
+                logger.error(f"Error fixing overclosed shift {shift.id}: {e}")
 
         return report
 
