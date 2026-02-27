@@ -45,6 +45,7 @@ class PayrollVerificationService:
             "shifts_force_closed": 0,
             "missing_adjustments_created": 0,
             "penalties_corrected": 0,
+            "invalid_late_penalties_removed": 0,
             "total_amount_added": Decimal("0"),
             "total_amount_corrected": Decimal("0"),
             "details": []
@@ -77,7 +78,12 @@ class PayrollVerificationService:
         report["penalties_corrected"] = penalties_report["penalties_corrected"]
         report["total_amount_corrected"] = penalties_report["total_corrected"]
         report["details"].extend(penalties_report["details"])
-        
+
+        # 3. Удалить штрафы за опоздание для смен с planned_start < opening_time
+        late_report = await self._fix_invalid_late_start_penalties(owner_id, start_date, end_date)
+        report["invalid_late_penalties_removed"] = late_report["removed"]
+        report["details"].extend(late_report["details"])
+
         await self.session.commit()
         
         return report
@@ -620,5 +626,98 @@ class PayrollVerificationService:
             corrected=report["penalties_corrected"]
         )
         
+        return report
+
+    async def _fix_invalid_late_start_penalties(
+        self,
+        owner_id: int,
+        start_date: date,
+        end_date: date,
+    ) -> Dict[str, Any]:
+        """Удалить штрафы late_start для смен, у которых planned_start (локальное) < opening_time.
+
+        По новой логике штраф за опоздание применяется только если
+        planned_start >= opening_time объекта. Устаревшие корректировки удаляются.
+        """
+        report: Dict[str, Any] = {"removed": 0, "details": []}
+
+        objects_query = select(Object).where(Object.owner_id == owner_id)
+        objects_result = await self.session.execute(objects_query)
+        owner_objects = {obj.id: obj for obj in objects_result.scalars().all()}
+
+        if not owner_objects:
+            return report
+
+        late_query = (
+            select(PayrollAdjustment)
+            .options(
+                selectinload(PayrollAdjustment.shift).selectinload(Shift.time_slot),
+                selectinload(PayrollAdjustment.shift).selectinload(Shift.user),
+                selectinload(PayrollAdjustment.employee),
+            )
+            .where(
+                and_(
+                    PayrollAdjustment.adjustment_type == "late_start",
+                    PayrollAdjustment.object_id.in_(owner_objects.keys()),
+                    PayrollAdjustment.created_at >= datetime.combine(start_date, datetime.min.time()),
+                    PayrollAdjustment.created_at <= datetime.combine(end_date, datetime.max.time()),
+                )
+            )
+        )
+        result = await self.session.execute(late_query)
+        late_adjustments = result.scalars().all()
+
+        for adj in late_adjustments:
+            shift = adj.shift
+            if not shift or not shift.planned_start:
+                continue
+            if not (shift.is_planned and shift.time_slot_id and shift.time_slot):
+                continue
+
+            obj = owner_objects.get(adj.object_id)
+            if not obj or not obj.opening_time:
+                continue
+
+            obj_tz_str = obj.timezone or "Europe/Moscow"
+            obj_tz = pytz.timezone(obj_tz_str)
+            planned_local_time = shift.planned_start.astimezone(obj_tz).time()
+
+            if planned_local_time >= obj.opening_time:
+                continue  # Корректировка легитимна
+
+            # planned_start < opening_time → штраф некорректен, удаляем
+            employee_name = (
+                f"{adj.employee.last_name} {adj.employee.first_name}"
+                if adj.employee
+                else f"ID {adj.employee_id}"
+            )
+            obj_name = obj.name
+
+            logger.info(
+                f"Removing invalid late_start adjustment {adj.id} "
+                f"(shift {shift.id}, planned={planned_local_time}, opening={obj.opening_time})"
+            )
+            await self.session.delete(adj)
+
+            report["removed"] += 1
+            report["details"].append({
+                "type": "invalid_late_penalty_removed",
+                "adjustment_id": adj.id,
+                "shift_id": shift.id,
+                "employee": employee_name,
+                "object": obj_name,
+                "amount": float(adj.amount),
+                "message": (
+                    f"Удалён некорректный штраф за опоздание #{adj.id} "
+                    f"(смена #{shift.id}, planned {planned_local_time.strftime('%H:%M')} "
+                    f"< opening {obj.opening_time.strftime('%H:%M')})"
+                ),
+            })
+
+        logger.info(
+            f"Invalid late penalties check completed",
+            owner_id=owner_id,
+            removed=report["removed"],
+        )
         return report
 

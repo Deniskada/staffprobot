@@ -383,6 +383,7 @@
                             <li>Принудительное закрытие смен, которые не закрылись автоматически</li>
                             <li>Создание недостающих начислений за завершенные смены</li>
                             <li>Корректировку штрафов за задачи на основе текущих настроек объектов</li>
+                            <li>Удаление ошибочных штрафов за опоздание (плановое начало смены раньше открытия объекта)</li>
                         </ul>
                     </div>
                     
@@ -572,7 +573,7 @@ document.getElementById('verifyAdjustmentsForm').addEventListener('submit', asyn
         if (data.success) {
             const report = data.report;
             
-            const hasChanges = (report.shifts_force_closed || 0) > 0 || report.missing_adjustments_created > 0 || report.penalties_corrected > 0;
+            const hasChanges = (report.shifts_force_closed || 0) > 0 || report.missing_adjustments_created > 0 || report.penalties_corrected > 0 || (report.invalid_late_penalties_removed || 0) > 0;
             const alertClass = hasChanges ? 'alert-success' : 'alert-info';
             const icon = hasChanges ? 'check-circle' : 'info-circle';
             
@@ -587,7 +588,8 @@ document.getElementById('verifyAdjustmentsForm').addEventListener('submit', asyn
             html += `<li>Закрыто незакрытых смен: <strong>${report.shifts_force_closed || 0}</strong></li>`;
             html += `<li>Проверено смен: <strong>${report.shifts_checked}</strong></li>`;
             html += `<li>Создано начислений: <strong>${report.missing_adjustments_created}</strong></li>`;
-            html += `<li>Исправлено штрафов: <strong>${report.penalties_corrected}</strong></li>`;
+            html += `<li>Исправлено штрафов за задачи: <strong>${report.penalties_corrected}</strong></li>`;
+            html += `<li>Удалено ошибочных штрафов за опоздание: <strong>${report.invalid_late_penalties_removed || 0}</strong></li>`;
             html += `<li>Добавлено сумма: <strong>${report.total_amount_added.toFixed(2)} ₽</strong></li>`;
             html += `<li>Скорректировано сумма: <strong>${report.total_amount_corrected.toFixed(2)} ₽</strong></li>`;
             html += '</ul></div>';
@@ -603,7 +605,8 @@ document.getElementById('verifyAdjustmentsForm').addEventListener('submit', asyn
                     const typeMap = {
                         'force_closed_shift': ['Закрыто', 'bg-danger'],
                         'missing_shift_base': ['Создано', 'bg-success'],
-                        'task_penalty_corrected': ['Исправлено', 'bg-warning']
+                        'task_penalty_corrected': ['Исправлено', 'bg-warning'],
+                        'invalid_late_penalty_removed': ['Удалён штраф', 'bg-info']
                     };
                     const [typeLabel, typeBadge] = typeMap[detail.type] || ['Изменено', 'bg-secondary'];
                     const amount = detail.amount !== undefined ? detail.amount : detail.new_amount || 0;
