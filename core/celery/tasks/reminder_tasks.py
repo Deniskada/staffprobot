@@ -523,10 +523,19 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                         logger.info(f"Object {current_obj.id}: first_shift={first_shift.id}, last_shift={last_shift.id}, last_status={last_shift.status}, last_end_time={last_shift.end_time}")
                         
                         # Проверка 2: ОТКРЫТИЕ ОБЪЕКТА (вовремя или с опозданием)
-                        # Синхронизируем логику с дашбордом (owner.py): используем default_timezone и candidates_after
-                        # Ищем все смены, которые фактически открыли объект (actual_start или start_time >= expected_open)
-                        naive_expected_open = datetime.combine(today_local, current_obj.opening_time)
-                        expected_open = timezone_helper.local_tz.localize(naive_expected_open)
+                        # expected_open = earliest planned_start смен (учитываем тайм-слоты),
+                        # иначе fallback на opening_time объекта.
+                        planned_opens_local = []
+                        for s in shifts_today:
+                            if s.planned_start:
+                                planned_opens_local.append(timezone_helper.utc_to_local(s.planned_start))
+                            elif s.start_time:
+                                planned_opens_local.append(timezone_helper.utc_to_local(s.start_time))
+                        if planned_opens_local:
+                            expected_open = min(planned_opens_local)
+                        else:
+                            naive_expected_open = datetime.combine(today_local, current_obj.opening_time)
+                            expected_open = timezone_helper.local_tz.localize(naive_expected_open)
                         
                         candidates_after: list[tuple[datetime, Shift]] = []
                         for s in shifts_today:

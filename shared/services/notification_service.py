@@ -462,7 +462,25 @@ class NotificationService:
                 before = datetime.now(timezone.utc)
             
             async with get_async_session() as session:
-                from sqlalchemy import cast, String
+                from sqlalchemy import cast, String, or_, not_
+                # Object-event уведомления (открытие/закрытие/нет смен) имеют смысл
+                # только в течение 2 часов. Устаревшие сначала помечаем cancelled.
+                object_event_types = [
+                    'object_opened', 'object_late_opening', 'object_no_shifts_today',
+                    'object_closed', 'object_early_closing',
+                ]
+                stale_cutoff = before - timedelta(hours=2)
+                await session.execute(
+                    Notification.__table__.update().where(
+                        and_(
+                            cast(Notification.status, String) == NotificationStatus.PENDING.value,
+                            Notification.scheduled_at.isnot(None),
+                            Notification.scheduled_at < stale_cutoff,
+                            Notification.type.in_(object_event_types)
+                        )
+                    ).values(status='cancelled')
+                )
+
                 # В БД enum хранится как значение в lowercase (pending)
                 # Используем cast для правильного сравнения enum с VARCHAR
                 query = select(Notification).where(
