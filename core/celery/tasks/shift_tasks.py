@@ -34,9 +34,9 @@ def auto_close_shifts(self):
         import asyncio
         from core.database.session import get_celery_session
         from datetime import datetime, time, timedelta
-                from sqlalchemy import select, and_, func as sqlfunc
-                from domain.entities.shift import Shift
-                from domain.entities.shift_schedule import ShiftSchedule
+        from sqlalchemy import select, and_, func as sqlfunc
+        from domain.entities.shift import Shift
+        from domain.entities.shift_schedule import ShiftSchedule
         from domain.entities.object import Object
         from domain.entities.time_slot import TimeSlot
         from sqlalchemy.orm import selectinload
