@@ -634,10 +634,12 @@ class PayrollVerificationService:
         start_date: date,
         end_date: date,
     ) -> Dict[str, Any]:
-        """Удалить штрафы late_start для смен, у которых planned_start (локальное) < opening_time.
+        """Удалить ошибочные штрафы late_start.
 
-        По новой логике штраф за опоздание применяется только если
-        planned_start >= opening_time объекта. Устаревшие корректировки удаляются.
+        Штраф считается некорректным если выполняется хотя бы одно из условий:
+        1. planned_start смены (локальное) < opening_time объекта (смена не является открывающей).
+        2. На том же объекте в тот же день есть другая смена с actual_start < planned_start
+           текущей смены — объект уже был открыт другим сотрудником.
         """
         report: Dict[str, Any] = {"removed": 0, "details": []}
 
@@ -682,20 +684,46 @@ class PayrollVerificationService:
             obj_tz = pytz.timezone(obj_tz_str)
             planned_local_time = shift.planned_start.astimezone(obj_tz).time()
 
-            if planned_local_time >= obj.opening_time:
+            invalid_reason = None
+
+            # Условие 1: planned_start < opening_time (до открытия объекта)
+            if planned_local_time < obj.opening_time:
+                invalid_reason = (
+                    f"planned {planned_local_time.strftime('%H:%M')} "
+                    f"< opening {obj.opening_time.strftime('%H:%M')}"
+                )
+
+            # Условие 2: другая смена на объекте в тот же день открылась раньше planned_start
+            if not invalid_reason:
+                earlier_shift_result = await self.session.execute(
+                    select(Shift.id).where(
+                        and_(
+                            Shift.object_id == shift.object_id,
+                            Shift.id != shift.id,
+                            Shift.actual_start.isnot(None),
+                            Shift.actual_start < shift.planned_start,
+                            # Тот же календарный день (UTC-дата planned_start)
+                            Shift.actual_start >= shift.planned_start - timedelta(hours=24),
+                        )
+                    ).limit(1)
+                )
+                if earlier_shift_result.scalar_one_or_none() is not None:
+                    earlier_local = None
+                    # Для логов — найдём actual_start самой ранней смены
+                    invalid_reason = "объект уже был открыт другим сотрудником"
+
+            if not invalid_reason:
                 continue  # Корректировка легитимна
 
-            # planned_start < opening_time → штраф некорректен, удаляем
             employee_name = (
                 f"{adj.employee.last_name} {adj.employee.first_name}"
                 if adj.employee
                 else f"ID {adj.employee_id}"
             )
-            obj_name = obj.name
 
             logger.info(
                 f"Removing invalid late_start adjustment {adj.id} "
-                f"(shift {shift.id}, planned={planned_local_time}, opening={obj.opening_time})"
+                f"(shift {shift.id}): {invalid_reason}"
             )
             await self.session.delete(adj)
 
@@ -705,12 +733,11 @@ class PayrollVerificationService:
                 "adjustment_id": adj.id,
                 "shift_id": shift.id,
                 "employee": employee_name,
-                "object": obj_name,
+                "object": obj.name,
                 "amount": float(adj.amount),
                 "message": (
-                    f"Удалён некорректный штраф за опоздание #{adj.id} "
-                    f"(смена #{shift.id}, planned {planned_local_time.strftime('%H:%M')} "
-                    f"< opening {obj.opening_time.strftime('%H:%M')})"
+                    f"Удалён штраф за опоздание #{adj.id} "
+                    f"(смена #{shift.id}, {invalid_reason})"
                 ),
             })
 
