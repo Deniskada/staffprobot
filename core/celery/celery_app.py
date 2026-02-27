@@ -164,6 +164,11 @@ celery_app.conf.update(
             'task': 'send_birthday_greetings',
             'schedule': crontab(hour=7, minute=30),
         },
+        # Поздравления с государственными праздниками РФ — ежедневно в 09:00 МСК (06:00 UTC)
+        'send-holiday-greetings': {
+            'task': 'send_holiday_greetings',
+            'schedule': crontab(hour=6, minute=0),
+        },
     },
     
     # Маршрутизация задач
@@ -191,7 +196,8 @@ celery_app.conf.update(
         'activate-scheduled-subscriptions': {'queue': 'celery'},  # Iteration 39: активация отложенных подписок
         'monitor_bot_heartbeat': {'queue': 'celery'},
         'core.celery.tasks.ssl_tasks.*': {'queue': 'celery'},
-        'send_birthday_greetings': {'queue': 'notifications'},  # SSL задачи
+        'send_birthday_greetings': {'queue': 'notifications'},
+        'send_holiday_greetings': {'queue': 'notifications'},  # SSL задачи
         'check-certificate-expiry': {'queue': 'celery'},  # SSL: проверка срока действия
         'renew-ssl-certificates': {'queue': 'celery'},  # SSL: обновление сертификатов
         'validate-ssl-configuration': {'queue': 'celery'},  # SSL: валидация конфигурации

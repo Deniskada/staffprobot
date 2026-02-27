@@ -1,8 +1,20 @@
-"""Celery задача: поздравления сотрудников с Днём Рождения."""
+"""Celery задачи: поздравления с Днём Рождения и государственными праздниками."""
 
 from celery import Task
 from core.celery.celery_app import celery_app
 from core.logging.logger import logger
+
+# Государственные праздники РФ: (день, месяц, название, эмодзи)
+RF_HOLIDAYS = [
+    (1,  1,  "Новый год",                          "🎆"),
+    (7,  1,  "Рождество Христово",                 "🎄"),
+    (23, 2,  "День защитника Отечества",           "🎖️"),
+    (8,  3,  "Международный женский день",         "🌸"),
+    (1,  5,  "Праздник Весны и Труда",             "🌷"),
+    (9,  5,  "День Победы",                        "🎗️"),
+    (12, 6,  "День России",                        "🇷🇺"),
+    (4,  11, "День народного единства",            "🤝"),
+]
 
 
 class BirthdayTask(Task):
@@ -198,3 +210,107 @@ async def _send_birthday_greetings_async():
 
     logger.info(f"send_birthday_greetings: всего отправлено {sent_count}, ошибок {len(errors)}")
     return {"sent": sent_count, "errors": errors}
+
+
+@celery_app.task(base=BirthdayTask, bind=True, name="send_holiday_greetings")
+def send_holiday_greetings(self):
+    """Поздравить коллективы объектов с государственными праздниками РФ."""
+    import asyncio
+    try:
+        return asyncio.run(_send_holiday_greetings_async())
+    except Exception as e:
+        logger.error(f"send_holiday_greetings failed: {e}")
+        raise
+
+
+async def _send_holiday_greetings_async():
+    from datetime import datetime
+    from sqlalchemy import select, and_
+    import pytz
+
+    from core.database.session import get_celery_session
+    from core.config.settings import settings
+    from domain.entities.user import User
+    from domain.entities.object import Object
+    from shared.services.yandex_gpt_service import generate_holiday_greeting
+    from telegram import Bot
+
+    moscow_tz = pytz.timezone("Europe/Moscow")
+    today = datetime.now(moscow_tz).date()
+
+    # Проверяем, есть ли сегодня праздник
+    holiday = next(
+        ((d, m, name, emoji) for d, m, name, emoji in RF_HOLIDAYS
+         if d == today.day and m == today.month),
+        None,
+    )
+
+    if not holiday:
+        logger.info("send_holiday_greetings: сегодня нет праздников")
+        return {"sent": 0, "holiday": None}
+
+    _, _, holiday_name, holiday_emoji = holiday
+    logger.info(f"send_holiday_greetings: сегодня — {holiday_name}")
+
+    # Генерируем поздравление
+    greeting = await generate_holiday_greeting(holiday_name)
+    if not greeting:
+        greeting = f"Поздравляем весь коллектив с праздником — {holiday_name}!"
+
+    message = f"{holiday_emoji} *{holiday_name}!*\n\n{greeting}"
+
+    bot = Bot(token=settings.telegram_bot_token)
+    sent_count = 0
+    errors = []
+
+    async with get_celery_session() as session:
+        # Получаем всех активных владельцев
+        owners_q = await session.execute(
+            select(User).where(
+                and_(User.is_active == True, User.role == "owner")
+            )
+        )
+        owners = owners_q.scalars().all()
+
+        for owner in owners:
+            # Проверяем настройку уведомления
+            prefs = owner.notification_preferences or {}
+            holiday_pref = prefs.get("employee_holiday_greeting", {})
+            if holiday_pref.get("telegram", True) is False:
+                continue
+
+            # Получаем объекты владельца с telegram-группой
+            objects_q = await session.execute(
+                select(Object).where(
+                    and_(
+                        Object.owner_id == owner.id,
+                        Object.is_active == True,
+                        Object.telegram_report_chat_id.isnot(None),
+                    )
+                )
+            )
+            objects = objects_q.scalars().all()
+
+            sent_to: set = set()
+
+            for obj in objects:
+                chat_id = obj.telegram_report_chat_id
+                if not chat_id or chat_id in sent_to:
+                    continue
+                try:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=message,
+                        parse_mode="Markdown",
+                    )
+                    sent_to.add(chat_id)
+                    sent_count += 1
+                    logger.info(f"Праздник: отправлено в группу {chat_id} (объект {obj.id})")
+                except Exception as e:
+                    errors.append(f"object {obj.id} group {chat_id}: {e}")
+                    logger.warning(f"Ошибка отправки в группу {chat_id}: {e}")
+
+    logger.info(
+        f"send_holiday_greetings: {holiday_name} — отправлено {sent_count} групп, ошибок {len(errors)}"
+    )
+    return {"sent": sent_count, "holiday": holiday_name, "errors": errors}

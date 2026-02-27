@@ -72,6 +72,7 @@ class NotificationType(enum.Enum):
     
     # Сотрудники
     EMPLOYEE_BIRTHDAY = "employee_birthday"             # День рождения сотрудника
+    EMPLOYEE_HOLIDAY_GREETING = "employee_holiday_greeting"  # Поздравление с государственным праздником
 
     # Системные
     WELCOME = "welcome"                                 # Приветствие
