@@ -580,7 +580,13 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                             obj_tz = pytz.timezone(obj_timezone)
                             expected_close = obj_tz.localize(naive_expected_close)
                             actual_close_local = timezone_helper.utc_to_local(last_shift.end_time, timezone_str=obj_timezone)
-                            
+
+                            # Защита от ложных срабатываний: если до закрытия объекта ещё больше 30 минут,
+                            # не оцениваем — возможно, следующая плановая смена ещё не началась
+                            now_local_for_close = timezone_helper.utc_to_local(now, timezone_str=obj_timezone)
+                            if now_local_for_close < expected_close - timedelta(minutes=30):
+                                continue
+
                             early_minutes = int((expected_close - actual_close_local).total_seconds() / 60)
                             
                             # Проверка: если все смены завершены и прошло 10 минут после закрытия - не создаем уведомление
