@@ -1,6 +1,7 @@
 """Celery задача для создания корректировок начислений из закрытых смен."""
 
 from datetime import datetime, timedelta, time as dt_time
+import pytz
 from decimal import Decimal
 import asyncio
 
@@ -159,42 +160,34 @@ def process_closed_shifts_adjustments():
                         if shift.planned_start and shift.actual_start:
                             obj = shift.object
 
-                            # Определяем, является ли смена нестандартной:
-                            # сравниваем start_time тайм-слота с opening_time объекта
-                            # (оба поля — локальное Time, сравниваются напрямую)
-                            should_penalize = True
+                            # Штраф применяется только для плановых смен с тайм-слотом,
+                            # у которых planned_start (в локальном времени объекта) >= opening_time.
+                            # Это позволяет корректно обрабатывать смены с индивидуальным
+                            # временем начала (не равным времени открытия тайм-слота).
+                            should_penalize = False
 
                             if shift.is_planned and shift.time_slot_id and shift.time_slot:
-                                timeslot_start = shift.time_slot.start_time  # local Time
-                                opening_time = obj.opening_time               # local Time
-                                timeslot_matches_opening = (timeslot_start == opening_time)
+                                obj_tz_str = obj.timezone or "Europe/Moscow"
+                                obj_tz = pytz.timezone(obj_tz_str)
+                                planned_local_time = shift.planned_start.astimezone(obj_tz).time()
+                                opening_time = obj.opening_time  # local Time
 
                                 logger.debug(
-                                    f"Shift {shift.id} time check",
-                                    timeslot_start=timeslot_start.strftime('%H:%M'),
+                                    f"Shift {shift.id} planned_start check",
+                                    planned_start_local=planned_local_time.strftime('%H:%M'),
                                     opening_time=opening_time.strftime('%H:%M'),
-                                    matches=timeslot_matches_opening
+                                    planned_ge_opening=(planned_local_time >= opening_time)
                                 )
 
-                                if timeslot_matches_opening:
-                                    # Стандартная смена: используем флаг тайм-слота
+                                if planned_local_time >= opening_time:
                                     should_penalize = shift.time_slot.penalize_late_start
                                     logger.debug(
-                                        f"Standard shift: using timeslot flag",
-                                        shift_id=shift.id,
-                                        penalize_late_start=should_penalize
+                                        f"Shift {shift.id}: planned_start >= opening_time, penalize={should_penalize}"
                                     )
                                 else:
-                                    # Нестандартная смена: тайм-слот запланирован на другое время →
-                                    # штраф за опоздание не начисляется
-                                    should_penalize = False
                                     logger.debug(
-                                        f"Non-standard shift: timeslot start != opening_time, skipping penalty",
-                                        shift_id=shift.id
+                                        f"Shift {shift.id}: planned_start < opening_time, no penalty"
                                     )
-                            else:
-                                # Спонтанная смена (без тайм-слота): штраф не начисляется
-                                should_penalize = False
                             
                             if should_penalize:
                                 # Сравниваем actual_start с planned_start (порог уже учтен при открытии смены)
