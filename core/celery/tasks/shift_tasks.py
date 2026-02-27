@@ -34,9 +34,9 @@ def auto_close_shifts(self):
         import asyncio
         from core.database.session import get_celery_session
         from datetime import datetime, time, timedelta
-        from sqlalchemy import select, and_
-        from domain.entities.shift import Shift
-        from domain.entities.shift_schedule import ShiftSchedule
+                from sqlalchemy import select, and_, func as sqlfunc
+                from domain.entities.shift import Shift
+                from domain.entities.shift_schedule import ShiftSchedule
         from domain.entities.object import Object
         from domain.entities.time_slot import TimeSlot
         from sqlalchemy.orm import selectinload
@@ -70,6 +70,7 @@ def auto_close_shifts(self):
                     try:
                         end_time_utc = None
                         planned_end_utc = None
+                        timeslot = None
                         obj = shift.object
                         tz_name = getattr(obj, 'timezone', None) or 'Europe/Moscow'
                         obj_tz = pytz.timezone(tz_name)
@@ -109,36 +110,57 @@ def auto_close_shifts(self):
                         should_close = False
                         close_at_time = None
                         if planned_end_matches_closing_time and obj and obj.auto_close_minutes:
-                            # Проверяем, прошло ли >= auto_close_minutes со времени planned_end
+                            # planned_end == closing_time: старая логика через auto_close_minutes
                             auto_close_deadline = planned_end_utc + timedelta(minutes=obj.auto_close_minutes)
                             if now_utc >= auto_close_deadline:
                                 should_close = True
-                                close_at_time = planned_end_utc  # Используем время закрытия объекта, а не текущее время
+                                close_at_time = planned_end_utc
                                 logger.info(
                                     f"Shift {shift.id}: auto-close condition met (planned_end={planned_end_utc}, "
                                     f"auto_close_minutes={obj.auto_close_minutes}, deadline={auto_close_deadline}, now={now_utc})"
                                 )
-                        elif planned_end_time and obj and obj.closing_time and obj.auto_close_minutes:
-                            # Если planned_end != closing_time, проверяем: ждём до closing_time + auto_close_minutes
-                            # Затем закрываем с end_time = planned_end
-                            closing_time_local = datetime.combine(planned_end_local.date(), obj.closing_time)
-                            closing_time_local = obj_tz.localize(closing_time_local)
-                            closing_time_utc = closing_time_local.astimezone(pytz.UTC)
-                            auto_close_deadline = closing_time_utc + timedelta(minutes=obj.auto_close_minutes)
-                            
-                            logger.debug(
-                                f"Shift {shift.id}: planned_end ({planned_end_time}) != closing_time ({obj.closing_time}), "
-                                f"waiting until {auto_close_deadline} (closing_time + auto_close_minutes={obj.auto_close_minutes})"
-                            )
-                            
-                            if now_utc >= auto_close_deadline:
-                                should_close = True
-                                close_at_time = planned_end_utc  # Используем planned_end, а не closing_time
-                                logger.info(
-                                    f"Shift {shift.id}: auto-close condition met for non-matching shift "
-                                    f"(planned_end={planned_end_utc}, closing_time={obj.closing_time}, "
-                                    f"auto_close_minutes={obj.auto_close_minutes}, deadline={auto_close_deadline}, now={now_utc})"
+                        elif planned_end_time and planned_end_utc and obj and obj.closing_time:
+                            # planned_end != closing_time: сравниваем кол-во активных смен с max_employees тайм-слота
+                            ts_max_employees = getattr(timeslot, 'max_employees', None) or 1 if shift.time_slot_id else 1
+                            active_count_q = await session.execute(
+                                select(sqlfunc.count(Shift.id)).where(
+                                    and_(Shift.object_id == shift.object_id, Shift.status == 'active')
                                 )
+                            )
+                            active_count = active_count_q.scalar_one()
+
+                            if active_count > ts_max_employees:
+                                # Сотрудников больше нормы: закрываем через 1 час после planned_end
+                                deadline = planned_end_utc + timedelta(hours=1)
+                                if now_utc >= deadline:
+                                    should_close = True
+                                    close_at_time = planned_end_utc
+                                    logger.info(
+                                        f"Shift {shift.id}: overstaffed ({active_count}>{ts_max_employees}), "
+                                        f"auto-close at planned_end={planned_end_utc} (deadline={deadline})"
+                                    )
+                                else:
+                                    logger.debug(
+                                        f"Shift {shift.id}: overstaffed ({active_count}>{ts_max_employees}), "
+                                        f"waiting until {deadline}"
+                                    )
+                            else:
+                                # Норма: ждём closing_time объекта, закрываем по closing_time
+                                closing_local = datetime.combine(start_local.date(), obj.closing_time)
+                                closing_local = obj_tz.localize(closing_local)
+                                closing_utc = closing_local.astimezone(pytz.UTC)
+                                if now_utc >= closing_utc:
+                                    should_close = True
+                                    close_at_time = closing_utc
+                                    logger.info(
+                                        f"Shift {shift.id}: planned_end ({planned_end_time}) != closing_time ({obj.closing_time}), "
+                                        f"active={active_count} <= max={ts_max_employees}, closing at closing_time"
+                                    )
+                                else:
+                                    logger.debug(
+                                        f"Shift {shift.id}: planned_end ({planned_end_time}) != closing_time ({obj.closing_time}), "
+                                        f"active={active_count} <= max={ts_max_employees}, waiting for closing_time={closing_utc}"
+                                    )
                         elif end_time_utc and now_utc >= end_time_utc:
                             # Для остальных смен (без auto_close_minutes или без planned_end) - стандартная логика
                             should_close = True
@@ -319,6 +341,7 @@ def auto_close_shifts(self):
                     try:
                         planned_end_utc = None
                         end_time_utc = None
+                        timeslot = None
                         obj = schedule.object
                         tz_name = getattr(obj, 'timezone', None) or 'Europe/Moscow'
                         obj_tz = pytz.timezone(tz_name)
@@ -364,36 +387,57 @@ def auto_close_shifts(self):
                         should_close = False
                         close_at_time = None
                         if planned_end_matches_closing_time and obj and obj.auto_close_minutes:
-                            # Проверяем, прошло ли >= auto_close_minutes со времени planned_end
+                            # planned_end == closing_time: старая логика через auto_close_minutes
                             auto_close_deadline = planned_end_utc + timedelta(minutes=obj.auto_close_minutes)
                             if now_utc >= auto_close_deadline:
                                 should_close = True
-                                close_at_time = planned_end_utc  # Используем время закрытия объекта, а не текущее время
+                                close_at_time = planned_end_utc
                                 logger.info(
                                     f"Schedule {schedule.id}: auto-close condition met (planned_end={planned_end_utc}, "
                                     f"auto_close_minutes={obj.auto_close_minutes}, deadline={auto_close_deadline}, now={now_utc})"
                                 )
-                        elif planned_end_time and planned_end_local and obj and obj.closing_time and obj.auto_close_minutes:
-                            # Если planned_end != closing_time, проверяем: ждём до closing_time + auto_close_minutes
-                            # Затем закрываем с planned_end = planned_end
-                            closing_time_local = datetime.combine(planned_end_local.date(), obj.closing_time)
-                            closing_time_local = obj_tz.localize(closing_time_local)
-                            closing_time_utc = closing_time_local.astimezone(pytz.UTC)
-                            auto_close_deadline = closing_time_utc + timedelta(minutes=obj.auto_close_minutes)
-                            
-                            logger.debug(
-                                f"Schedule {schedule.id}: planned_end ({planned_end_time}) != closing_time ({obj.closing_time}), "
-                                f"waiting until {auto_close_deadline} (closing_time + auto_close_minutes={obj.auto_close_minutes})"
-                            )
-                            
-                            if now_utc >= auto_close_deadline:
-                                should_close = True
-                                close_at_time = planned_end_utc  # Используем planned_end, а не closing_time
-                                logger.info(
-                                    f"Schedule {schedule.id}: auto-close condition met for non-matching shift "
-                                    f"(planned_end={planned_end_utc}, closing_time={obj.closing_time}, "
-                                    f"auto_close_minutes={obj.auto_close_minutes}, deadline={auto_close_deadline}, now={now_utc})"
+                        elif planned_end_time and planned_end_utc and planned_end_local and obj and obj.closing_time:
+                            # planned_end != closing_time: сравниваем кол-во активных смен с max_employees тайм-слота
+                            ts_max_employees = getattr(timeslot, 'max_employees', None) or 1 if schedule.time_slot_id else 1
+                            active_count_q = await session.execute(
+                                select(sqlfunc.count(Shift.id)).where(
+                                    and_(Shift.object_id == schedule.object_id, Shift.status == 'active')
                                 )
+                            )
+                            active_count = active_count_q.scalar_one()
+
+                            if active_count > ts_max_employees:
+                                # Сотрудников больше нормы: закрываем через 1 час после planned_end
+                                deadline = planned_end_utc + timedelta(hours=1)
+                                if now_utc >= deadline:
+                                    should_close = True
+                                    close_at_time = planned_end_utc
+                                    logger.info(
+                                        f"Schedule {schedule.id}: overstaffed ({active_count}>{ts_max_employees}), "
+                                        f"auto-close at planned_end={planned_end_utc} (deadline={deadline})"
+                                    )
+                                else:
+                                    logger.debug(
+                                        f"Schedule {schedule.id}: overstaffed ({active_count}>{ts_max_employees}), "
+                                        f"waiting until {deadline}"
+                                    )
+                            else:
+                                # Норма: ждём closing_time объекта, закрываем по closing_time
+                                closing_local = datetime.combine(planned_end_local.date(), obj.closing_time)
+                                closing_local = obj_tz.localize(closing_local)
+                                closing_utc = closing_local.astimezone(pytz.UTC)
+                                if now_utc >= closing_utc:
+                                    should_close = True
+                                    close_at_time = closing_utc
+                                    logger.info(
+                                        f"Schedule {schedule.id}: planned_end ({planned_end_time}) != closing_time ({obj.closing_time}), "
+                                        f"active={active_count} <= max={ts_max_employees}, closing at closing_time"
+                                    )
+                                else:
+                                    logger.debug(
+                                        f"Schedule {schedule.id}: planned_end ({planned_end_time}) != closing_time ({obj.closing_time}), "
+                                        f"active={active_count} <= max={ts_max_employees}, waiting for closing_time={closing_utc}"
+                                    )
                         elif end_time_utc and now_utc >= end_time_utc:
                             # Для остальных смен (без auto_close_minutes или без planned_end) - стандартная логика
                             should_close = True
