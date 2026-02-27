@@ -579,14 +579,27 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                         # Создаем уведомление только если есть actual_start
                         if opener_shift and opener_shift.actual_start:
                             actual_open_local = timezone_helper.utc_to_local(opener_shift.actual_start)
-                            
-                            # Уже создавали уведомление для этого объекта на сегодня?
-                            # Проверяем по дате, чтобы не создавать дубликаты при каждом запуске задачи
+
+                            # Правило: OBJECT_LATE_OPENING только если planned_start == opening_time.
+                            # Если planned_start != opening_time — смена не «открывающая», опоздание не считаем.
+                            if delay_minutes > 5 and opener_shift.planned_start:
+                                opener_planned_time = timezone_helper.utc_to_local(opener_shift.planned_start).time()
+                                if opener_planned_time != current_obj.opening_time:
+                                    delay_minutes = 0
+
+                            # Деdup: проверяем оба типа сразу (OPENED и LATE_OPENING),
+                            # чтобы не создавать дубли при смене типа между запусками задачи.
                             notif_type = NotificationType.OBJECT_LATE_OPENING if delay_minutes > 5 else NotificationType.OBJECT_OPENED
-                            notification_exists = await _check_notification_exists(
-                                session, current_obj.owner_id, 
-                                notif_type.value,  # Передаём строковое значение
-                                {"object_id": current_obj.id, "date": str(today_local)}
+                            data_key = {"object_id": current_obj.id, "date": str(today_local)}
+                            notification_exists = (
+                                await _check_notification_exists(
+                                    session, current_obj.owner_id,
+                                    NotificationType.OBJECT_LATE_OPENING.value, data_key
+                                )
+                                or await _check_notification_exists(
+                                    session, current_obj.owner_id,
+                                    NotificationType.OBJECT_OPENED.value, data_key
+                                )
                             )
                             
                             if not notification_exists:
