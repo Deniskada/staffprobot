@@ -7,7 +7,7 @@ Create Date: 2026-02-27
 from alembic import op
 import sqlalchemy as sa
 
-revision = '20260227_notification_type_varchar'
+revision = '20260227_notif_type_varchar'
 down_revision = 'incident_types_260207'
 branch_labels = None
 depends_on = None
