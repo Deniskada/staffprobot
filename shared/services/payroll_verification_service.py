@@ -636,8 +636,8 @@ class PayrollVerificationService:
     ) -> Dict[str, Any]:
         """Удалить ошибочные штрафы late_start.
 
-        Штраф считается некорректным если planned_start смены (в локальном времени объекта)
-        < opening_time объекта — смена была запланирована до начала работы объекта.
+        Штраф за опоздание применяется только если planned_start смены (локальное время)
+        равен opening_time объекта. Если planned_start != opening_time — штраф удаляется.
         """
         report: Dict[str, Any] = {"removed": 0, "details": []}
 
@@ -681,8 +681,8 @@ class PayrollVerificationService:
             obj_tz = pytz.timezone(obj_tz_str)
             planned_local_time = shift.planned_start.astimezone(obj_tz).time()
 
-            # Штраф удаляется только если planned_start < opening_time
-            if planned_local_time >= obj.opening_time:
+            # Штраф удаляется если planned_start != opening_time
+            if planned_local_time == obj.opening_time:
                 continue
 
             employee_name = (
@@ -709,7 +709,7 @@ class PayrollVerificationService:
                 "message": (
                     f"Удалён штраф #{adj.id} (смена #{shift.id}): "
                     f"planned {planned_local_time.strftime('%H:%M')} "
-                    f"< opening {obj.opening_time.strftime('%H:%M')}"
+                    f"≠ opening {obj.opening_time.strftime('%H:%M')}"
                 ),
             })
 

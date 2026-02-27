@@ -179,14 +179,15 @@ def process_closed_shifts_adjustments():
                                     planned_ge_opening=(planned_local_time >= opening_time)
                                 )
 
-                                if planned_local_time >= opening_time:
+                                if planned_local_time == opening_time:
                                     should_penalize = shift.time_slot.penalize_late_start
                                     logger.debug(
-                                        f"Shift {shift.id}: planned_start >= opening_time, penalize={should_penalize}"
+                                        f"Shift {shift.id}: planned_start == opening_time, penalize={should_penalize}"
                                     )
                                 else:
                                     logger.debug(
-                                        f"Shift {shift.id}: planned_start < opening_time, no penalty"
+                                        f"Shift {shift.id}: planned_start {planned_local_time.strftime('%H:%M')} "
+                                        f"!= opening_time {opening_time.strftime('%H:%M')}, no penalty"
                                     )
                             
                             if should_penalize:
