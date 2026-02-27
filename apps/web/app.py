@@ -16,7 +16,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, constructor_api, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, shared_cancellations, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll, manager_payroll_adjustments, owner_payroll_adjustments, cancellations, admin_notifications, organization_profiles, owner_features, owner_media_storage, owner_cancellation_reasons, owner_rules, owner_tasks, owner_incidents, owner_products, manager_tasks, employee_tasks, employee_incidents, webhooks, owner_subscription, support, media_proxy, shared_profiles, address_book, manager_profiles
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, constructor_api, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, shared_cancellations, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll, manager_payroll_adjustments, owner_payroll_adjustments, cancellations, admin_notifications, organization_profiles, owner_features, owner_media_storage, owner_cancellation_reasons, owner_rules, owner_tasks, owner_incidents, owner_products, manager_tasks, employee_tasks, employee_incidents, employee_offers, webhooks, owner_subscription, support, media_proxy, shared_profiles, address_book, manager_profiles
 from routes.shared.calendar_api import router as calendar_api_router
 from apps.web.routes.system_settings_api import router as system_settings_router
 from core.database.session import get_db_session
@@ -105,7 +105,7 @@ app = FastAPI(
 # Настройка для работы за HTTPS
 app.add_middleware(
     TrustedHostMiddleware, 
-    allowed_hosts=["staffprobot.ru", "*.staffprobot.ru", "localhost", "127.0.0.1"]
+    allowed_hosts=["staffprobot.ru", "*.staffprobot.ru", "localhost", "127.0.0.1", "host.docker.internal"]
 )
 
 # Rate Limiting Middleware
@@ -296,6 +296,7 @@ app.include_router(test_calendar.router, tags=["Тест календаря"])
 app.include_router(employee.router, prefix="/employee", tags=["Сотрудник"])
 app.include_router(employee_tasks.router, tags=["Сотрудник - Задачи v2"])
 app.include_router(employee_incidents.router, tags=["Сотрудник - Тикеты"])
+app.include_router(employee_offers.router, prefix="/employee", tags=["Сотрудник - Оферты"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Уведомления API"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Вебхуки"])
 app.include_router(calendar_api_router, tags=["Календарь - API"])
@@ -318,6 +319,9 @@ app.include_router(manager_reviews_simple.router, tags=["Управляющий 
 app.include_router(test_dropdown.router, tags=["Тест Dropdown"])
 app.include_router(support.router, prefix="/support", tags=["Поддержка"])
 app.include_router(manager_profiles.router, prefix="/manager", tags=["Управляющий - Профили"])
+
+from apps.web.routes.internal_api import router as internal_api_router
+app.include_router(internal_api_router, tags=["Internal API"])
 
 
 # API для интеграции с ботом

@@ -5,7 +5,7 @@ set -e
 
 SERVER_IP=$1
 SERVER_USER="staffprobot"
-PROJECT_DIR="/opt/staffprobot"
+PROJECT_DIR="/opt/sites/staffprobot"
 
 if [ -z "$SERVER_IP" ]; then
     echo "❌ Использование: $0 <SERVER_IP>"

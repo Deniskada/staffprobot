@@ -32,7 +32,7 @@ services:
       --maxmemory-policy allkeys-lru
       --save 900 1
       --save 300 10
-      --appendonly yes
+      --appendonly no
     ports:
       - "6379:6379"
     volumes:

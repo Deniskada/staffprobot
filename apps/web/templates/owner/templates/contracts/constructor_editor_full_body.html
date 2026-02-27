@@ -1,0 +1,60 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">{{ title }} <span id="typeLabel" class="text-muted"></span></h1>
+        <a href="/owner/contract-templates/constructor/flows" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> К flows</a>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-6">
+      <p class="text-muted small">Jinja2-шаблон. Переменные: customer_party, contractor_party, works_list, start_date, end_date, cost, cost_words, payment_terms, materials_supplier, warranty_text и др.</p>
+      <p class="text-muted small">Оформление: добавьте в начало шаблона блок <code>&lt;style&gt;...&lt;/style&gt;</code> для шрифтов, отступов, нумерации.</p>
+      <textarea class="form-control font-monospace" id="fullBodyEdit" rows="25"></textarea>
+      <div class="mt-2">
+        <button class="btn btn-primary" id="saveBtn">Сохранить</button>
+        <button class="btn btn-outline-secondary" id="previewBtn">Превью</button>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <h6>Превью</h6>
+      <div id="previewArea" class="border p-3 bg-light" style="min-height:300px; white-space:pre-wrap; font-size:0.9em;"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  const typeId = {{ type_id }};
+  async function load() {
+    const r = await fetch('/api/constructor/contract-types/' + typeId + '/full-body', { credentials: 'include' });
+    const data = await r.json();
+    if (data.success) {
+      document.getElementById('typeLabel').textContent = data.label ? ' — ' + data.label : '';
+      document.getElementById('fullBodyEdit').value = data.full_body || '';
+    }
+  }
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const body = document.getElementById('fullBodyEdit').value;
+    const r = await fetch('/api/constructor/contract-types/' + typeId + '/full-body', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ full_body: body })
+    });
+    if ((await r.json()).success) alert('Сохранено');
+  });
+  document.getElementById('previewBtn').addEventListener('click', async () => {
+    const body = document.getElementById('fullBodyEdit').value;
+    const r = await fetch('/api/constructor/preview-full-body', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ full_body: body })
+    });
+    const data = await r.json();
+    document.getElementById('previewArea').innerHTML = data.success ? data.preview.replace(/\n/g, '<br>') : (data.error || 'Ошибка');
+  });
+  load();
+})();
+</script>
+{% endblock %}

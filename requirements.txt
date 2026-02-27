@@ -35,3 +35,6 @@ yookassa>=3.0.0
 
 # Медиа-хранилище (S3/MinIO/Selectel)
 boto3>=1.34.0
+
+# PDF-генерация (договоры)
+weasyprint>=62.0

@@ -8,10 +8,19 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1 class="h3 mb-0">{{ template.name }}</h1>
-                <div>
+                <div class="d-flex gap-2">
                     <a href="/owner/contract-templates/{{ template.id }}/edit" class="btn btn-primary">
                         <i class="bi bi-pencil"></i> Редактировать
                     </a>
+                    {% if template.constructor_flow_id %}
+                    <a href="/owner/contract-templates/constructor/flows/{{ template.constructor_flow_id }}/steps" class="btn btn-outline-primary">
+                        <i class="bi bi-diagram-3"></i> Редактор мастера
+                    </a>
+                    {% elif template.contract_type_id %}
+                    <a href="/owner/contract-templates/constructor/flows" class="btn btn-outline-primary">
+                        <i class="bi bi-diagram-3"></i> Редактор мастера
+                    </a>
+                    {% endif %}
                     <a href="/owner/contract-templates" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-left"></i> Назад к списку
                     </a>

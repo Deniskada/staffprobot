@@ -106,12 +106,18 @@ URLHelper.get_web_url("/owner/objects")
 
 ### 6.3. OpenSpec + Spec Kit
 
-Спеки как “источник истины” для крупных изменений:
-- `specs/capabilities/*` — актуальные спецификации
-- `changes/active/*` — активные предложения изменений
+Спеки как "источник истины" для крупных изменений:
+- `openspec/specs/*` — актуальные спецификации (OpenSpec)
+- `openspec/changes/*` — активные предложения изменений (OpenSpec)
+- `specs/capabilities/*` — актуальные спецификации (Spec Kit, legacy)
+- `changes/active/*` — активные предложения изменений (legacy)
 
-CLI:
+**Рекомендуется использовать OpenSpec** (`openspec/`) для новых спецификаций.
+
+CLI (Spec Kit):
 - `specify init` / `specify check` / `specify version`
+
+**Документация**: `.cursor/docs/OPENSPEC_USAGE.md` и `.cursor/docs/MEMORY_BANK_USAGE.md`
 
 ### 6.4. TaskMaster (если включён)
 

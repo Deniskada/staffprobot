@@ -9,16 +9,18 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1 class="h3 mb-0">{{ title }}</h1>
                 <div class="d-flex gap-2">
-                    <!-- Выбор типа шаблонов -->
+                    <!-- Фильтр по типу договора -->
                     <div class="btn-group" role="group">
-                        <a href="/owner/contract-templates?template_type=planning" 
-                           class="btn {% if template_type == 'planning' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                            <i class="bi bi-calendar3"></i> Планирование
+                        <a href="/owner/contract-templates" 
+                           class="btn {% if not contract_type %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            Все
                         </a>
-                        <a href="/owner/contract-templates?template_type=contract" 
-                           class="btn {% if template_type == 'contract' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                            <i class="bi bi-file-earmark-text"></i> Договоры
+                        {% for ct in contract_types %}
+                        <a href="/owner/contract-templates?contract_type={{ ct.code }}" 
+                           class="btn {% if contract_type == ct.code %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {{ ct.label }}
                         </a>
+                        {% endfor %}
                     </div>
                     
                     <!-- Кнопка создания -->
@@ -27,6 +29,9 @@
                     </a>
                     <a href="/owner/contract-templates/constructor" class="btn btn-outline-primary">
                         <i class="bi bi-diagram-3"></i> Мастер конструктора
+                    </a>
+                    <a href="/owner/contract-templates/constructor/flows" class="btn btn-outline-secondary">
+                        <i class="bi bi-pencil-square"></i> Редактор мастера
                     </a>
                 </div>
             </div>
@@ -38,6 +43,11 @@
                         <div class="card h-100">
                             <div class="card-body">
                                 <h5 class="card-title">{{ template.name }}</h5>
+                                {% if template.contract_type %}
+                                    <span class="badge {% if template.contract_type.code == 'offer' %}bg-warning text-dark{% else %}bg-info{% endif %} mb-2">
+                                        {{ template.contract_type.label }}
+                                    </span>
+                                {% endif %}
                                 {% if template.description %}
                                     <p class="card-text text-muted">{{ template.description }}</p>
                                 {% endif %}

@@ -2,34 +2,28 @@
 
 {% block title %}{{ title }}{% endblock %}
 
-{% block head %}
-<!-- jQuery загружаем первым - версия для совместимости -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js" integrity="sha512-pumBsjNRGGqkPzKHndZMaAG+bir374sORyzM3uulLV14lN5LyykqNk8eEeUlUkB3U0M4FApyaHraT65ihJhDpQ==" crossorigin="anonymous"></script>
-<!-- Summernote WYSIWYG Editor CSS -->
-<link href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.css" rel="stylesheet">
-<!-- Summernote WYSIWYG Editor JS -->
-<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-bs5.min.js"></script>
-<!-- Проверка загрузки -->
-<script>
-console.log('Скрипты head загружены. jQuery доступен:', typeof window.jQuery !== 'undefined');
-</script>
-
+{% block extra_css %}
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 <style>
-/* Стили для блока подсказок тегов */
+#contentEditor {
+    height: 500px;
+    font-family: 'Times New Roman', serif;
+    font-size: 14px;
+}
+#contentEditor .ql-editor {
+    min-height: 460px;
+}
 .card .tag-item {
     border-left: 3px solid #0d6efd;
     padding-left: 8px;
-    margin-left: 0;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
-
 .card .tag-item:hover {
     background-color: #f8f9fa;
     transform: translateX(2px);
 }
-
 .card .tag-item code {
     background-color: #f8f9fa;
     color: #0d6efd;
@@ -39,63 +33,15 @@ console.log('Скрипты head загружены. jQuery доступен:', 
     font-family: 'Courier New', monospace;
     cursor: pointer;
 }
-
 .card .tag-item code:hover {
     background-color: #e0e7ff;
 }
-
-.card .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
-}
-
-.card .card-header h5 {
-    color: #495057;
-}
-
-/* Плавный скрол для sticky бокс */
-.sticky-top {
-    transition: top 0.3s ease;
-}
-
-/* Скрытие категорий при фильтрации */
-.tag-category {
-    transition: opacity 0.3s ease;
-}
-
-.tag-category.hidden {
-    display: none;
-}
-
-/* Анимация уведомления */
+.tag-category.hidden { display: none; }
 @keyframes fadeInOut {
     0% { opacity: 0; transform: translateY(-10px); }
     20% { opacity: 1; transform: translateY(0); }
     80% { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-10px); }
-}
-
-/* Стили для Summernote редактора */
-.summernote-editor {
-    border: 1px solid #ced4da;
-    border-radius: 0.375rem;
-}
-
-.note-editor.note-frame .note-editing-area .note-editable {
-    font-family: 'Times New Roman', serif;
-    font-size: 14px;
-    line-height: 1.5;
-    color: #333;
-    padding: 15px;
-}
-
-/* Стили для средного блока редактора */
-.summernote-container {
-    background: white;
-    border: 1px solid #ced4da;
-    border-radius: 0.375rem;
-    height: 400px;
-    position: relative;
 }
 </style>
 {% endblock %}
@@ -126,6 +72,26 @@ console.log('Скрипты head загружены. jQuery доступен:', 
               <textarea name="description" class="form-control" rows="2"></textarea>
             </div>
             <div class="mb-3">
+              <label class="form-label">Тип договора *</label>
+              <select id="contractTypeSelect" class="form-select" required>
+                <option value="">— Выберите тип —</option>
+                {% for ct in contract_types if ct.code != 'offer' %}
+                <option value="{{ ct.id }}" data-code="{{ ct.code }}">{{ ct.label }}</option>
+                {% endfor %}
+              </select>
+              <input type="hidden" name="contract_type_id" id="contractTypeId">
+              <input type="hidden" name="is_offer" id="isOfferHidden" value="0">
+            </div>
+            <div class="mb-3 d-none" id="offerCheckboxWrap">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="isOffer">
+                <label class="form-check-label" for="isOffer">
+                  <i class="bi bi-file-earmark-check"></i> Оферта (договор присоединения)
+                </label>
+                <div class="form-text">Сотрудник получит уведомление и подпишет через ПЭП</div>
+              </div>
+            </div>
+            <div class="mb-3">
               <label class="form-label">Версия</label>
               <input type="text" name="version" class="form-control" value="1.0">
             </div>
@@ -135,16 +101,18 @@ console.log('Скрипты head загружены. jQuery доступен:', 
             </div>
 
             <div class="mb-3">
-              <label class="form-label">Контент шаблона (Jinja2/HTML) *</label>
+              <label class="form-label">Контент шаблона *</label>
               <div class="mb-2">
                 <button type="button" id="pasteHtmlBtn" class="btn btn-outline-primary btn-sm">
-                  <i class="fas fa-code me-1"></i>Вставить как HTML
+                  <i class="bi bi-code-slash me-1"></i>Вставить как HTML
                 </button>
-                <span class="small text-muted ms-2">Для форматированного текста из внешних редакторов</span>
+                <button type="button" id="viewSourceBtn" class="btn btn-outline-secondary btn-sm ms-1">
+                  <i class="bi bi-filetype-html me-1"></i>Исходный код
+                </button>
               </div>
-              <div id="contentEditor" style="min-height: 300px;"></div>
-              <textarea name="content" id="content" class="form-control" style="display: none;" required></textarea>
-              <div class="form-text">Используйте теги вида {{ "{{ key }}" }} из справочника тегов справа. Используйте кнопку "Вставить как HTML" для сохранения форматирования</div>
+              <div id="contentEditor"></div>
+              <textarea name="content" id="content" style="display: none;" required></textarea>
+              <div class="form-text">Используйте теги вида {{ "{{ key }}" }} из справочника тегов справа</div>
             </div>
 
             <hr>
@@ -163,24 +131,17 @@ console.log('Скрипты head загружены. jQuery доступен:', 
         </div>
       </div>
     </div>
-    
+
     <!-- Правая колонка с подсказками по тегам -->
     <div class="col-lg-4">
       <div class="card sticky-top" style="top: 20px;">
         <div class="card-header">
-          <h5 class="mb-0">
-            <i class="fas fa-info-circle me-2"></i>
-            Подсказки по тегам
-          </h5>
+          <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Подсказки по тегам</h5>
         </div>
         <div class="card-body">
-          <p class="small text-muted mb-3">
-            Используйте теги для автоматической подстановки данных в шаблоны договоров:
-          </p>
-          
-          <!-- Фильтр категорий -->
+          <p class="small text-muted mb-3">Кликните по тегу, чтобы вставить его в редактор:</p>
+
           <div class="mb-3">
-            <label class="form-label">Фильтр:</label>
             <select class="form-select form-select-sm" id="tagFilter">
               <option value="all">Все категории</option>
               <option value="system">Системные</option>
@@ -190,574 +151,302 @@ console.log('Скрипты head загружены. jQuery доступен:', 
               <option value="contract">Договор</option>
             </select>
           </div>
-          
-          <!-- Теги по категориям -->
+
           <div id="tagsContainer">
-            <!-- Системные теги -->
             <div class="tag-category" data-category="system">
-              <h6 class="text-primary mb-2">
-                <i class="fas fa-cog me-1"></i>
-                Системные теги
-              </h6>
+              <h6 class="text-primary mb-2"><i class="bi bi-gear me-1"></i>Системные</h6>
               <div class="small mb-3">
-                <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ current_date }}" }}')">
+                <div class="tag-item mb-2" onclick="insertTag('current_date')">
                   <code>{{ "{{ current_date }}" }}</code>
                   <div class="small text-muted">Текущая дата</div>
                 </div>
-                <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ current_time }}" }}')">
+                <div class="tag-item mb-2" onclick="insertTag('current_time')">
                   <code>{{ "{{ current_time }}" }}</code>
                   <div class="small text-muted">Текущее время</div>
                 </div>
-                <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ current_year }}" }}')">
+                <div class="tag-item mb-2" onclick="insertTag('current_year')">
                   <code>{{ "{{ current_year }}" }}</code>
                   <div class="small text-muted">Текущий год</div>
                 </div>
               </div>
             </div>
-            
-            <!-- Теги владельца -->
+
             <div class="tag-category" data-category="owner">
-              <h6 class="text-success mb-2">
-                <i class="fas fa-user me-1"></i>
-                Владелец
-              </h6>
+              <h6 class="text-success mb-2"><i class="bi bi-person me-1"></i>Владелец</h6>
+              <div class="small mb-3">
               {% for tag in all_tags if tag.category == "owner" %}
-              <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ " + tag.key + " }}" }}')">
+              <div class="tag-item mb-2" onclick="insertTag('{{ tag.key }}')">
                 <code>{{ "{{ " + tag.key + " }}" }}</code>
                 <div class="small text-muted">{{ tag.label }}</div>
-                {% if tag.description %}
-                <div class="small text-info">{{ tag.description|truncate(100) }}</div>
-                {% endif %}
               </div>
               {% endfor %}
+              </div>
             </div>
-            
-            <!-- Теги компании -->
+
             <div class="tag-category" data-category="company">
-              <h6 class="text-info mb-2">
-                <i class="fas fa-building me-1"></i>
-                Компания
-              </h6>
+              <h6 class="text-info mb-2"><i class="bi bi-building me-1"></i>Компания</h6>
+              <div class="small mb-3">
               {% for tag in all_tags if tag.category == "company" %}
-              <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ " + tag.key + " }}" }}')">
+              <div class="tag-item mb-2" onclick="insertTag('{{ tag.key }}')">
                 <code>{{ "{{ " + tag.key + " }}" }}</code>
                 <div class="small text-muted">{{ tag.label }}</div>
-                {% if tag.description %}
-                <div class="small text-info">{{ tag.description|truncate(100) }}</div>
-                {% endif %}
               </div>
               {% endfor %}
+              </div>
             </div>
-            
-            <!-- Теги сотрудника -->
+
             <div class="tag-category" data-category="employee">
-              <h6 class="text-warning mb-2">
-                <i class="fas fa-users me-1"></i>
-                Сотрудник
-              </h6>
+              <h6 class="text-warning mb-2"><i class="bi bi-people me-1"></i>Сотрудник</h6>
+              <div class="small mb-3">
               {% for tag in all_tags if tag.category == "employee" %}
-              <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ " + tag.key + " }}" }}')">
+              <div class="tag-item mb-2" onclick="insertTag('{{ tag.key }}')">
                 <code>{{ "{{ " + tag.key + " }}" }}</code>
                 <div class="small text-muted">{{ tag.label }}</div>
-                {% if tag.description %}
-                <div class="small text-info">{{ tag.description|truncate(100) }}</div>
-                {% endif %}
               </div>
               {% endfor %}
+              </div>
             </div>
-            
-            <!-- Договорные теги -->
+
             <div class="tag-category" data-category="contract">
-              <h6 class="text-danger mb-2">
-                <i class="fas fa-file-contract me-1"></i>
-                Договор
-              </h6>
+              <h6 class="text-danger mb-2"><i class="bi bi-file-earmark-text me-1"></i>Договор</h6>
+              <div class="small mb-3">
               {% for tag in all_tags if tag.category == "contract" %}
-              <div class="tag-item mb-2" onclick="copyToClipboard('{{ "{{ " + tag.key + " }}" }}')">
+              <div class="tag-item mb-2" onclick="insertTag('{{ tag.key }}')">
                 <code>{{ "{{ " + tag.key + " }}" }}</code>
                 <div class="small text-muted">{{ tag.label }}</div>
-                {% if tag.description %}
-                <div class="small text-info">{{ tag.description|truncate(100) }}</div>
-                {% endif %}
               </div>
               {% endfor %}
+              </div>
             </div>
           </div>
-          
+
           <div class="alert alert-info mt-3 mb-0 p-2" style="font-size: 0.8rem;">
-            <strong><i class="fas fa-lightbulb me-1"></i>TIP:</strong> Кликните по тегу чтобы скопировать его в буфер обмена<br>
-            <strong><i class="fas fa-crown me-1"></i>FORMAT:</strong> Для форматированного текста используйте "Вставить как HTML" в редакторе
+            <strong>TIP:</strong> Клик по тегу вставляет его в позицию курсора в редакторе
           </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
+{{ super() }}
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <script>
-let fields = [];
-
-function addField(field = {key:'', label:'', type:'text', required:false, options:''}) {
-  fields.push(field);
-  renderFields();
-}
-
-function removeField(idx){
-  fields.splice(idx,1);
-  renderFields();
-}
-
-function updateField(idx, prop, value){
-  fields[idx][prop] = value;
-}
-
-function renderFields(){
-  const list = document.getElementById('fieldsList');
-  list.innerHTML = fields.map((f, i)=>`
-    <div class="border rounded p-2 mb-2">
-      <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-          <label class="form-label">Key</label>
-          <input class="form-control" value="${f.key}" oninput="updateField(${i}, 'key', this.value)">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Label</label>
-          <input class="form-control" value="${f.label}" oninput="updateField(${i}, 'label', this.value)">
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Type</label>
-          <select class="form-select" onchange="updateField(${i}, 'type', this.value)">
-            <option ${f.type==='text'?'selected':''}>text</option>
-            <option ${f.type==='number'?'selected':''}>number</option>
-            <option ${f.type==='date'?'selected':''}>date</option>
-            <option ${f.type==='select'?'selected':''}>select</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Опции (для select)</label>
-          <input class="form-control" value="${f.options||''}" oninput="updateField(${i}, 'options', this.value)">
-        </div>
-        <div class="col-md-1">
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" ${f.required?'checked':''} onchange="updateField(${i}, 'required', this.checked)">
-            <label class="form-check-label">Req</label>
-          </div>
-        </div>
-      </div>
-      <div class="text-end mt-2">
-        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeField(${i})"><i class="bi bi-trash"></i></button>
-      </div>
-    </div>
-  `).join('');
-}
-
-// Инициализация Summernote WYSIWYG редактора - двойная проверка
-function initSummernoteEditor() {
-    console.log('Проверка jQuery:', typeof window.jQuery, typeof $);
-    
-    if (typeof window.jQuery !== 'undefined' || typeof window.$ !== 'undefined') {
-        const $ = window.jQuery || window.$;
-        console.log('jQuery найден, инициализируем Summernote');
-        initializeSummernote($);
-    } else {
-        console.warn('jQuery не найден, ожидание...');
-        
-        function waitForjQuery(callback, timeout = 3000) {
-            const start = Date.now();
-            
-            function check() {
-                if (typeof window.jQuery !== 'undefined' || typeof window.$ !== 'undefined') {
-                    console.log('jQuery загружен!');
-                    const $ = window.jQuery || window.$;
-                    callback($);
-                } else if ((Date.now() - start) > timeout) {
-                    console.warn('jQuery не загрузился, используем fallback');
-                    fallbackToTextarea();
-                } else {
-                    setTimeout(check, 100);
-                }
-            }
-            check();
-        }
-        
-        waitForjQuery(function($) {
-            initializeSummernote($);
-        });
+// --- Quill Editor ---
+const quill = new Quill('#contentEditor', {
+    theme: 'snow',
+    placeholder: 'Введите текст шаблона договора...',
+    modules: {
+        toolbar: [
+            [{ header: [1, 2, 3, 4, 5, 6, false] }],
+            [{ font: [] }],
+            [{ size: ['small', false, 'large', 'huge'] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ color: [] }, { background: [] }],
+            [{ script: 'sub' }, { script: 'super' }],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            [{ indent: '-1' }, { indent: '+1' }],
+            [{ align: [] }],
+            ['blockquote'],
+            ['link', 'image'],
+            ['clean']
+        ]
     }
-}
-
-// Дополнительная проверка для fallback если напрямую в DOMContentLoaded установлена fallback кнопка
-function ensureHtmlButtonExists() {
-    var pasteButton = document.getElementById('pasteHtmlBtn');
-    if (pasteButton && typeof pasteButton.onclick !== 'function') {
-        console.log('Устанавливаем fallback handler для HTML button (только если не set уже)');
-        pasteButton.onclick = function() {
-            const modalHtml = `
-                <div class="modal fade" id="htmlPasteModal" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Вставить форматированный текст</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                <textarea id="htmlInput" class="form-control" rows="8" placeholder="Вставьте HTML или отформатированный текст."></textarea>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                <button type="button" class="btn btn-primary" id="insertHtmlBtn">Вставить в редактор</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Удаляем предыдущее модальное окно если есть
-            const existingModal = document.getElementById('htmlPasteModal');
-            if (existingModal) {
-                existingModal.remove();
-            }
-
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-            const modalElement = document.getElementById('htmlPasteModal');
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-            
-            document.getElementById('insertHtmlBtn').addEventListener('click', function() {
-                const htmlContent = document.getElementById('htmlInput').value;
-                
-                if (htmlContent && htmlContent.trim()) {
-                    // Ищем поле content editor или обычный textarea
-                    const editorElement = document.getElementById('contentEditor');
-                    const textAreaElement = document.getElementById('content');
-
-                    if (editorElement && editorElement.style.display !== 'none') {
-                        // Summernote все еще работает
-                        if (typeof window.jQuery !== 'undefined') {
-                            window.jQuery(editorElement).summernote('pasteHTML', htmlContent);
-                        }
-                    } else {
-                        // Fallback на textarea
-                        const currentValue = textAreaElement.value;
-                        textAreaElement.value = currentValue + htmlContent;
-                    }
-                    
-                    modal.hide();
-                    setTimeout(() => modalElement.remove(), 300);
-                }
-            });
-            
-            modalElement.addEventListener('hidden.bs.modal', function() {
-                modalElement.remove();
-            });
-        };
-    }
-}
-
-// Подключаемся к событию когда DOM готов
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM готов, проверяем jQuery...');
-    
-    // Проверяем кнопку HTML Paste существует сразу 
-    const pasteButton = document.getElementById('pasteHtmlBtn');
-    if (pasteButton) {
-        console.log('Кнопка HTML Paste найдена, добавляем временный обработчик');
-        // Временно отключаем до нормальной инициализации
-        pasteButton.style.display = 'block';
-    }
-    
-    setTimeout(initSummernoteEditor, 100); // небольшая задержка для загрузки скриптов
-    
-    // Дополнительная защита кнопки HTML Paste после небольшей паузы
-    setTimeout(ensureHtmlButtonExists, 2000);
 });
 
-function initializeSummernote($) {
-    try {
-        $('#contentEditor').summernote({
-            height: 350,
-            minHeight: 200,
-            maxHeight: 500,
-            placeholder: 'Например: Договор с {{ fio }} от {{ date }}',
-            toolbar: [
-                ['style', ['style']],
-                ['font', ['bold', 'underline', 'italic', 'clear']],
-                ['fontname', ['fontname']],
-                ['fontsize', ['fontsize']],
-                ['color', ['color']],
-                ['para', ['ul', 'ol', 'paragraph']],
-                ['table', ['table']],
-                ['insert', ['link']],
-                ['misc', ['undo', 'redo']],
-                ['view', ['fullscreen', 'codeview', 'help']]
-            ],
-            fontNames: ['Times New Roman', 'Arial', 'Georgia', 'Verdana', 'Courier New'],
-            fontNamesIgnoreCheck: ['Times New Roman'],
-            callbacks: {
-                onChange: function(contents, $editable) {
-                    // Копируем HTML содержимое в скрытое поле textarea - АКТИВНОЕ ОБНОВЛЕНИЕ HTML
-                    document.getElementById('content').value = contents;
-                    console.log('Summernote onChange: HTML сохранён (длина)', contents.length, 'превью:', contents.substring(0, 50) + '...');
-                },
-                onPaste: function(e) {
-                    const clipboardData = e.originalEvent.clipboardData || window.clipboardData;
-                    if (clipboardData && clipboardData.getData) {
-                        e.preventDefault();
-                        const html = clipboardData.getData('text/html');
-                        const text = clipboardData.getData('text/plain');
-                        
-                        // Если есть HTML разметка, вставляем её
-                        if (html) {
-                            document.execCommand('insertHTML', false, html);
-                        } else {
-                            document.execCommand('insertText', false, text);
-                        }
-                    }
-                }
-            },
-            styleTags: [
-                'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-                { tag: 'div', name: 'Контейнер блока', class: 'content-block' },
-                { tag: 'span', name: 'Встроенный текст', class: 'inline-text' }
-            ]
-        });
-        console.log('Summernote успешно инициализирован!');
-        
-    } catch (e) {
-        console.error('Ошибка инициализации Summernote:', e);
-        // Fallback при ошибке
-        fallbackToTextarea();
-        return; // выходим, чтобы не делать setupPasteHtmlButton
-    }
-    
-    // Инициализируем кнопку "Вставить как HTML" только при успешном запуске Summernote
-    if (typeof window.jQuery !== 'undefined' || typeof window.$ !== 'undefined') {
-        const $ = window.jQuery || window.$;
-        setupPasteHtmlButton($);
-    }
+// Синхронизация с hidden textarea
+quill.on('text-change', function() {
+    document.getElementById('content').value = quill.root.innerHTML;
+});
+
+// Вставка тега в позицию курсора
+function insertTag(key) {
+    const tag = '{{ ' + key + ' }}';
+    const range = quill.getSelection(true);
+    quill.insertText(range.index, tag);
+    quill.setSelection(range.index + tag.length);
 }
 
-function setupPasteHtmlButton($) {
-    $('#pasteHtmlBtn').click(function() {
-        // Создаем простое модальное окно для вставки HTML
-        var modalHtml = `
-            <div class="modal fade" id="htmlPasteModal" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">
-                                <i class="fas fa-code me-2"></i>Вставить форматированный текст
-                            </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <label class="form-label">HTML-код для вставки:</label>
-                            <textarea id="htmlInput" class="form-control" rows="8" placeholder="Скопируйте отформатированный текст из внешнего редактора (Word, Google Docs, etc.) и вставьте сюда...
-                            
-Рекомендации:
-• Скопируйте текст из Word или другого редактора
-• Нажмите Ctrl+V в этом поле
-• HTML сохранится автоматически"></textarea>
-                            <div class="mt-2">
-                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('htmlInput').value='';">
-                                    <i class="fas fa-trash me-1"></i>Очистить
-                                </button>
-                                <span class="small text-muted ms-2">Или вставьте готовый HTML-код</span>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                            <button type="button" class="btn btn-primary" id="insertHtmlBtn">
-                                <i class="fas fa-paste me-1"></i>Вставить в редактор
-                            </button>
-                        </div>
+// Кнопка «Вставить как HTML»
+document.getElementById('pasteHtmlBtn').addEventListener('click', function() {
+    const old = document.getElementById('htmlPasteModal');
+    if (old) old.remove();
+
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="modal fade" id="htmlPasteModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-code-slash me-2"></i>Вставить HTML</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <textarea id="htmlInput" class="form-control font-monospace" rows="12"
+                            placeholder="Вставьте HTML-код сюда..."></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-primary" id="insertHtmlBtn">Вставить</button>
                     </div>
                 </div>
             </div>
-        `;
-        
-        // Удаляем старое модальное окно если оно есть
-        $('#htmlPasteModal').remove();
-        
-        // Добавляем новое в body
-        $('body').append(modalHtml);
-        
-        // Показываем модальное окно
-        var modal = new bootstrap.Modal(document.getElementById('htmlPasteModal'));
-        modal.show();
-        
-        // Фокус на textarea
-        setTimeout(function() {
-            document.getElementById('htmlInput').focus();
-        }, 300);
-        
-        // Обработчик для кнопки Вставить
-                $('#insertHtmlBtn').click(function() {
-                    var htmlContent = $('#htmlInput').val();
-                    
-                    if (htmlContent && htmlContent.trim()) {
-                        try {
-                            console.log('Вставляем HTML в Summernote (длина)', htmlContent.length);
-                            console.log('HTML контент превью:', htmlContent.substring(0, 200) + '...');
-                            
-                            // Вставляем HTML в редактор
-                            $('#contentEditor').summernote('pasteHTML', htmlContent);
-                            modal.hide();
-                            console.log('HTML успешно вставлен в редактор');
-                        } catch (e) {
-                            console.error('Ошибка вставки HTML в редактор:', e);
-                            alert('Ошибка вставки HTML в редактор: ' + e.message);
-                        }
-                    } else {
-                        alert('Вставьте HTML-код в поле выше');
-                    }
-                });
-        
-        // Очистка модального окна при закрытии
-        $('#htmlPasteModal').on('hidden.bs.modal', function() {
-            $(this).remove();
-        });
-    });
-}
+        </div>
+    `);
 
-function fallbackToTextarea() {
-    document.getElementById('contentEditor').style.display = 'none';
-    document.getElementById('content').style.display = 'block';
-    document.getElementById('content').setAttribute('rows', '10');
-    document.getElementById('content').classList.add('form-control');
-    console.log('Используется fallback textarea');
-    
-    // Сразу устанавливаем кнопку HTML, а не там же где ошибка - значит что будет перезаписана
-    ensureHtmlButtonExists();
-}
+    const modalEl = document.getElementById('htmlPasteModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+    setTimeout(() => document.getElementById('htmlInput').focus(), 300);
 
-document.getElementById('templateForm').addEventListener('submit', function(e){
-    // КРИТИЧНО: Получаем содержимое из Summernote с HTML-форматированием
-    try {
-        const contentField = document.getElementById('content');
-        const editorElement = document.getElementById('contentEditor');
-        
-        // Проверяем в каком режиме мы работаем - Summernote или fallback
-        if (typeof window.jQuery !== 'undefined' && 
-            $(editorElement).length && 
-            $(editorElement).summernote('code')) {
-            
-            console.log('Логика Summernote: извлекаем HTML-код из редактора');
-            const $ = window.jQuery;
-            
-            // Получаем все HTML из Summernote редактора
-            const htmlContent = $(editorElement).summernote('code');
-            console.log('Получен HTML из Summernote (длина):', htmlContent.length, 'превью:', htmlContent.substring(0, 100) + '...');
-            
-            // Записываем в скрытое поле для отправки на сервер
-            contentField.value = htmlContent;
-            
-        } else if (contentField !== null && contentField.style.display !== 'none') {
-            // Fallback режим - textarea уже активен
-            console.log('Fallback режим: используем содержимое textarea');
-            const textContent = contentField.value;
-            const htmlContent = textContent.replace(/\r\n/g, '<br>').replace(/\r/g, '<br>').replace(/\n/g, '<br>');
-            
-            console.log('Fallback: преобразовали text в HTML, длина:', htmlContent.length);
-            contentField.value = htmlContent;
-            
-        } else {
-            console.warn('Ни один редактор не найден - отключаем сохранение');
-            // В крайнем случае - берем элемент как text и личностируем HTML
-            const container = editorElement || contentField;
-            if (container && container.innerHTML) {
-                contentField.value = container.innerHTML;
-            }
+    document.getElementById('insertHtmlBtn').addEventListener('click', function() {
+        const html = document.getElementById('htmlInput').value.trim();
+        if (html) {
+            quill.clipboard.dangerouslyPasteHTML(quill.getLength() - 1, html);
+            modal.hide();
         }
-        
-    } catch (error) {
-        console.error('Ошибка получения содержимого Summernote:', error);
-        alert('Ошибка извлечения содержимого редактора. Попробуйте еще раз.');
-        e.preventDefault();
-        return false;
+    });
+    modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove());
+});
+
+// Кнопка «Исходный код» — переключение между WYSIWYG и HTML
+let sourceMode = false;
+const sourceBtn = document.getElementById('viewSourceBtn');
+const editorContainer = document.getElementById('contentEditor');
+
+sourceBtn.addEventListener('click', function() {
+    if (!sourceMode) {
+        // Переход в режим HTML
+        const html = quill.root.innerHTML;
+        const ta = document.createElement('textarea');
+        ta.id = 'sourceTextarea';
+        ta.className = 'form-control font-monospace';
+        ta.style.height = '500px';
+        ta.value = html;
+        editorContainer.style.display = 'none';
+        editorContainer.parentNode.insertBefore(ta, editorContainer.nextSibling);
+        sourceBtn.innerHTML = '<i class="bi bi-eye me-1"></i>Визуальный режим';
+        sourceMode = true;
+    } else {
+        // Возврат в WYSIWYG
+        const ta = document.getElementById('sourceTextarea');
+        if (ta) {
+            quill.root.innerHTML = ta.value;
+            ta.remove();
+        }
+        editorContainer.style.display = '';
+        sourceBtn.innerHTML = '<i class="bi bi-filetype-html me-1"></i>Исходный код';
+        sourceMode = false;
     }
-    
-    // Продолжаем стандартную логику
+});
+
+// --- Схема полей ---
+let fields = [];
+
+function addField(field = {key:'', label:'', type:'text', required:false, options:''}) {
+    fields.push(field);
+    renderFields();
+}
+function removeField(idx) { fields.splice(idx,1); renderFields(); }
+function updateField(idx, prop, value) { fields[idx][prop] = value; }
+
+function renderFields() {
+    const list = document.getElementById('fieldsList');
+    list.innerHTML = fields.map((f, i) => `
+        <div class="border rounded p-2 mb-2">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label">Key</label>
+              <input class="form-control" value="${f.key}" oninput="updateField(${i},'key',this.value)">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Label</label>
+              <input class="form-control" value="${f.label}" oninput="updateField(${i},'label',this.value)">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Type</label>
+              <select class="form-select" onchange="updateField(${i},'type',this.value)">
+                <option ${f.type==='text'?'selected':''}>text</option>
+                <option ${f.type==='number'?'selected':''}>number</option>
+                <option ${f.type==='date'?'selected':''}>date</option>
+                <option ${f.type==='select'?'selected':''}>select</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Опции</label>
+              <input class="form-control" value="${f.options||''}" oninput="updateField(${i},'options',this.value)">
+            </div>
+            <div class="col-md-1">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" ${f.required?'checked':''} onchange="updateField(${i},'required',this.checked)">
+                <label class="form-check-label">Req</label>
+              </div>
+            </div>
+          </div>
+          <div class="text-end mt-2">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeField(${i})"><i class="bi bi-trash"></i></button>
+          </div>
+        </div>
+    `).join('');
+}
+renderFields();
+
+// --- Submit формы ---
+document.getElementById('templateForm').addEventListener('submit', function(e) {
+    // Синхронизируем HTML из текущего режима
+    if (sourceMode) {
+        const ta = document.getElementById('sourceTextarea');
+        if (ta) quill.root.innerHTML = ta.value;
+    }
+    document.getElementById('content').value = quill.root.innerHTML;
     document.getElementById('fields_schema').value = JSON.stringify(fields);
 });
 
-// Функция копирования тега в буфер обмена
-function copyToClipboard(text) {
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(function() {
-            showCopySuccess();
-        }).catch(function(err) {
-            console.error('Ошибка копирования:', err);
-            fallbackCopyToClipboard(text);
-        });
-    } else {
-        fallbackCopyToClipboard(text);
-    }
-}
-
-// Альтернативный способ копирования для браузеров без поддержки Clipboard API
-function fallbackCopyToClipboard(text) {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    
-    try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-            showCopySuccess();
-        }
-    } catch (err) {
-        console.error('Не удалось скопировать текст: ', err);
-        alert('Скопируйте тег вручную: ' + text);
-    }
-    
-    document.body.removeChild(textArea);
-}
-
-// Показать уведомление об успешном копировании
-function showCopySuccess() {
-    // Создаем временное уведомление
-    const notification = document.createElement('div');
-    notification.className = 'alert alert-success position-fixed';
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; animation: fadeInOut 2s ease-in-out;';
-    notification.innerHTML = '<i class="fas fa-check me-2"></i>Тег скопирован!';
-    
-    document.body.appendChild(notification);
-    
-    // Удаляем уведомление через 2 секунды
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.parentNode.removeChild(notification);
-        }
-    }, 2000);
-}
-
-// Обработчик фильтра тегов
-document.addEventListener('DOMContentLoaded', function() {
-    const tagFilter = document.getElementById('tagFilter');
-    if (tagFilter) {
-        tagFilter.addEventListener('change', function() {
-            const filterValue = this.value;
-            const categories = document.querySelectorAll('.tag-category');
-            
-            categories.forEach(category => {
-                const categoryName = category.dataset.category;
-                if (filterValue === 'all' || filterValue === categoryName) {
-                    category.style.display = 'block';
-                    category.classList.remove('hidden');
-                } else {
-                    category.style.display = 'none';
-                    category.classList.add('hidden');
-                }
-            });
-        });
-    }
+// --- Фильтр тегов ---
+document.getElementById('tagFilter').addEventListener('change', function() {
+    const v = this.value;
+    document.querySelectorAll('.tag-category').forEach(c => {
+        c.classList.toggle('hidden', v !== 'all' && c.dataset.category !== v);
+    });
 });
 
-renderFields();
+// --- Чекбокс «Оферта» ---
+(function() {
+    const sel = document.getElementById('contractTypeSelect');
+    const hidden = document.getElementById('contractTypeId');
+    const offerHidden = document.getElementById('isOfferHidden');
+    const wrap = document.getElementById('offerCheckboxWrap');
+    const cb = document.getElementById('isOffer');
+    const OFFER_TYPE_ID = '{{ (contract_types | selectattr("code","equalto","offer") | map(attribute="id") | first) | default("") }}';
+
+    function update() {
+        const opt = sel.options[sel.selectedIndex];
+        const code = opt ? opt.dataset.code : '';
+        if (code === 'gpc_contract' || code === 'services') {
+            wrap.classList.remove('d-none');
+        } else {
+            wrap.classList.add('d-none');
+            cb.checked = false;
+        }
+        hidden.value = (cb.checked && OFFER_TYPE_ID) ? OFFER_TYPE_ID : sel.value;
+        offerHidden.value = cb.checked ? '1' : '0';
+    }
+    sel.addEventListener('change', update);
+    cb.addEventListener('change', update);
+    update();
+})();
+
+// --- Копирование в буфер (fallback для старых тегов) ---
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        const n = document.createElement('div');
+        n.className = 'alert alert-success position-fixed';
+        n.style.cssText = 'top:20px;right:20px;z-index:9999;animation:fadeInOut 2s ease-in-out';
+        n.textContent = 'Скопировано!';
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 2000);
+    }).catch(() => {});
+}
 </script>
 {% endblock %}
-
-

@@ -1,249 +1,120 @@
-# 🚀 Развертывание StaffProBot на staffprobot.ru
+# Развертывание StaffProBot на staffprobot.ru
 
-Полное руководство по развертыванию StaffProBot в production окружении.
+## Текущее production-окружение
 
-## 📋 Предварительные требования
-
-### 1. Сервер
+- **Сервер**: `155.212.217.38` (VPS)
 - **ОС**: Ubuntu 22.04 LTS
-- **RAM**: Минимум 2GB (рекомендуется 4GB)
-- **CPU**: Минимум 2 ядра
-- **Диск**: Минимум 20GB SSD
-- **Сеть**: Статический IP адрес
+- **Путь**: `/opt/sites/staffprobot`
+- **SSH**: `ssh root@155.212.217.38`
+- **Docker Compose**: `docker-compose.prod.yml`
+- **Nginx**: общий контейнер `sites_nginx` (конфиг `/opt/sites/nginx/conf.d/staffprobot.conf`)
+- **SSL**: Let's Encrypt через общий `sites_certbot`
 
-### 2. Домен
-- **Основной домен**: staffprobot.ru ✅
-- **Поддомены**:
-  - `api.staffprobot.ru` - API
-  - `admin.staffprobot.ru` - Админка
-  - `bot.staffprobot.ru` - Telegram webhook
+### DNS
 
-### 3. DNS настройки
 ```
-A     staffprobot.ru          → IP_СЕРВЕРА
-A     www.staffprobot.ru      → IP_СЕРВЕРА
-A     api.staffprobot.ru      → IP_СЕРВЕРА
-A     admin.staffprobot.ru    → IP_СЕРВЕРА
-A     bot.staffprobot.ru      → IP_СЕРВЕРА
-CNAME *.staffprobot.ru        → staffprobot.ru
+A     staffprobot.ru          → 155.212.217.38
+A     www.staffprobot.ru      → 155.212.217.38
 ```
 
-## 🔧 Пошаговая инструкция
+### Dev-окружение
+
+- **Сервер**: `192.168.77.177` (локальный)
+- **Прокси**: `dev-proxy` на том же сервере
+- **URL**: `https://dev.staffprobot.ru` (через `79.174.62.232`)
+
+---
+
+## Пошаговая инструкция (для нового сервера)
 
 ### Шаг 1: Подготовка сервера
 
-1. **Подключение к серверу**:
-   ```bash
-   ssh root@YOUR_SERVER_IP
-   ```
-
-2. **Запуск скрипта настройки**:
-   ```bash
-   wget https://raw.githubusercontent.com/your-repo/staffprobot/main/deployment/scripts/setup-server.sh
-   chmod +x setup-server.sh
-   sudo ./setup-server.sh
-   ```
-
-3. **Настройка SSH ключей для пользователя**:
-   ```bash
-   sudo -u staffprobot mkdir -p /home/staffprobot/.ssh
-   sudo -u staffprobot nano /home/staffprobot/.ssh/authorized_keys
-   # Добавьте ваш публичный SSH ключ
-   sudo chown staffprobot:staffprobot /home/staffprobot/.ssh/authorized_keys
-   sudo chmod 600 /home/staffprobot/.ssh/authorized_keys
-   ```
+```bash
+ssh root@155.212.217.38
+```
 
 ### Шаг 2: Клонирование репозитория
 
 ```bash
-sudo -u staffprobot git clone https://github.com/your-repo/staffprobot.git /opt/staffprobot
-cd /opt/staffprobot
+git clone https://github.com/Deniskada/staffprobot.git /opt/sites/staffprobot
+cd /opt/sites/staffprobot
 ```
 
 ### Шаг 3: Настройка переменных окружения
 
 ```bash
-sudo -u staffprobot cp env.example .env
-sudo -u staffprobot nano .env
+cp env.example .env
+nano .env
 ```
 
-**Обязательно заполните**:
-- `POSTGRES_PASSWORD` - надежный пароль для БД
-- `REDIS_PASSWORD` - надежный пароль для Redis
-- `RABBITMQ_PASSWORD` - надежный пароль для RabbitMQ
-- `TELEGRAM_BOT_TOKEN_PROD` - токен вашего бота
-- `OPENAI_API_KEY` - ключ OpenAI API
-- `SECRET_KEY` - секретный ключ (минимум 32 символа)
-- `GRAFANA_PASSWORD` - пароль для Grafana
+**Обязательно заполните**: `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `RABBITMQ_PASSWORD`, `TELEGRAM_BOT_TOKEN_PROD`, `SECRET_KEY`.
 
-### Шаг 4: Настройка SSL сертификатов
+### Шаг 4: SSL сертификат
+
+SSL выдаётся через общий контейнер `sites_certbot`:
+```bash
+cd /opt/sites
+docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot \
+  --email admin@staffprobot.ru --agree-tos -d staffprobot.ru -d www.staffprobot.ru
+```
+
+Затем активировать HTTPS-конфиг:
+```bash
+cp nginx/conf.d/staffprobot.conf.ssl nginx/conf.d/staffprobot.conf
+docker exec sites_nginx nginx -s reload
+```
+
+### Шаг 5: Запуск
 
 ```bash
-sudo ./deployment/scripts/setup-ssl.sh
+cd /opt/sites/staffprobot
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-### Шаг 5: Настройка Nginx
+### GitHub Actions (CI/CD)
 
-```bash
-sudo cp deployment/nginx/staffprobot.conf /etc/nginx/sites-available/
-sudo ln -sf /etc/nginx/sites-available/staffprobot.conf /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl reload nginx
-```
+Секреты в GitHub:
+- `SSH_DEPLOY_KEY` — приватный SSH ключ для деплоя
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` — уведомления (опционально)
 
-### Шаг 6: Первый деплой
+## Проверка
 
-```bash
-sudo -u staffprobot ./deploy.sh
-```
-
-### Шаг 7: Настройка GitHub Actions
-
-1. **Добавьте Secrets в GitHub**:
-   - `PRODUCTION_HOST` - IP адрес сервера
-   - `PRODUCTION_USER` - staffprobot
-   - `PRODUCTION_SSH_KEY` - приватный SSH ключ
-   - `SLACK_WEBHOOK` - URL webhook для Slack (опционально)
-
-2. **Проверьте workflow**:
-   - Перейдите в Actions в GitHub
-   - Убедитесь, что workflow запускается при push в main
-
-## 🔍 Проверка развертывания
-
-### Проверка сервисов
 ```bash
 # Статус контейнеров
-docker-compose -f docker-compose.prod.yml ps
+ssh root@155.212.217.38 "cd /opt/sites/staffprobot && docker compose -f docker-compose.prod.yml ps"
 
-# Логи
-docker-compose -f docker-compose.prod.yml logs -f
+# Логи бота
+ssh root@155.212.217.38 "docker logs staffprobot_bot_prod --tail 50"
 
-# Проверка здоровья
-./scripts/health-check.sh
+# Веб-интерфейс
+curl -sI https://staffprobot.ru/
 ```
 
-### Проверка веб-интерфейса
-- **Основной сайт**: https://staffprobot.ru
-- **API**: https://api.staffprobot.ru
-- **Админка**: https://admin.staffprobot.ru
-- **Grafana**: https://staffprobot.ru:3000 (admin/admin)
+- **Сайт**: https://staffprobot.ru
+- **SSL**: Let's Encrypt, автообновление через `sites_certbot`
 
-### Проверка SSL
+## Ручное обновление
+
 ```bash
-# Проверка сертификатов
-openssl s_client -connect staffprobot.ru:443 -servername staffprobot.ru
-
-# Проверка автообновления
-sudo certbot renew --dry-run
+ssh root@155.212.217.38
+cd /opt/sites/staffprobot
+git pull origin main
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-## 📊 Мониторинг
+## Бэкапы
 
-### Prometheus
-- **URL**: http://staffprobot.ru:9090
-- **Метрики**: CPU, память, БД, Redis, RabbitMQ
-
-### Grafana
-- **URL**: http://staffprobot.ru:3000
-- **Логин**: admin
-- **Пароль**: из .env
-
-### Логи
 ```bash
-# Логи приложения
-tail -f /var/log/staffprobot/app.log
-
-# Логи Nginx
-tail -f /var/log/nginx/access.log
-tail -f /var/log/nginx/error.log
-
-# Логи Docker
-docker-compose -f docker-compose.prod.yml logs -f bot
+# Бэкап БД
+docker exec staffprobot_postgres_prod pg_dump -U staffprobot staffprobot_prod | gzip > backup_$(date +%Y%m%d).sql.gz
 ```
 
-## 🔄 Обновление
+## Перезапуск отдельных сервисов
 
-### Автоматическое обновление
-При push в ветку `main` GitHub Actions автоматически:
-1. Запустит тесты
-2. Соберет Docker образ
-3. Развернет на сервере
-4. Проверит здоровье сервисов
-
-### Ручное обновление
 ```bash
-cd /opt/staffprobot
-sudo -u staffprobot git pull origin main
-sudo -u staffprobot ./deploy.sh
+cd /opt/sites/staffprobot
+docker compose -f docker-compose.prod.yml restart web        # изменения в apps/web
+docker compose -f docker-compose.prod.yml restart bot        # изменения в apps/bot
+docker compose -f docker-compose.prod.yml restart web bot celery_worker celery_beat  # изменения в shared/domain
 ```
-
-### Откат
-```bash
-cd /opt/staffprobot
-sudo -u staffprobot git checkout HEAD~1
-sudo -u staffprobot ./deploy.sh
-```
-
-## 🛠️ Устранение неполадок
-
-### Проблемы с SSL
-```bash
-# Проверка сертификатов
-sudo certbot certificates
-
-# Обновление сертификатов
-sudo certbot renew
-
-# Перезапуск Nginx
-sudo systemctl reload nginx
-```
-
-### Проблемы с Docker
-```bash
-# Очистка Docker
-docker system prune -a
-
-# Перезапуск сервисов
-docker-compose -f docker-compose.prod.yml restart
-```
-
-### Проблемы с БД
-```bash
-# Подключение к БД
-docker-compose -f docker-compose.prod.yml exec postgres psql -U staffprobot_user -d staffprobot_prod
-
-# Проверка миграций
-docker-compose -f docker-compose.prod.yml exec bot alembic current
-```
-
-## 📞 Поддержка
-
-При возникновении проблем:
-
-1. **Проверьте логи**: `docker-compose -f docker-compose.prod.yml logs`
-2. **Проверьте статус**: `./scripts/health-check.sh`
-3. **Проверьте мониторинг**: Grafana дашборды
-4. **Создайте issue** в GitHub с подробным описанием
-
-## 🔐 Безопасность
-
-### Рекомендации
-- Регулярно обновляйте систему
-- Используйте сильные пароли
-- Настройте мониторинг безопасности
-- Регулярно проверяйте логи
-- Настройте бэкапы
-
-### Бэкапы
-```bash
-# Ручной бэкап БД
-docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U staffprobot_user staffprobot_prod > backup_$(date +%Y%m%d).sql
-
-# Автоматические бэкапы настроены в docker-compose.prod.yml
-```
-
----
-
-**🎉 Поздравляем! StaffProBot успешно развернут на staffprobot.ru!**

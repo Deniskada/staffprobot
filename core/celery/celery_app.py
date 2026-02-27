@@ -24,6 +24,7 @@ celery_app = Celery(
         "core.celery.tasks.billing_tasks",  # Iteration 39: биллинг и автопродление подписок
         "core.celery.tasks.bot_monitoring_tasks",
         "core.celery.tasks.ssl_tasks",  # SSL сертификаты: проверка и обновление
+        "core.celery.tasks.birthday_tasks",  # Поздравления с Днём Рождения
     ]
 )
 
@@ -158,6 +159,11 @@ celery_app.conf.update(
             'task': 'validate_ssl_configuration',
             'schedule': 6 * 60 * 60,  # каждые 6 часов
         },
+        # Поздравления с Днём Рождения — ежедневно в 10:30 МСК (07:30 UTC)
+        'send-birthday-greetings': {
+            'task': 'send_birthday_greetings',
+            'schedule': crontab(hour=7, minute=30),
+        },
     },
     
     # Маршрутизация задач
@@ -184,7 +190,8 @@ celery_app.conf.update(
         'check-expired-subscriptions': {'queue': 'celery'},  # Iteration 39: проверка истёкших подписок
         'activate-scheduled-subscriptions': {'queue': 'celery'},  # Iteration 39: активация отложенных подписок
         'monitor_bot_heartbeat': {'queue': 'celery'},
-        'core.celery.tasks.ssl_tasks.*': {'queue': 'celery'},  # SSL задачи
+        'core.celery.tasks.ssl_tasks.*': {'queue': 'celery'},
+        'send_birthday_greetings': {'queue': 'notifications'},  # SSL задачи
         'check-certificate-expiry': {'queue': 'celery'},  # SSL: проверка срока действия
         'renew-ssl-certificates': {'queue': 'celery'},  # SSL: обновление сертификатов
         'validate-ssl-configuration': {'queue': 'celery'},  # SSL: валидация конфигурации

@@ -1,0 +1,202 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            {# Заголовок #}
+            <div class="d-flex align-items-center mb-4">
+                <a href="/employee" class="btn btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <div>
+                    <h3 class="mb-0">{{ contract.title }}</h3>
+                    <small class="text-muted">
+                        {% if contract.template_name %}Шаблон: {{ contract.template_name }}{% endif %}
+                        {% if contract.contract_number %} | № {{ contract.contract_number }}{% endif %}
+                    </small>
+                </div>
+                {% if contract.status == 'active' %}
+                    <span class="badge bg-success ms-3">Подписана</span>
+                {% elif contract.status == 'pending_acceptance' %}
+                    <span class="badge bg-warning text-dark ms-3">Ожидает подписания</span>
+                {% else %}
+                    <span class="badge bg-secondary ms-3">{{ contract.status }}</span>
+                {% endif %}
+            </div>
+
+            {# Блок предупреждений о незаполненных реквизитах #}
+            {% if not validation.complete %}
+            <div class="alert alert-warning" id="validation-alert">
+                <h5 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> Необходимо заполнить реквизиты</h5>
+                <p>Перед подписанием оферты заполните все обязательные поля в профиле:</p>
+                <ul class="mb-2">
+                    {% for field in validation.missing_fields %}
+                    <li>{{ field.label }}</li>
+                    {% endfor %}
+                </ul>
+                <a href="/employee/profile/profiles" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-pencil"></i> Перейти в профиль
+                </a>
+            </div>
+            {% endif %}
+
+            {# Текст оферты #}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-file-text"></i> Текст оферты</h5>
+                </div>
+                <div class="card-body offer-content" style="max-height: 600px; overflow-y: auto;">
+                    {{ contract.content | safe }}
+                </div>
+            </div>
+
+            {# Блок подписания #}
+            {% if contract.status == 'pending_acceptance' %}
+            <div class="card border-primary" id="sign-block">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0"><i class="bi bi-pen"></i> Подписание оферты (ПЭП)</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Для подписания оферты простой электронной подписью (ПЭП) нажмите «Получить код» — 
+                        код подтверждения будет отправлен в Telegram. Введите код ниже.
+                    </p>
+
+                    <div class="row g-3 align-items-end">
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-outline-primary" id="btn-request-otp"
+                                {% if not validation.complete %}disabled{% endif %}>
+                                <i class="bi bi-send"></i> Получить код
+                            </button>
+                        </div>
+                        <div class="col-sm-4">
+                            <label for="otp-input" class="form-label">Код из Telegram</label>
+                            <input type="text" class="form-control" id="otp-input" maxlength="6"
+                                   placeholder="______" disabled>
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-success" id="btn-accept" disabled>
+                                <i class="bi bi-check-lg"></i> Подписать оферту
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-3" id="otp-status" style="display:none;"></div>
+                </div>
+            </div>
+            {% elif contract.status == 'active' %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i> Оферта подписана
+                {% if contract.signed_at %}
+                    {{ contract.signed_at.strftime('%d.%m.%Y %H:%M') }}
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const contractId = {{ contract.id }};
+    const btnOtp = document.getElementById('btn-request-otp');
+    const btnAccept = document.getElementById('btn-accept');
+    const otpInput = document.getElementById('otp-input');
+    const otpStatus = document.getElementById('otp-status');
+
+    if (!btnOtp) return;
+
+    btnOtp.addEventListener('click', async function() {
+        btnOtp.disabled = true;
+        btnOtp.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Отправка...';
+        otpStatus.style.display = 'none';
+
+        try {
+            const resp = await fetch(`/employee/offers/${contractId}/request-otp`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                otpInput.disabled = false;
+                otpInput.focus();
+                otpStatus.className = 'mt-3 text-success';
+                otpStatus.textContent = 'Код отправлен в Telegram';
+                otpStatus.style.display = 'block';
+                btnAccept.disabled = false;
+                // Таймер повторной отправки
+                let sec = 60;
+                const timer = setInterval(() => {
+                    sec--;
+                    btnOtp.textContent = `Повторить (${sec}с)`;
+                    if (sec <= 0) {
+                        clearInterval(timer);
+                        btnOtp.disabled = false;
+                        btnOtp.innerHTML = '<i class="bi bi-send"></i> Получить код';
+                    }
+                }, 1000);
+            } else {
+                otpStatus.className = 'mt-3 text-danger';
+                otpStatus.textContent = data.detail || 'Ошибка отправки кода';
+                otpStatus.style.display = 'block';
+                btnOtp.disabled = false;
+                btnOtp.innerHTML = '<i class="bi bi-send"></i> Получить код';
+            }
+        } catch (e) {
+            otpStatus.className = 'mt-3 text-danger';
+            otpStatus.textContent = 'Ошибка сети';
+            otpStatus.style.display = 'block';
+            btnOtp.disabled = false;
+            btnOtp.innerHTML = '<i class="bi bi-send"></i> Получить код';
+        }
+    });
+
+    btnAccept.addEventListener('click', async function() {
+        const code = otpInput.value.trim();
+        if (!code) {
+            otpStatus.className = 'mt-3 text-danger';
+            otpStatus.textContent = 'Введите код';
+            otpStatus.style.display = 'block';
+            return;
+        }
+
+        btnAccept.disabled = true;
+        btnAccept.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Подписание...';
+
+        try {
+            const formData = new FormData();
+            formData.append('otp_code', code);
+
+            const resp = await fetch(`/employee/offers/${contractId}/accept`, {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                otpStatus.className = 'mt-3 alert alert-success';
+                otpStatus.innerHTML = '<i class="bi bi-check-circle"></i> Оферта успешно подписана! Страница обновится...';
+                otpStatus.style.display = 'block';
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                otpStatus.className = 'mt-3 text-danger';
+                otpStatus.textContent = data.detail || 'Ошибка подписания';
+                otpStatus.style.display = 'block';
+                btnAccept.disabled = false;
+                btnAccept.innerHTML = '<i class="bi bi-check-lg"></i> Подписать оферту';
+            }
+        } catch (e) {
+            otpStatus.className = 'mt-3 text-danger';
+            otpStatus.textContent = 'Ошибка сети';
+            otpStatus.style.display = 'block';
+            btnAccept.disabled = false;
+            btnAccept.innerHTML = '<i class="bi bi-check-lg"></i> Подписать оферту';
+        }
+    });
+});
+</script>
+{% endblock %}

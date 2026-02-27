@@ -17,42 +17,62 @@ from apps.web.jinja import templates
 
 
 @router.get("/", response_class=HTMLResponse)
-async def contract_templates_list(request: Request):
-    """Список шаблонов договоров."""
-    # Проверяем авторизацию
+async def contract_templates_list(
+    request: Request,
+    template_type: Optional[str] = None,
+    contract_type: Optional[str] = None,
+):
+    """Список шаблонов договоров с фильтром по типу."""
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
-    
+
     contract_service = ContractService()
-    templates_list = await contract_service.get_contract_templates()
-    
+    templates_list = await contract_service.get_contract_templates(
+        contract_type_code=contract_type
+    )
+
+    # Загружаем типы для фильтра
+    from apps.web.services.constructor_service import ConstructorService
+    from core.database.session import get_async_session
+    async with get_async_session() as session:
+        constructor_svc = ConstructorService()
+        contract_types = await constructor_svc.get_contract_types(session)
+
     return templates.TemplateResponse(
         "owner/templates/contracts/list.html",
         {
             "request": request,
             "templates": templates_list,
             "title": "Шаблоны договоров",
-            "current_user": current_user
-        }
+            "current_user": current_user,
+            "template_type": template_type or "contract",
+            "contract_type": contract_type or "",
+            "contract_types": contract_types,
+        },
     )
 
 
 @router.get("/create", response_class=HTMLResponse)
 async def create_contract_template_form(request: Request):
     """Форма создания шаблона договора."""
-    # Проверяем авторизацию
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
-    
+
+    from apps.web.services.constructor_service import ConstructorService
+    from core.database.session import get_async_session
+    async with get_async_session() as session:
+        contract_types = await ConstructorService().get_contract_types(session)
+
     return templates.TemplateResponse(
         "owner/templates/contracts/create.html",
         {
             "request": request,
             "title": "Создание шаблона договора",
-            "current_user": current_user
-        }
+            "current_user": current_user,
+            "contract_types": contract_types,
+        },
     )
 
 
@@ -64,26 +84,37 @@ async def create_contract_template(
     content: str = Form(...),
     version: str = Form("1.0"),
     is_public: Optional[bool] = Form(False),
-    fields_schema: Optional[str] = Form(None)
+    fields_schema: Optional[str] = Form(None),
+    contract_type_id: Optional[int] = Form(None),
+    is_offer: Optional[str] = Form("0"),
 ):
     """Создание шаблона договора."""
-    # Проверяем авторизацию
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
     
     try:
+        # Серверная валидация: если is_offer=1, принудительно ставим contract_type_id = offer
+        if is_offer == "1":
+            from apps.web.services.constructor_service import ConstructorService
+            from core.database.session import get_async_session
+            async with get_async_session() as session:
+                types = await ConstructorService().get_contract_types(session)
+                offer_type = next((t for t in types if t["code"] == "offer"), None)
+                if offer_type:
+                    contract_type_id = offer_type["id"]
+
         contract_service = ContractService()
         
-        # Создаем шаблон
         template_data = {
             "name": name,
             "description": description,
             "content": content,
             "version": version,
-            "created_by": current_user["id"],  # Это telegram_id
+            "created_by": current_user["id"],
             "is_public": bool(is_public),
-            "fields_schema": None
+            "fields_schema": None,
+            "contract_type_id": contract_type_id,
         }
         # Парсим JSON схемы полей, если передана
         if fields_schema:
@@ -103,6 +134,58 @@ async def create_contract_template(
     except Exception as e:
         logger.error(f"Error creating contract template: {e}")
         raise HTTPException(status_code=400, detail=f"Ошибка создания шаблона: {str(e)}")
+
+
+@router.get("/constructor/contract-types/{type_id}/full-body", response_class=HTMLResponse)
+async def constructor_editor_full_body(request: Request, type_id: int):
+    """Редактор полного текста договора (full_body)."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    return templates.TemplateResponse(
+        "owner/templates/contracts/constructor_editor_full_body.html",
+        {"request": request, "title": "Полный текст договора", "type_id": type_id, "current_user": current_user},
+    )
+
+
+@router.get("/constructor/flows/{flow_id}/steps/{step_id}/fragments", response_class=HTMLResponse)
+async def constructor_editor_fragments(request: Request, flow_id: int, step_id: int):
+    """Редактор фрагментов шага."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    return templates.TemplateResponse(
+        "owner/templates/contracts/constructor_editor_fragments.html",
+        {"request": request, "title": "Редактор фрагментов", "flow_id": flow_id, "step_id": step_id, "current_user": current_user},
+    )
+
+
+@router.get("/constructor/flows/{flow_id}/steps", response_class=HTMLResponse)
+async def constructor_editor_steps(request: Request, flow_id: int):
+    """Редактор шагов flow."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    return templates.TemplateResponse(
+        "owner/templates/contracts/constructor_editor_steps.html",
+        {"request": request, "title": "Редактор шагов", "flow_id": flow_id, "current_user": current_user},
+    )
+
+
+@router.get("/constructor/flows", response_class=HTMLResponse)
+async def constructor_editor_flows(request: Request):
+    """Редактор мастера — список flows по типам."""
+    current_user = await require_owner_or_superadmin(request)
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    return templates.TemplateResponse(
+        "owner/templates/contracts/constructor_editor_flows.html",
+        {
+            "request": request,
+            "title": "Редактор мастера",
+            "current_user": current_user,
+        },
+    )
 
 
 @router.get("/constructor", response_class=HTMLResponse)

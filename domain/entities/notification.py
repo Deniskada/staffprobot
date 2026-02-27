@@ -33,6 +33,17 @@ class NotificationType(enum.Enum):
     CONTRACT_EXPIRING = "contract_expiring"             # Договор истекает
     CONTRACT_UPDATED = "contract_updated"               # Договор обновлен
     
+    # Оферта
+    OFFER_SENT = "offer_sent"                           # Оферта направлена на подписание
+    OFFER_ACCEPTED = "offer_accepted"                   # Оферта принята сотрудником
+    OFFER_REJECTED = "offer_rejected"                   # Сотрудник отклонил оферту
+    OFFER_TERMS_CHANGED = "offer_terms_changed"         # Условия оферты изменены
+    
+    # KYC / Верификация
+    KYC_REQUIRED = "kyc_required"                       # Требуется верификация
+    KYC_VERIFIED = "kyc_verified"                       # Верификация пройдена
+    KYC_FAILED = "kyc_failed"                           # Верификация не пройдена
+    
     # Отзывы
     REVIEW_RECEIVED = "review_received"                 # Получен отзыв
     REVIEW_MODERATED = "review_moderated"               # Отзыв промодерирован
@@ -59,6 +70,9 @@ class NotificationType(enum.Enum):
     INCIDENT_REJECTED = "incident_rejected"             # Инцидент отклонён
     INCIDENT_CANCELLED = "incident_cancelled"           # Инцидент отменён
     
+    # Сотрудники
+    EMPLOYEE_BIRTHDAY = "employee_birthday"             # День рождения сотрудника
+
     # Системные
     WELCOME = "welcome"                                 # Приветствие
     PASSWORD_RESET = "password_reset"                   # Сброс пароля

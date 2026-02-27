@@ -603,4 +603,3 @@ class PayrollAdjustmentService:
             employee_id=employee_id, incident_id=incident_id, amount=float(abs(Decimal(amount)))
         )
         return adjustment
-

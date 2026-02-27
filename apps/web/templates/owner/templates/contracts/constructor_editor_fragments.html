@@ -1,0 +1,123 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block extra_css %}
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<style>.fragment-editor .ql-editor { min-height: 200px; }</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">{{ title }} <span id="stepInfo" class="text-muted"></span></h1>
+        <a href="/owner/contract-templates/constructor/flows/{{ flow_id }}/steps" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> К шагам</a>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-10">
+      <p class="text-muted small mb-3">Плейсхолдеры: <code id="placeholdersHint">—</code></p>
+      <div id="fragmentsList"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+{{ super() }}
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+(function() {
+  const flowId = {{ flow_id }};
+  const stepId = {{ step_id }};
+  const container = document.getElementById('fragmentsList');
+  const editors = {};
+
+  async function loadStep() {
+    const r = await fetch('/api/constructor/flows/' + flowId + '/steps', { credentials: 'include' });
+    const data = await r.json();
+    if (data.success && data.steps) {
+      const s = data.steps.find(x => x.id === stepId);
+      if (s) {
+        document.getElementById('stepInfo').textContent = ' — ' + (s.title || s.slug || '');
+        const placeholders = collectPlaceholders(s.schema || {});
+        document.getElementById('placeholdersHint').textContent = placeholders.length ? '{{ ' + placeholders.join(' }}, {{ ') + ' }}' : 'нет';
+      }
+    }
+  }
+
+  function collectPlaceholders(schema) {
+    const keys = new Set(['_option']);
+    (schema.options || []).forEach(o => { if (o.key) keys.add(o.key); });
+    (schema.fields || []).forEach(f => {
+      if (f.key) keys.add(f.key);
+      (f.options || []).forEach(o => { if (o.key) keys.add(o.key); });
+    });
+    return [...keys];
+  }
+
+  function getHtmlFromQuill(quill) {
+    const html = quill.root.innerHTML;
+    return html === '<p><br></p>' ? '' : html;
+  }
+
+  async function saveFragment(id) {
+    const q = editors[id];
+    if (!q) return;
+    const content = getHtmlFromQuill(q);
+    const r = await fetch('/api/constructor/fragments/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ fragment_content: content })
+    });
+    const data = await r.json();
+    if (data.success) {
+      const btn = document.querySelector('[data-save-id="' + id + '"]');
+      if (btn) { btn.textContent = 'Сохранено'; btn.classList.remove('btn-primary'); btn.classList.add('btn-success'); setTimeout(() => { btn.textContent = 'Сохранить'; btn.classList.add('btn-primary'); btn.classList.remove('btn-success'); }, 1500); }
+    } else alert('Ошибка сохранения');
+  }
+
+  async function load() {
+    await loadStep();
+    const r = await fetch('/api/constructor/steps/' + stepId + '/fragments', { credentials: 'include' });
+    const data = await r.json();
+    if (!data.success) { container.innerHTML = '<p>Ошибка загрузки</p>'; return; }
+    const frags = data.fragments || [];
+    if (!frags.length) {
+      container.innerHTML = '<p class="text-muted">Нет фрагментов у этого шага.</p>';
+      return;
+    }
+    Object.keys(editors).forEach(id => { try { delete editors[id]; } catch(e) {} });
+    window._fragmentsData = frags;
+    let html = '';
+    frags.forEach(f => {
+      const label = f.option_key || 'Общий';
+      html += '<div class="card mb-4 fragment-card" data-fragment-id="' + f.id + '">';
+      html += '<div class="card-header d-flex justify-content-between align-items-center"><strong>' + escapeHtml(label) + '</strong><button type="button" class="btn btn-sm btn-primary" data-save-id="' + f.id + '">Сохранить</button></div>';
+      html += '<div class="card-body"><div class="fragment-editor" id="editor-' + f.id + '"></div></div></div>';
+    });
+    container.innerHTML = html;
+
+    frags.forEach(f => {
+      const el = document.getElementById('editor-' + f.id);
+      if (!el || typeof Quill === 'undefined') return;
+      const initial = (f.fragment_content || '').trim();
+      const q = new Quill(el, {
+        theme: 'snow',
+        modules: { toolbar: [['bold','italic','underline'], [{list:'ordered'},{list:'bullet'}], ['link'], ['clean']] }
+      });
+      q.root.innerHTML = initial ? (initial.startsWith('<') ? initial : '<p>' + initial.replace(/\n/g, '</p><p>') + '</p>') : '<p><br></p>';
+      editors[f.id] = q;
+    });
+
+    container.querySelectorAll('[data-save-id]').forEach(btn => {
+      btn.addEventListener('click', () => saveFragment(parseInt(btn.dataset.saveId, 10)));
+    });
+  }
+
+  function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escapeAttr(s) { return (s || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  load();
+})();
+</script>
+{% endblock %}

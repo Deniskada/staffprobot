@@ -46,9 +46,10 @@ class ContractService:
                 description=template_data.get("description", ""),
                 content=template_data["content"],
                 version=template_data.get("version", "1.0"),
-                created_by=user.id,  # Используем id из БД
+                created_by=user.id,
                 is_public=bool(template_data.get("is_public", False)),
-                fields_schema=fields_schema
+                fields_schema=fields_schema,
+                contract_type_id=template_data.get("contract_type_id"),
             )
             
             session.add(template)
@@ -109,10 +110,22 @@ class ContractService:
         logger.info(f"Extracted fields schema: {fields_schema}")
         return fields_schema
     
-    async def get_contract_templates(self) -> List[ContractTemplate]:
-        """Получение списка шаблонов договоров."""
+    async def get_contract_templates(
+        self, contract_type_code: Optional[str] = None
+    ) -> List[ContractTemplate]:
+        """Получение списка шаблонов договоров, опционально фильтр по коду типа."""
         async with get_async_session() as session:
-            query = select(ContractTemplate).where(ContractTemplate.is_active == True)
+            from sqlalchemy.orm import selectinload
+            query = (
+                select(ContractTemplate)
+                .where(ContractTemplate.is_active == True)
+                .options(selectinload(ContractTemplate.contract_type))
+            )
+            if contract_type_code:
+                from domain.entities.contract_type import ContractType
+                query = query.join(
+                    ContractType, ContractTemplate.contract_type_id == ContractType.id
+                ).where(ContractType.code == contract_type_code)
             query = query.order_by(ContractTemplate.created_at.desc())
             
             result = await session.execute(query)
@@ -208,11 +221,14 @@ class ContractService:
             # Генерируем контент из шаблона, если нужно
             content = contract_data.get("content")
             values = contract_data.get("values", {})
-            
-            if contract_data.get("template_id") and not content:
+            template = None
+
+            if contract_data.get("template_id"):
                 template_query = select(ContractTemplate).where(ContractTemplate.id == contract_data["template_id"])
                 template_result = await session.execute(template_query)
                 template = template_result.scalar_one_or_none()
+
+            if template and not content:
                 values = contract_data.get("values") or {}
 
                 if template:
@@ -268,6 +284,16 @@ class ContractService:
             if end_date and isinstance(end_date, str):
                 end_date = date.fromisoformat(end_date)
             
+            # Определяем начальный статус: для оферт — pending_acceptance
+            initial_status = "active"
+            is_offer = False
+            if template and template.contract_type_id:
+                from domain.entities.contract_type import ContractType as CT
+                ct_obj = await session.get(CT, template.contract_type_id)
+                if ct_obj and ct_obj.code == "offer":
+                    initial_status = "pending_acceptance"
+                    is_offer = True
+
             # Создаем договор
             contract = Contract(
                 contract_number=contract_number,
@@ -286,7 +312,7 @@ class ContractService:
                 allowed_objects=contract_data.get("allowed_objects", []),
                 is_manager=contract_data.get("is_manager", False),
                 manager_permissions=contract_data.get("manager_permissions"),
-                status="active"  # Устанавливаем активный статус по умолчанию
+                status=initial_status,
             )
             
             session.add(contract)
@@ -356,7 +382,25 @@ class ContractService:
             from core.cache.redis_cache import cache
             await cache.clear_pattern("api_employees:*")
             await cache.clear_pattern("api_objects:*")
-            
+
+            # Если оферта — уведомляем сотрудника
+            if is_offer:
+                try:
+                    from shared.services.notification_service import NotificationService
+                    from domain.entities.notification import NotificationType
+                    ns = NotificationService(session)
+                    await ns.create_notification(
+                        user_id=employee.id,
+                        notification_type=NotificationType.OFFER_SENT,
+                        data={
+                            "contract_id": contract.id,
+                            "contract_title": contract.title,
+                            "accept_url": f"/employee/offers/{contract.id}",
+                        },
+                    )
+                except Exception as notify_err:
+                    logger.error(f"Failed to send offer notification: {notify_err}")
+
             return contract
     
     async def get_owner_contracts(self, owner_id: int, active_only: bool = True) -> List[Contract]:
@@ -838,15 +882,6 @@ class ContractService:
                     Object.is_active == True
                 )
             ).order_by(Object.name)
-            
-            result = await session.execute(query)
-            return result.scalars().all()
-    
-    async def get_contract_templates(self) -> List[ContractTemplate]:
-        """Получение шаблонов договоров."""
-        async with get_async_session() as session:
-            query = select(ContractTemplate).where(ContractTemplate.is_active == True)
-            query = query.order_by(ContractTemplate.created_at.desc())
             
             result = await session.execute(query)
             return result.scalars().all()
@@ -2367,45 +2402,71 @@ class ContractService:
     async def _check_and_update_employee_role(self, session, employee_id: int) -> None:
         """Проверка и обновление роли сотрудника при расторжении договора."""
         try:
-            # Проверяем, есть ли у сотрудника другие активные договоры
+            # Проверяем, есть ли у сотрудника другие действующие договоры
+            # (active или pending_acceptance — оферта ещё не подписана, но договор создан)
             active_contracts_query = select(Contract).where(
                 and_(
                     Contract.employee_id == employee_id,
                     Contract.is_active == True,
-                    Contract.status == "active"
+                    Contract.status.in_(["active", "pending_acceptance"]),
                 )
             )
             active_contracts_result = await session.execute(active_contracts_query)
             active_contracts = active_contracts_result.scalars().all()
-            
+
+            # Есть ли среди них договор управляющего
+            has_manager_contract = any(c.is_manager for c in active_contracts)
+
             # Получаем пользователя
             user_query = select(User).where(User.id == employee_id)
             user_result = await session.execute(user_query)
             user = user_result.scalar_one_or_none()
-            
+
             if not user:
                 logger.error(f"User with id {employee_id} not found")
                 return
-            
-            # Если нет активных договоров, убираем роль employee и делаем пользователя неактивным
+
+            changed = False
+
             if not active_contracts:
-                if user.role == "employee":
+                # Нет действующих договоров — понижаем до applicant
+                if user.role in ("employee", "manager"):
                     user.role = "applicant"
-                
-                # Обновляем массив ролей
-                if hasattr(user, 'roles') and user.roles and "employee" in user.roles:
-                    user.roles.remove("employee")
-                    if not user.roles:  # Если массив стал пустым
-                        user.roles = ["applicant"]
-                
-                # Делаем пользователя неактивным
+                    changed = True
+                if hasattr(user, 'roles') and user.roles:
+                    new_roles = [r for r in user.roles if r not in ("employee", "manager")]
+                    user.roles = new_roles if new_roles else ["applicant"]
+                    changed = True
                 user.is_active = False
-                
-                await session.commit()
-                logger.info(f"Removed employee role from user {employee_id} and marked as inactive - no active contracts")
+                changed = True
             else:
-                logger.info(f"User {employee_id} still has {len(active_contracts)} active contracts")
-            
+                # Есть действующие договоры — убеждаемся, что роль employee
+                if user.role not in ("employee", "manager", "owner"):
+                    user.role = "employee"
+                    changed = True
+                user.is_active = True
+
+                # Снимаем manager, если нет договора управляющего
+                if not has_manager_contract:
+                    if user.role == "manager":
+                        user.role = "employee"
+                        changed = True
+                    if hasattr(user, 'roles') and user.roles and "manager" in user.roles:
+                        user.roles = [r for r in user.roles if r != "manager"]
+                        if "employee" not in user.roles:
+                            user.roles.append("employee")
+                        changed = True
+
+            if changed:
+                await session.commit()
+                logger.info(
+                    f"Updated role for user {employee_id}: role={user.role}, "
+                    f"roles={getattr(user, 'roles', None)}, is_active={user.is_active}, "
+                    f"active_contracts={len(active_contracts)}, has_manager={has_manager_contract}"
+                )
+            else:
+                logger.info(f"User {employee_id} role unchanged, {len(active_contracts)} active contracts")
+
         except Exception as e:
             logger.error(f"Error checking employee role for user {employee_id}: {e}")
             # Не поднимаем исключение, чтобы не сломать расторжение договора

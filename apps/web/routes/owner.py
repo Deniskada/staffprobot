@@ -627,12 +627,14 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
         "shifts": "Смены",
         "objects": "Объекты",
         "contracts": "Договоры",
+        "verification": "Верификация",
         "reviews": "Отзывы",
         "payments": "Платежи",
         "system": "Системные",
         "tasks": "Задачи",
         "applications": "Заявки",
-        "incidents": "Инциденты"
+        "incidents": "Инциденты",
+        "employees": "Сотрудники",
     }
     
     # Формирование данных для шаблона
@@ -644,7 +646,7 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
     }
     
     categories_data = []
-    for category_code in ["shifts", "objects", "contracts", "reviews", "payments", "tasks", "applications", "incidents", "system"]:
+    for category_code in ["shifts", "objects", "contracts", "verification", "reviews", "payments", "tasks", "applications", "incidents", "employees", "system"]:
         if category_code not in types_grouped:
             continue
         
@@ -5723,6 +5725,17 @@ async def owner_profile(
                 'notes': subscription.notes if subscription else None
             }
         
+        # KYC-статус из дефолтного профиля
+        from domain.entities.profile import Profile as ProfileModel
+        kyc_q = (
+            select(ProfileModel.kyc_status)
+            .where(ProfileModel.user_id == user_id, ProfileModel.is_archived.is_(False))
+            .order_by(ProfileModel.is_default.desc(), ProfileModel.id)
+            .limit(1)
+        )
+        kyc_result = await db.execute(kyc_q)
+        kyc_status = kyc_result.scalar_one_or_none() or "unverified"
+
         return templates.TemplateResponse(
             "owner/profile/index.html",
             {
@@ -5734,6 +5747,7 @@ async def owner_profile(
                 "subscription_info": subscription_info,
                 "tags_by_category": tags_by_category,
                 "tags_by_category_json": tags_by_category_json,
+                "kyc_status": kyc_status,
                 "legal_types": [
                     {"value": "individual", "label": "Физическое лицо (ИП)"},
                     {"value": "legal", "label": "Юридическое лицо (ООО)"},

@@ -126,9 +126,16 @@ class Settings(BaseSettings):
     yookassa_webhook_secret: Optional[str] = os.getenv("YOOKASSA_WEBHOOK_SECRET")
     yookassa_test_mode: bool = os.getenv("YOOKASSA_TEST_MODE", "false").lower() == "true"
     
+    # Yandex GPT (генерация поздравлений и других текстов)
+    yandex_gpt_folder_id: str = os.getenv("YANDEX_GPT_FOLDER_ID", "")
+    yandex_gpt_api_key: str = os.getenv("YANDEX_GPT_API_KEY", "")
+
     # GitHub (для интеграции с Issues API)
     github_token: Optional[str] = os.getenv("GITHUB_TOKEN")
     github_repo: str = os.getenv("GITHUB_REPO", "OWNER/REPO")  # Format: "owner/repo"
+
+    # Внутренний API (межсервисная коммуникация)
+    internal_api_token: str = Field(default="", env="INTERNAL_API_TOKEN")
     
     @property
     def telegram_bot_token(self) -> Optional[str]:

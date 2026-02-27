@@ -5,7 +5,7 @@ set -e
 
 DOMAIN="staffprobot.ru"
 USER="staffprobot"
-PROJECT_DIR="/opt/staffprobot"
+PROJECT_DIR="/opt/sites/staffprobot"
 
 echo "🔄 Продолжение установки StaffProBot с места остановки"
 

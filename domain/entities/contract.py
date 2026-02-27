@@ -82,6 +82,9 @@ class Contract(Base):
     termination_date = Column(Date, nullable=True)  # Дата увольнения
     settlement_policy = Column(String(32), nullable=False, default="schedule")  # 'schedule' | 'termination_date'
     
+    # Метаданные ПЭП (простой электронной подписи)
+    pep_metadata = Column(JSON, nullable=True, comment="Метаданные ПЭП: channel, otp_hash, esia_oid, signed_ip")
+    
     # Отношения
     owner = relationship("User", foreign_keys=[owner_id], backref="owned_contracts")
     employee = relationship("User", foreign_keys=[employee_id], backref="employee_contracts")
@@ -164,6 +167,7 @@ class ContractVersion(Base):
     version_number = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
     changes_description = Column(Text, nullable=True)
+    file_key = Column(String(500), nullable=True, comment="Ключ подписанного PDF в S3")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     

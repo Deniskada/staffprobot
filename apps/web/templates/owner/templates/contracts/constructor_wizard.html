@@ -121,13 +121,17 @@
     }
     const step = flow.steps[currentStepIndex];
     const schema = step.schema || {};
-    const infoBlock = schema.info_block || '';
+    const infoBlock = schema.info_block;
     const fields = schema.fields || [];
     const options = schema.options || [];
     const tables = schema.tables || [];
     const conditionals = schema.conditionals || [];
     let html = '';
-    if (infoBlock) html += '<div class="alert alert-info mb-3">' + infoBlock + '</div>';
+    if (Array.isArray(infoBlock)) {
+      infoBlock.forEach(function(t) { if (t) html += '<div class="alert alert-info mb-3">' + t + '</div>'; });
+    } else if (infoBlock) {
+      html += '<div class="alert alert-info mb-3">' + infoBlock + '</div>';
+    }
     if (options.length) {
       const key = fields[0] && fields[0].key ? fields[0].key : 'option';
       const current = (getStepData(step.slug)._option || '').toString();

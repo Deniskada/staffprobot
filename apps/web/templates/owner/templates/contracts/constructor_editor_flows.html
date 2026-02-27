@@ -1,0 +1,125 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">{{ title }}</h1>
+        <a href="/owner/contract-templates" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-10">
+      <div id="flowsEditor"></div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="editFlowModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Редактировать flow</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editFlowId">
+        <div class="mb-3">
+          <label class="form-label">Название</label>
+          <input type="text" class="form-control" id="editFlowName">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Версия</label>
+          <input type="text" class="form-control" id="editFlowVersion">
+        </div>
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" id="editFlowActive" checked>
+          <label class="form-check-label" for="editFlowActive">Активен</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-primary" id="saveFlowBtn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+{{ super() }}
+<script>
+(function() {
+  const container = document.getElementById('flowsEditor');
+  const modal = new bootstrap.Modal(document.getElementById('editFlowModal'));
+
+  async function load() {
+    const r = await fetch('/api/constructor/flows/editor', { credentials: 'include' });
+    const data = await r.json();
+    if (!data.success || !data.by_contract_type) {
+      container.innerHTML = '<p class="text-muted">Нет flows.</p>';
+      return;
+    }
+    let html = '';
+    for (const group of data.by_contract_type) {
+      html += '<div class="card mb-4"><div class="card-header d-flex justify-content-between align-items-center"><strong>' + escapeHtml(group.contract_type_label) + '</strong><a href="/owner/contract-templates/constructor/contract-types/' + (group.contract_type_id || '') + '/full-body" class="btn btn-sm btn-outline-primary">Полный текст</a></div><div class="card-body"><table class="table table-sm"><thead><tr><th>Flow</th><th>Версия</th><th>Статус</th><th></th></tr></thead><tbody>';
+      for (const f of group.flows) {
+        html += '<tr><td>' + escapeHtml(f.name) + '</td><td>' + escapeHtml(f.version) + '</td><td>' + (f.is_active ? '<span class="badge bg-success">активен</span>' : '<span class="badge bg-secondary">неактивен</span>') + '</td><td><a href="/owner/contract-templates/constructor/flows/' + f.id + '/steps" class="btn btn-sm btn-outline-primary me-1">Шаги</a><a href="/owner/contract-templates/constructor/wizard/' + f.id + '" class="btn btn-sm btn-outline-info me-1">Мастер</a><button class="btn btn-sm btn-outline-secondary edit-flow" data-id="' + f.id + '" data-name="' + escapeAttr(f.name) + '" data-version="' + escapeAttr(f.version) + '" data-active="' + f.is_active + '">Редактировать</button><button class="btn btn-sm btn-outline-warning toggle-active ms-1" data-id="' + f.id + '" data-active="' + f.is_active + '">' + (f.is_active ? 'Деактивировать' : 'Активировать') + '</button></td></tr>';
+      }
+      html += '</tbody></table></div></div>';
+    }
+    container.innerHTML = html;
+
+    container.querySelectorAll('.edit-flow').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('editFlowId').value = btn.dataset.id;
+        document.getElementById('editFlowName').value = btn.dataset.name || '';
+        document.getElementById('editFlowVersion').value = btn.dataset.version || '';
+        document.getElementById('editFlowActive').checked = btn.dataset.active === 'true';
+        modal.show();
+      });
+    });
+    container.querySelectorAll('.toggle-active').forEach(btn => {
+      btn.addEventListener('click', () => toggleActive(parseInt(btn.dataset.id, 10), btn.dataset.active !== 'true'));
+    });
+  }
+
+  document.getElementById('saveFlowBtn').addEventListener('click', async () => {
+    const id = document.getElementById('editFlowId').value;
+    const name = document.getElementById('editFlowName').value;
+    const version = document.getElementById('editFlowVersion').value;
+    const is_active = document.getElementById('editFlowActive').checked;
+    const r = await fetch('/api/constructor/flows/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ name, version, is_active })
+    });
+    const data = await r.json();
+    if (data.success) {
+      modal.hide();
+      load();
+    } else {
+      alert('Ошибка сохранения');
+    }
+  });
+
+  async function toggleActive(id, is_active) {
+    const r = await fetch('/api/constructor/flows/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ is_active })
+    });
+    const data = await r.json();
+    if (data.success) load();
+  }
+
+  function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function escapeAttr(s) { return (s || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+  load();
+})();
+</script>
+{% endblock %}
+

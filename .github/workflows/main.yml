@@ -131,17 +131,17 @@ jobs:
         mkdir -p ~/.ssh
         echo "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan staffprobot.ru >> ~/.ssh/known_hosts
+        ssh-keyscan 155.212.217.38 >> ~/.ssh/known_hosts
     
     - name: Deploy to production
       env:
-        SSH_HOST: staffprobot@staffprobot.ru
+        SSH_HOST: root@155.212.217.38
         SSH_PORT: 22
-        DEPLOY_PATH: /opt/staffprobot
+        DEPLOY_PATH: /opt/sites/staffprobot
       run: |
         ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << EOF
           set -e
-          cd /opt/staffprobot
+          cd /opt/sites/staffprobot
           START_TS=\$(date +%s)
           git fetch origin
           git reset --hard origin/main
@@ -159,13 +159,13 @@ jobs:
     
     - name: Health check and register deployment
       env:
-        SSH_HOST: staffprobot@staffprobot.ru
+        SSH_HOST: root@155.212.217.38
         GITHUB_SHA: ${{ github.sha }}
         GITHUB_COMMIT_MSG: ${{ github.event.head_commit.message }}
       run: |
         ssh -i ~/.ssh/deploy_key ${SSH_HOST} bash << EOF
           set -e
-          cd /opt/staffprobot
+          cd /opt/sites/staffprobot
           # load duration from previous step
           if [ -f .deploy_env ]; then . ./.deploy_env; fi
           tries=0; max=3; ok=0

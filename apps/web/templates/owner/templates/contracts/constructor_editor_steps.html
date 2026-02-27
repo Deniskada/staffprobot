@@ -1,0 +1,149 @@
+{% extends "owner/base_owner.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">{{ title }} <span id="flowName" class="text-muted"></span></h1>
+        <a href="/owner/contract-templates/constructor/flows" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> К flows</a>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-10">
+      <p class="text-muted small">Перетащите строки для изменения порядка.</p>
+      <table class="table table-sm" id="stepsTable">
+        <thead><tr><th style="width:30px"></th><th>#</th><th>Название</th><th>Slug</th><th></th></tr></thead>
+        <tbody id="stepsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="editStepModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Редактировать шаг</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="editStepId">
+        <div class="row mb-3">
+          <div class="col-md-6"><label class="form-label">Название</label><input type="text" class="form-control" id="editStepTitle"></div>
+          <div class="col-md-6"><label class="form-label">Slug</label><input type="text" class="form-control" id="editStepSlug"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Schema (JSON)
+            <button type="button" class="btn btn-link btn-sm p-0 ms-1" data-bs-toggle="modal" data-bs-target="#schemaHelpModal" title="Справка по формату">
+              <i class="bi bi-question-circle text-primary"></i>
+            </button>
+          </label>
+          <textarea class="form-control font-monospace small" id="editStepSchema" rows="12"></textarea>
+        </div>
+        <div class="form-check"><input type="checkbox" class="form-check-input" id="editStepRequest"><label class="form-check-label">Запрашивать при заключении</label></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-primary" id="saveStepBtn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="schemaHelpModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Формат Schema (JSON)</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body small">
+        <h6>Правила JSON</h6>
+        <ul>
+          <li>Строки в кавычках. Переносы строк в строке — только как <code>\n</code> (не Enter).</li>
+          <li>Кавычки внутри строки — <code>\"</code>. Запятые между полями.</li>
+        </ul>
+        <h6 class="mt-3">Элементы schema</h6>
+        <ul>
+          <li><strong>info_block</strong> — один блок текста (строка) или массив строк — несколько блоков подряд:<br>
+            <code>"info_block": "Текст подсказки"</code> или <code>"info_block": ["Первый абзац.", "Второй абзац."]</code></li>
+          <li><strong>fields</strong> — массив полей: <code>{"key": "name", "label": "Название", "type": "text|number|checkbox|radio|select|date|profile_select", "required": true}</code></li>
+          <li><strong>options</strong> — варианты выбора: <code>{"key": "val", "label": "Подпись"}</code></li>
+          <li><strong>conditionals</strong> — показать поля при условии: <code>{"if_field": "_option", "eq": "individual", "then_show_fields": ["field_key"]}</code></li>
+          <li><strong>tables</strong> — таблицы с колонками, <code>show_if_option</code> — показ при выборе.</li>
+          <li><strong>show_if</strong> — показать шаг при условии: <code>{"step_slug": "payment", "field": "pay_prepay"}</code></li>
+        </ul>
+        <h6 class="mt-3">Пример</h6>
+        <pre class="bg-light p-2 rounded" style="font-size:0.8em">{
+  "info_block": ["Первый абзац подсказки.", "Второй абзац с переносом."],
+  "fields": [{"key": "choice", "label": "Выбор", "type": "radio", "required": true}],
+  "options": [{"key": "a", "label": "Вариант А"}, {"key": "b", "label": "Вариант Б"}],
+  "conditionals": [{"if_field": "_option", "eq": "a", "then_show_fields": ["extra_field"]}]
+}</pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+(function() {
+  const flowId = {{ flow_id }};
+  const stepsBody = document.getElementById('stepsBody');
+  const modal = new bootstrap.Modal(document.getElementById('editStepModal'));
+
+  async function load() {
+    const r = await fetch('/api/constructor/flows/' + flowId + '/steps', { credentials: 'include' });
+    const data = await r.json();
+    if (!data.success) { stepsBody.innerHTML = '<tr><td colspan="5">Ошибка загрузки</td></tr>'; return; }
+    document.getElementById('flowName').textContent = data.flow ? ' — ' + data.flow.name : '';
+    let html = '';
+    window._stepsData = data.steps || [];
+    (data.steps || []).forEach((s, i) => {
+      html += '<tr data-id="' + s.id + '"><td class="drag-handle" style="cursor:grab"><i class="bi bi-grip-vertical"></i></td><td>' + (i + 1) + '</td><td>' + escapeHtml(s.title) + '</td><td><code>' + escapeHtml(s.slug) + '</code></td><td><button class="btn btn-sm btn-outline-secondary edit-step" data-step-id="' + s.id + '">Редактировать</button> <a href="/owner/contract-templates/constructor/flows/' + flowId + '/steps/' + s.id + '/fragments" class="btn btn-sm btn-outline-primary">Фрагменты</a></td></tr>';
+    });
+    stepsBody.innerHTML = html || '<tr><td colspan="5">Нет шагов</td></tr>';
+
+    stepsBody.querySelectorAll('.edit-step').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const s = (window._stepsData || []).find(x => x.id === parseInt(btn.dataset.stepId, 10)) || {};
+        document.getElementById('editStepId').value = s.id || '';
+        document.getElementById('editStepTitle').value = s.title || '';
+        document.getElementById('editStepSlug').value = s.slug || '';
+        document.getElementById('editStepSchema').value = JSON.stringify(s.schema || {}, null, 2);
+        document.getElementById('editStepRequest').checked = !!s.request_at_conclusion;
+        modal.show();
+      });
+    });
+
+    if (typeof Sortable !== 'undefined') {
+      new Sortable(stepsBody, {
+        handle: '.drag-handle',
+        animation: 150,
+        onEnd: async () => {
+          const ids = [...stepsBody.querySelectorAll('tr[data-id]')].map(tr => parseInt(tr.dataset.id, 10));
+          await fetch('/api/constructor/flows/' + flowId + '/steps/reorder', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ step_ids: ids })
+          });
+          load();
+        }
+      });
+    }
+  }
+
+  document.getElementById('saveStepBtn').addEventListener('click', async () => {
+    const id = document.getElementById('editStepId').value;
+    const title = document.getElementById('editStepTitle').value;
+    const slug = document.getElementById('editStepSlug').value;
+    let schema;
+    try { schema = JSON.parse(document.getElementById('editStepSchema').value); } catch (e) { alert('Неверный JSON в schema'); return; }
+    const request_at_conclusion = document.getElementById('editStepRequest').checked;
+    const r = await fetch('/api/constructor/steps/' + id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ title, slug, step_schema: schema, request_at_conclusion })
+    });
+    if ((await r.json()).success) { modal.hide(); load(); } else alert('Ошибка сохранения');
+  });
+
+  function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  load();
+})();
+</script>
+{% endblock %}

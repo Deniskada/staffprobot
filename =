@@ -1,0 +1,5 @@
+time="2026-02-27T13:03:52Z" level=warning msg="/opt/sites/staffprobot/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+  File "<stdin>", line 10
+    AND created_at 2026-02-27 00:00+00 ORDER BY created_at
+                        ^
+SyntaxError: leading zeros in decimal integer literals are not permitted; use an 0o prefix for octal integers

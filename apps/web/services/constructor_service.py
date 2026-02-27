@@ -25,6 +25,32 @@ class ConstructorService:
         rows = result.scalars().all()
         return [{"id": r.id, "code": r.code, "label": r.label} for r in rows]
 
+    async def get_contract_type_full_body(
+        self, session: AsyncSession, type_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Получить full_body типа договора."""
+        result = await session.execute(
+            select(ContractType).where(ContractType.id == type_id)
+        )
+        ct = result.scalar_one_or_none()
+        if not ct:
+            return None
+        return {"id": ct.id, "label": ct.label, "full_body": ct.full_body or ""}
+
+    async def update_contract_type_full_body(
+        self, session: AsyncSession, type_id: int, full_body: str
+    ) -> bool:
+        """Обновить full_body типа договора."""
+        result = await session.execute(
+            select(ContractType).where(ContractType.id == type_id)
+        )
+        ct = result.scalar_one_or_none()
+        if not ct:
+            return False
+        ct.full_body = full_body
+        await session.commit()
+        return True
+
     async def get_flows(
         self, session: AsyncSession, contract_type_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
@@ -48,16 +74,119 @@ class ConstructorService:
             for f in flows
         ]
 
+    async def get_flows_for_editor(
+        self, session: AsyncSession
+    ) -> Dict[str, Any]:
+        """Все flows для редактора, сгруппированные по типу договора."""
+        result = await session.execute(
+            select(ConstructorFlow, ContractType.label)
+            .join(ContractType, ConstructorFlow.contract_type_id == ContractType.id)
+            .order_by(ContractType.id, ConstructorFlow.id)
+        )
+        rows = result.all()
+        by_type: Dict[int, Dict[str, Any]] = {}
+        for flow, type_label in rows:
+            tid = flow.contract_type_id
+            if tid not in by_type:
+                by_type[tid] = {
+                    "contract_type_id": tid,
+                    "contract_type_label": type_label,
+                    "flows": [],
+                }
+            by_type[tid]["flows"].append({
+                "id": flow.id,
+                "name": flow.name,
+                "version": flow.version,
+                "is_active": flow.is_active,
+            })
+        return {"by_contract_type": list(by_type.values())}
+
+    async def update_flow(
+        self,
+        session: AsyncSession,
+        flow_id: int,
+        name: Optional[str] = None,
+        version: Optional[str] = None,
+        is_active: Optional[bool] = None,
+    ) -> bool:
+        """Обновить flow (name, version, is_active)."""
+        result = await session.execute(
+            select(ConstructorFlow).where(ConstructorFlow.id == flow_id)
+        )
+        flow = result.scalar_one_or_none()
+        if not flow:
+            return False
+        if name is not None:
+            flow.name = name
+        if version is not None:
+            flow.version = version
+        if is_active is not None:
+            flow.is_active = is_active
+        await session.commit()
+        return True
+
+    async def update_step(
+        self,
+        session: AsyncSession,
+        step_id: int,
+        title: Optional[str] = None,
+        slug: Optional[str] = None,
+        schema: Optional[Dict[str, Any]] = None,
+        request_at_conclusion: Optional[bool] = None,
+        sort_order: Optional[int] = None,
+    ) -> bool:
+        """Обновить шаг."""
+        result = await session.execute(
+            select(ConstructorStep).where(ConstructorStep.id == step_id)
+        )
+        step = result.scalar_one_or_none()
+        if not step:
+            return False
+        if title is not None:
+            step.title = title
+        if slug is not None:
+            step.slug = slug
+        if schema is not None:
+            step.schema = schema
+        if request_at_conclusion is not None:
+            step.request_at_conclusion = request_at_conclusion
+        if sort_order is not None:
+            step.sort_order = sort_order
+        await session.commit()
+        return True
+
+    async def reorder_steps(
+        self, session: AsyncSession, flow_id: int, step_ids: List[int]
+    ) -> bool:
+        """Установить порядок шагов по списку id."""
+        for idx, sid in enumerate(step_ids):
+            result = await session.execute(
+                select(ConstructorStep).where(
+                    ConstructorStep.id == sid,
+                    ConstructorStep.flow_id == flow_id,
+                )
+            )
+            step = result.scalar_one_or_none()
+            if step:
+                step.sort_order = idx
+        await session.commit()
+        return True
+
+    async def get_flow_by_id(
+        self, session: AsyncSession, flow_id: int, for_editor: bool = False
+    ) -> Optional[ConstructorFlow]:
+        """Flow по id. for_editor=True — без фильтра is_active."""
+        q = select(ConstructorFlow).where(ConstructorFlow.id == flow_id)
+        if not for_editor:
+            q = q.where(ConstructorFlow.is_active == True)
+        result = await session.execute(q.options(selectinload(ConstructorFlow.steps)))
+        return result.scalar_one_or_none()
+
     async def get_flow_with_steps(
         self, session: AsyncSession, flow_id: int
     ) -> Optional[Dict[str, Any]]:
         """Flow с шагами (schema) для отображения мастера."""
-        result = await session.execute(
-            select(ConstructorFlow)
-            .where(ConstructorFlow.id == flow_id, ConstructorFlow.is_active == True)
-            .options(selectinload(ConstructorFlow.steps))
-        )
-        flow = result.scalar_one_or_none()
+        flow = await self.get_flow_by_id(session, flow_id, for_editor=False)
         if not flow:
             return None
         steps = sorted(flow.steps, key=lambda s: s.sort_order)
@@ -66,6 +195,7 @@ class ConstructorService:
             "contract_type_id": flow.contract_type_id,
             "name": flow.name,
             "version": flow.version,
+            "is_active": flow.is_active,
             "steps": [
                 {
                     "id": s.id,
@@ -78,6 +208,36 @@ class ConstructorService:
                 for s in steps
             ],
         }
+
+    async def get_fragments_for_step(
+        self, session: AsyncSession, step_id: int
+    ) -> List[Dict[str, Any]]:
+        """Фрагменты шага для редактора (с id)."""
+        result = await session.execute(
+            select(ConstructorFragment).where(ConstructorFragment.step_id == step_id)
+        )
+        frags = result.scalars().all()
+        return [
+            {"id": f.id, "option_key": f.option_key, "fragment_content": f.fragment_content}
+            for f in frags
+        ]
+
+    async def update_fragment(
+        self,
+        session: AsyncSession,
+        fragment_id: int,
+        fragment_content: str,
+    ) -> bool:
+        """Обновить fragment_content."""
+        result = await session.execute(
+            select(ConstructorFragment).where(ConstructorFragment.id == fragment_id)
+        )
+        frag = result.scalar_one_or_none()
+        if not frag:
+            return False
+        frag.fragment_content = fragment_content
+        await session.commit()
+        return True
 
     async def get_fragments_by_flow(
         self, session: AsyncSession, flow_id: int
@@ -193,6 +353,11 @@ class ConstructorService:
 
         full_content = "\n\n".join(parts) if parts else ""
 
+        # Автоподстановка данных владельца из профиля
+        owner_data = await self._load_owner_profile_data(session, user.id)
+        if owner_data:
+            full_content = self._substitute_placeholders(full_content, owner_data)
+
         template = ContractTemplate(
             name=template_name,
             description=template_description or "",
@@ -210,6 +375,90 @@ class ConstructorService:
         await session.refresh(template, attribute_names=["id", "name", "created_at"])
         logger.info("Constructor template created", template_id=template.id, template_name=template_name)
         return template
+
+    async def _load_owner_profile_data(
+        self, session: AsyncSession, user_id: int
+    ) -> Dict[str, str]:
+        """
+        Загрузить данные дефолтного профиля владельца для автоподстановки.
+
+        Поддерживаемые плейсхолдеры:
+          ЮЛ: company_name, company_short_name, ogrn, inn, legal_address, ceo_name, ceo_basis
+          ИП: company_name, inn, ogrnip, legal_address
+          ФЛ: company_name (ФИО), inn, snils
+        """
+        from domain.entities.profile import (
+            Profile, LegalProfile, SoleProprietorProfile, IndividualProfile,
+        )
+        from domain.entities.address import Address
+
+        stmt = (
+            select(Profile)
+            .where(Profile.user_id == user_id, Profile.is_archived.is_(False))
+            .order_by(Profile.is_default.desc(), Profile.id)
+        )
+        result = await session.execute(stmt)
+        profile = result.scalars().first()
+        if not profile:
+            return {}
+
+        data: Dict[str, str] = {}
+
+        if profile.profile_type == "legal":
+            lp_result = await session.execute(
+                select(LegalProfile).where(LegalProfile.profile_id == profile.id)
+            )
+            lp = lp_result.scalar_one_or_none()
+            if lp:
+                data["company_name"] = lp.full_name or ""
+                data["company_short_name"] = profile.display_name or lp.full_name or ""
+                data["ogrn"] = lp.ogrn or ""
+                data["inn"] = lp.inn or ""
+                if lp.registration_address_id:
+                    addr = await session.get(Address, lp.registration_address_id)
+                    data["legal_address"] = addr.full_address if addr else ""
+                if lp.representative_profile_id:
+                    rep = await session.get(IndividualProfile, lp.representative_profile_id)
+                    if rep:
+                        middle = f" {rep.middle_name}" if rep.middle_name else ""
+                        data["ceo_name"] = f"{rep.last_name} {rep.first_name}{middle}"
+                data["ceo_basis"] = lp.representative_basis or "Устав"
+
+        elif profile.profile_type == "sole_proprietor":
+            sp_result = await session.execute(
+                select(SoleProprietorProfile).where(SoleProprietorProfile.profile_id == profile.id)
+            )
+            sp = sp_result.scalar_one_or_none()
+            if sp:
+                middle = f" {sp.middle_name}" if sp.middle_name else ""
+                data["company_name"] = f"ИП {sp.last_name} {sp.first_name}{middle}"
+                data["company_short_name"] = data["company_name"]
+                data["inn"] = sp.inn or ""
+                data["ogrnip"] = sp.ogrnip or ""
+                data["ogrn"] = sp.ogrnip or ""
+                data["ceo_name"] = f"{sp.last_name} {sp.first_name}{middle}"
+                data["ceo_basis"] = "свидетельство о государственной регистрации"
+                if sp.residence_address_id:
+                    addr = await session.get(Address, sp.residence_address_id)
+                    data["legal_address"] = addr.full_address if addr else ""
+
+        elif profile.profile_type == "individual":
+            ip_result = await session.execute(
+                select(IndividualProfile).where(IndividualProfile.profile_id == profile.id)
+            )
+            ip = ip_result.scalar_one_or_none()
+            if ip:
+                middle = f" {ip.middle_name}" if ip.middle_name else ""
+                data["company_name"] = f"{ip.last_name} {ip.first_name}{middle}"
+                data["company_short_name"] = data["company_name"]
+                data["inn"] = ip.inn or ""
+                data["snils"] = ip.snils or ""
+                data["ceo_name"] = data["company_name"]
+                if ip.registration_address_id:
+                    addr = await session.get(Address, ip.registration_address_id)
+                    data["legal_address"] = addr.full_address if addr else ""
+
+        return data
 
     @staticmethod
     def _resolve_display_values(
