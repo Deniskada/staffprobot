@@ -19,6 +19,16 @@ def upgrade():
         ALTER COLUMN type TYPE VARCHAR(50)
         USING type::text
     """)
+    op.execute("""
+        ALTER TABLE notification_templates
+        ALTER COLUMN type TYPE VARCHAR(50)
+        USING type::text
+    """)
+    op.execute("""
+        ALTER TABLE payment_notifications
+        ALTER COLUMN notification_type TYPE VARCHAR(50)
+        USING notification_type::text
+    """)
     op.execute("DROP TYPE IF EXISTS notificationtype")
 
 
