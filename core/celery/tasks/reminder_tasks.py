@@ -454,25 +454,66 @@ async def _check_object_openings_async() -> Dict[str, Any]:
                         # Проверяем, что время открытия прошло и мы еще в рабочем времени
                         if now_local >= expected_open and now_local <= expected_close:
                             # Проверяем существование уведомления по дате, чтобы не создавать дубликаты
+                            date_display = today_local.strftime("%d.%m.%Y")
                             notification_exists = await _check_notification_exists(
                                 session, current_obj.owner_id,
                                 NotificationType.OBJECT_NO_SHIFTS_TODAY.value,
-                                {"object_id": current_obj.id, "date": str(today_local)}
+                                {"object_id": str(current_obj.id), "date": date_display}
                             )
                             
                             if not notification_exists:
                                 await _create_object_notification(
                                     session, current_obj.id, current_obj.owner, NotificationType.OBJECT_NO_SHIFTS_TODAY,
                                     {
+                                        "object_id": str(current_obj.id),
                                         "object_name": current_obj.name,
                                         "object_address": current_obj.address or "",
-                                        "date": today_local.strftime("%d.%m.%Y")
+                                        "date": date_display
                                     },
                                     now
                                 )
                                 stats["no_shifts"] += 1
                         continue
                     
+                    # Проверка 1б: НЕТ АКТИВНОЙ СМЕНЫ В РАБОЧЕЕ ВРЕМЯ
+                    # Объект имеет завершённые смены сегодня, но сейчас никто не работает
+                    # и нет плановых незапущенных смен (т.е. это не просто пауза между сменами)
+                    if shifts_today and current_obj.opening_time and current_obj.closing_time:
+                        active_now = [s for s in shifts_today if s.status == 'active']
+                        planned_remaining = [s for s in shifts_today if s.status == 'planned' and not s.start_time]
+                        if not active_now and not planned_remaining:
+                            naive_open = datetime.combine(today_local, current_obj.opening_time)
+                            naive_close = datetime.combine(today_local, current_obj.closing_time)
+                            obj_tz_str = current_obj.timezone or "Europe/Moscow"
+                            obj_tz2 = pytz.timezone(obj_tz_str)
+                            expected_open2 = obj_tz2.localize(naive_open)
+                            expected_close2 = obj_tz2.localize(naive_close)
+                            now_local2 = timezone_helper.utc_to_local(now, timezone_str=obj_tz_str)
+
+                            # Срабатывает в рабочее время, если до закрытия ещё более 30 минут
+                            # (иначе это "раннее закрытие" — обрабатывается отдельно)
+                            if (now_local2 >= expected_open2 and
+                                    now_local2 < expected_close2 - timedelta(minutes=30)):
+                                date_display_no_active = today_local.strftime("%d.%m.%Y")
+                                notif_exists_no_active = await _check_notification_exists(
+                                    session, current_obj.owner_id,
+                                    NotificationType.OBJECT_NO_SHIFTS_TODAY.value,
+                                    {"object_id": str(current_obj.id), "date": date_display_no_active}
+                                )
+                                if not notif_exists_no_active:
+                                    await _create_object_notification(
+                                        session, current_obj.id, current_obj.owner,
+                                        NotificationType.OBJECT_NO_SHIFTS_TODAY,
+                                        {
+                                            "object_id": str(current_obj.id),
+                                            "object_name": current_obj.name,
+                                            "object_address": current_obj.address or "",
+                                            "date": date_display_no_active
+                                        },
+                                        now
+                                    )
+                                    stats["no_shifts"] += 1
+
                     # Для объектов со сменами проверяем открытие/закрытие
                     if shifts_today and current_obj.opening_time and current_obj.closing_time:
                         logger.info(f"Checking object {current_obj.id} ({current_obj.name}): {len(shifts_today)} shifts today")
