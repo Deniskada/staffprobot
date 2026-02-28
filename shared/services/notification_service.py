@@ -610,7 +610,7 @@ class NotificationService:
                 now = datetime.now(timezone.utc)
                 
                 # Формируем SQL с правильным синтаксисом для asyncpg
-                sql = text(f"UPDATE notifications SET status = CAST(:status AS notificationstatus) WHERE id = :id")
+                sql = text("UPDATE notifications SET status = :status WHERE id = :id")
                 await session.execute(sql, {"status": status_value, "id": notification_id})
                 
                 if status == NotificationStatus.SENT:

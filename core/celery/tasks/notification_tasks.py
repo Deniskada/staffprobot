@@ -103,6 +103,7 @@ async def _dispatch_all_scheduled():
             except Exception as e:
                 logger.error(f"Error dispatching notification {notif.id}: {e}")
                 try:
+                    await session.rollback()
                     await _mark(session, notif.id, "failed", error=str(e)[:200])
                 except Exception:
                     pass
@@ -118,7 +119,7 @@ async def _mark(session, notif_id: int, status: str, error: str | None = None):
     now = datetime.now(timezone.utc)
 
     await session.execute(
-        text("UPDATE notifications SET status = CAST(:status AS notificationstatus) WHERE id = :id"),
+        text("UPDATE notifications SET status = :status WHERE id = :id"),
         {"status": status, "id": notif_id},
     )
     if status == "sent":
