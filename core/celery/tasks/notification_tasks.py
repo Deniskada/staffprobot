@@ -49,21 +49,10 @@ def send_notification_now(notification_id: int) -> bool:
 def dispatch_scheduled_notifications() -> Dict[str, Any]:
     """Обработать и отправить все запланированные уведомления (scheduled <= now)."""
     try:
+        import asyncio
         from shared.services.notification_dispatcher import get_notification_dispatcher
         dispatcher = get_notification_dispatcher()
-        import asyncio
-        
-        # Правильная работа с event loop в Celery
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        return loop.run_until_complete(dispatcher.dispatch_scheduled_notifications())
+        return asyncio.run(dispatcher.dispatch_scheduled_notifications())
     except Exception as e:
         logger.error("dispatch_scheduled_notifications failed", error=str(e))
         return {"processed": 0, "sent": 0, "failed": 0, "error": str(e)}
