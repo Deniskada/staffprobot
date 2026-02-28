@@ -480,6 +480,7 @@ class NotificationService:
                         )
                     ).values(status='cancelled')
                 )
+                await session.commit()
 
                 # В БД enum хранится как значение в lowercase (pending)
                 # Используем cast для правильного сравнения enum с VARCHAR
