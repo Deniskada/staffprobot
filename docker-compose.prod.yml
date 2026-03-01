@@ -92,6 +92,24 @@ services:
           memory: 256M
           cpus: '0.1'
 
+  minio:
+    image: minio/minio:latest
+    container_name: staffprobot_minio_prod
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_prod_data:/data
+    networks:
+      - staffprobot_network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.15'
+
   bot:
     image: staffprobot-bot:latest
     container_name: staffprobot_bot_prod
@@ -393,6 +411,8 @@ volumes:
   grafana_prod_data:
     driver: local
   celery_beat_prod_data:
+    driver: local
+  minio_prod_data:
     driver: local
 
 networks:
