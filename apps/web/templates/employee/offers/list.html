@@ -13,7 +13,48 @@
                 <i class="bi bi-info-circle"></i> У вас пока нет договоров.
             </div>
             {% else %}
-            <div class="table-responsive">
+
+            {# ── Мобильные карточки (< md) ── #}
+            <div class="d-md-none">
+                {% for c in contracts %}
+                <div class="card mb-3 {% if c.status == 'pending_acceptance' %}border-warning{% endif %}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="card-title mb-1">{{ c.title }}</h6>
+                                <small class="text-muted">{{ c.contract_number }}</small>
+                            </div>
+                            {% if c.status == 'pending_acceptance' %}
+                                <span class="badge bg-warning text-dark">Ожидает</span>
+                            {% elif c.status == 'active' %}
+                                <span class="badge bg-success">Подписан</span>
+                            {% elif c.status == 'rejected' %}
+                                <span class="badge bg-danger">Отклонён</span>
+                            {% elif c.status == 'terminated' %}
+                                <span class="badge bg-dark">Расторгнут</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ c.status }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="text-muted small mb-3">
+                            {% if c.template_name %}{{ c.template_name }} · {% endif %}{{ c.created_at.strftime('%d.%m.%Y') if c.created_at else '' }}
+                        </div>
+                        {% if c.status == 'pending_acceptance' and c.is_offer %}
+                            <a href="/employee/offers/{{ c.id }}" class="btn btn-primary w-100">
+                                <i class="bi bi-pen me-1"></i>Подписать договор
+                            </a>
+                        {% elif c.status == 'active' %}
+                            <a href="/employee/offers/{{ c.id }}" class="btn btn-outline-secondary w-100">
+                                <i class="bi bi-eye me-1"></i>Просмотр
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {# ── Таблица (>= md) ── #}
+            <div class="d-none d-md-block table-responsive">
                 <table class="table table-hover align-middle">
                     <thead class="table-light">
                         <tr>
