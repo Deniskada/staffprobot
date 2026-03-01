@@ -21,6 +21,12 @@ def _get_api_key() -> str:
     return os.getenv("YANDEX_GEOCODER_API_KEY") or os.getenv("YANDEX_MAPS_API_KEY", "")
 
 
+def _get_referer() -> str:
+    from core.config.settings import settings
+    protocol = "https" if settings.use_https else "http"
+    return f"{protocol}://{settings.domain}/"
+
+
 @router.get("/search")
 async def geocode_search(q: str = Query(..., min_length=2, max_length=300)):
     """Прямое геокодирование: текст → координаты."""
@@ -36,8 +42,9 @@ async def geocode_search(q: str = Query(..., min_length=2, max_length=300)):
         "results": "5",
     }
     try:
+        headers = {"Referer": _get_referer()}
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(GEOCODER_URL, params=params)
+            resp = await client.get(GEOCODER_URL, params=params, headers=headers)
             resp.raise_for_status()
     except Exception as exc:
         logger.warning("Geocoder HTTP error: %s", exc)
@@ -85,8 +92,9 @@ async def geocode_reverse(
         "results": "1",
     }
     try:
+        headers = {"Referer": _get_referer()}
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(GEOCODER_URL, params=params)
+            resp = await client.get(GEOCODER_URL, params=params, headers=headers)
             resp.raise_for_status()
     except Exception as exc:
         logger.warning("Geocoder reverse HTTP error: %s", exc)
