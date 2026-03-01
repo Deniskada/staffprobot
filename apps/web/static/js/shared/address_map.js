@@ -1,11 +1,11 @@
 // Общий модуль работы с Яндекс.Картой для выбора адреса.
-// Используется на страницах профилей и объектов владельца.
+// Карта — ymaps, всё остальное — серверный прокси /api/geocode/.
 
 window.SPAddressMap = (function () {
-  let map = null;
-  let placemark = null;
-  let config = null;
-  let geocodeTimer = null;
+  var map = null;
+  var placemark = null;
+  var config = null;
+  var suggestTimer = null;
 
   function ensureYMapsReady(callback) {
     if (typeof ymaps === "undefined") {
@@ -29,9 +29,9 @@ window.SPAddressMap = (function () {
       userConfig || {}
     );
 
-    const input = document.getElementById(config.searchInputId);
-    const suggestions = document.getElementById(config.suggestionsId);
-    const mapContainer = document.getElementById(config.mapContainerId);
+    var input = document.getElementById(config.searchInputId);
+    var suggestions = document.getElementById(config.suggestionsId);
+    var mapContainer = document.getElementById(config.mapContainerId);
 
     if (!input || !suggestions || !mapContainer) {
       console.warn("SPAddressMap: элементы не найдены, инициализация пропущена");
@@ -53,12 +53,12 @@ window.SPAddressMap = (function () {
       map.geoObjects.add(placemark);
 
       placemark.events.add("dragend", function () {
-        const coords = placemark.getCoordinates();
+        var coords = placemark.geometry.getCoordinates();
         reverseGeocode(coords);
       });
 
       map.events.add("click", function (e) {
-        const coords = e.get("coords");
+        var coords = e.get("coords");
         if (placemark) {
           placemark.geometry.setCoordinates(coords);
         }
@@ -67,164 +67,155 @@ window.SPAddressMap = (function () {
     });
 
     input.addEventListener("input", function () {
-      const query = this.value.trim();
-      if (geocodeTimer) {
-        clearTimeout(geocodeTimer);
-      }
+      var query = this.value.trim();
+      if (suggestTimer) clearTimeout(suggestTimer);
       if (!query) {
         suggestions.innerHTML =
           '<div class="list-group-item text-muted small">Введите адрес, чтобы увидеть подсказки.</div>';
         return;
       }
-      geocodeTimer = setTimeout(function () {
+      suggestTimer = setTimeout(function () {
         searchByQuery(query);
       }, 400);
     });
   }
 
+  // Подсказки через серверный прокси /api/geocode/search
   function searchByQuery(query) {
-    const suggestions = document.getElementById(config.suggestionsId);
+    var suggestions = document.getElementById(config.suggestionsId);
     if (!suggestions) return;
 
     suggestions.innerHTML =
       '<div class="list-group-item text-muted small">Поиск адреса...</div>';
 
-    ymaps
-      .geocode(query, { results: 5 })
-      .then(function (res) {
-        const geoObjects = res.geoObjects;
-        if (!geoObjects || geoObjects.getLength() === 0) {
+    fetch("/api/geocode/search?q=" + encodeURIComponent(query))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error || !data.results || data.results.length === 0) {
           suggestions.innerHTML =
             '<div class="list-group-item text-muted small">Ничего не найдено. Попробуйте уточнить запрос.</div>';
           return;
         }
 
         suggestions.innerHTML = "";
-        geoObjects.each(function (geoObject) {
-          const addressLine = geoObject.getAddressLine
-            ? geoObject.getAddressLine()
-            : geoObject.getProperty && geoObject.getProperty("name")
-            ? geoObject.getProperty("name")
-            : geoObject.properties.get("text") || "";
-
-          const coords = geoObject.geometry.getCoordinates();
-          const item = document.createElement("button");
-          item.type = "button";
-          item.className = "list-group-item list-group-item-action small";
-          item.textContent = addressLine;
-          item.onclick = function () {
-            applySelection(coords, geoObject);
+        data.results.forEach(function (item) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "list-group-item list-group-item-action small";
+          btn.textContent = item.address;
+          btn.onclick = function () {
+            selectResult(item);
           };
-          suggestions.appendChild(item);
+          suggestions.appendChild(btn);
         });
       })
-      .catch(function (e) {
-        console.error("Yandex geocode error", e);
+      .catch(function (err) {
+        console.warn("Address search error:", err);
         suggestions.innerHTML =
-          '<div class="list-group-item text-danger small">Ошибка поиска адреса</div>';
+          '<div class="list-group-item text-warning small">' +
+          '<i class="bi bi-exclamation-triangle me-1"></i>' +
+          "Ошибка поиска адреса.</div>";
       });
   }
 
-  function reverseGeocode(coords) {
-    const suggestions = document.getElementById(config.suggestionsId);
-    if (suggestions) {
-      suggestions.innerHTML =
-        '<div class="list-group-item text-muted small">Определяем адрес по точке на карте...</div>';
+  // Выбор результата из подсказок (координаты уже есть)
+  function selectResult(item) {
+    var input = document.getElementById(config.searchInputId);
+    var suggestions = document.getElementById(config.suggestionsId);
+    var coords = [item.lat, item.lon];
+
+    if (input) input.value = item.address;
+
+    if (map && placemark) {
+      placemark.geometry.setCoordinates(coords);
+      map.setCenter(coords, 16, { duration: 300 });
     }
-    ymaps
-      .geocode(coords, { results: 1 })
-      .then(function (res) {
-        const geoObject = res.geoObjects.get(0);
-        if (!geoObject) {
-          if (suggestions) {
-            suggestions.innerHTML =
-              '<div class="list-group-item text-muted small">Не удалось определить адрес для выбранной точки.</div>';
-          }
-          return;
-        }
 
-        applySelection(coords, geoObject);
-      })
-      .catch(function (e) {
-        console.error("Yandex reverse geocode error", e);
-        if (suggestions) {
-          suggestions.innerHTML =
-            '<div class="list-group-item text-danger small">Ошибка определения адреса</div>';
-        }
-      });
-  }
-
-  function extractCity(geoObject) {
-    try {
-      const meta = geoObject.getGeocoderMetaData();
-      const components = meta.Address.Components || [];
-      const locality = components.find(function (c) {
-        return c.kind === "locality" || c.kind === "province" || c.kind === "area";
-      });
-      return locality ? locality.name : "";
-    } catch (e) {
-      return "";
-    }
-  }
-
-  function applySelection(coords, geoObject) {
-    const [lat, lon] = coords;
-    const input = document.getElementById(config.searchInputId);
-    const suggestions = document.getElementById(config.suggestionsId);
-
-    const addressLine = geoObject.getAddressLine
-      ? geoObject.getAddressLine()
-      : geoObject.getProperty && geoObject.getProperty("name")
-      ? geoObject.getProperty("name")
-      : geoObject.properties.get("text") || "";
-
-    if (input) {
-      input.value = addressLine;
-    }
     if (suggestions) {
       suggestions.innerHTML =
         '<div class="list-group-item small text-success">Адрес выбран: ' +
-        addressLine +
-        "</div>";
-    }
-
-    if (map && placemark) {
-      placemark.geometry.setCoordinates([lat, lon]);
-      map.setCenter([lat, lon], 16, { duration: 300 });
+        item.address + "</div>";
     }
 
     if (typeof config.onAddressSelected === "function") {
       config.onAddressSelected({
-        full_address: addressLine,
-        lat: lat,
-        lon: lon,
-        city: extractCity(geoObject),
+        full_address: item.address,
+        lat: item.lat,
+        lon: item.lon,
+        city: item.city || "",
       });
     }
   }
 
-  function setCenterByQuery(query) {
-    if (!query) {
-      return;
+  // Обратное геокодирование через серверный прокси
+  function reverseGeocode(coords) {
+    var suggestions = document.getElementById(config.suggestionsId);
+    var input = document.getElementById(config.searchInputId);
+
+    if (suggestions) {
+      suggestions.innerHTML =
+        '<div class="list-group-item text-muted small">Определяем адрес по точке на карте...</div>';
     }
-    ensureYMapsReady(function () {
-      ymaps
-        .geocode(query, { results: 1 })
-        .then(function (res) {
-          const geoObject = res.geoObjects.get(0);
-          if (!geoObject) {
-            return;
+
+    fetch("/api/geocode/reverse?lat=" + coords[0] + "&lon=" + coords[1])
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error || !data.found) {
+          if (suggestions) {
+            suggestions.innerHTML =
+              '<div class="list-group-item text-muted small">' +
+              "Не удалось определить адрес. Введите вручную.</div>";
           }
-          const coords = geoObject.geometry.getCoordinates();
+          return;
+        }
+
+        if (input) input.value = data.address;
+
+        if (suggestions) {
+          suggestions.innerHTML =
+            '<div class="list-group-item small text-success">Адрес выбран: ' +
+            data.address + "</div>";
+        }
+
+        if (typeof config.onAddressSelected === "function") {
+          config.onAddressSelected({
+            full_address: data.address,
+            lat: data.lat,
+            lon: data.lon,
+            city: data.city || "",
+          });
+        }
+      })
+      .catch(function (err) {
+        console.warn("Reverse geocode proxy error:", err);
+        if (suggestions) {
+          suggestions.innerHTML =
+            '<div class="list-group-item text-warning small">' +
+            '<i class="bi bi-exclamation-triangle me-1"></i>' +
+            "Ошибка определения адреса.</div>";
+        }
+      });
+  }
+
+  function setCenterByQuery(query) {
+    if (!query) return;
+
+    fetch("/api/geocode/search?q=" + encodeURIComponent(query))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error || !data.results || data.results.length === 0) return;
+        var best = data.results[0];
+        var coords = [best.lat, best.lon];
+        ensureYMapsReady(function () {
           if (map && placemark) {
             placemark.geometry.setCoordinates(coords);
             map.setCenter(coords, 16, { duration: 300 });
           }
-        })
-        .catch(function (e) {
-          console.error("Yandex setCenterByQuery error", e);
         });
-    });
+      })
+      .catch(function (err) {
+        console.warn("setCenterByQuery error:", err);
+      });
   }
 
   return {
@@ -232,4 +223,3 @@ window.SPAddressMap = (function () {
     setCenterByQuery: setCenterByQuery,
   };
 })();
-

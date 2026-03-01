@@ -12,6 +12,7 @@
 
 {% block manager_extra_js %}
 <script src="https://api-maps.yandex.ru/2.1/?apikey={{ yandex_maps_api_key }}&lang=ru_RU" type="text/javascript"></script>
+<script src="{{ 'js/shared/phone_mask.js' | static_version }}"></script>
 <script src="{{ 'js/shared/address_map.js' | static_version }}"></script>
 <script src="{{ 'js/shared/profiles_wizard.js' | static_version }}"></script>
 {% endblock %}

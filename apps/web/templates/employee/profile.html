@@ -314,6 +314,7 @@
 
 {% block extra_js %}
 {{ super() }}
+<script src="{{ 'js/shared/phone_mask.js' | static_version }}"></script>
 <script src="/static/js/employee/profile.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
