@@ -1241,7 +1241,116 @@ class ContractService:
                     {"id": obj.id, "name": obj.name, "address": obj.address}
                     for obj in objects
                 ]
-            
+
+            # Подписанный PDF
+            signed_pdf_key = None
+            if contract.status == "active" and contract.signed_at:
+                ver_stmt = (
+                    select(ContractVersion.file_key)
+                    .where(ContractVersion.contract_id == contract.id, ContractVersion.file_key.isnot(None))
+                    .order_by(ContractVersion.created_at.desc())
+                    .limit(1)
+                )
+                ver_result = await session.execute(ver_stmt)
+                signed_pdf_key = ver_result.scalar_one_or_none()
+
+            # Профиль сотрудника и документы
+            from domain.entities.profile import Profile, IndividualProfile, SoleProprietorProfile, LegalProfile
+            from domain.entities.profile_document import ProfileDocument
+
+            employee_profile = None
+            profile_documents = []
+
+            profile_stmt = (
+                select(Profile)
+                .where(Profile.user_id == contract.employee.id, Profile.is_archived == False)
+                .options(
+                    selectinload(Profile.individual_profile),
+                    selectinload(Profile.sole_proprietor_profile),
+                    selectinload(Profile.legal_profile),
+                )
+                .order_by(Profile.is_default.desc(), Profile.created_at.desc())
+                .limit(1)
+            )
+            profile_result = await session.execute(profile_stmt)
+            profile = profile_result.scalar_one_or_none()
+
+            if profile:
+                employee_profile = {
+                    "id": profile.id,
+                    "profile_type": profile.profile_type,
+                    "display_name": profile.display_name,
+                    "kyc_status": profile.kyc_status,
+                }
+                if profile.profile_type == "individual" and profile.individual_profile:
+                    ip = profile.individual_profile
+                    employee_profile.update({
+                        "last_name": ip.last_name,
+                        "first_name": ip.first_name,
+                        "middle_name": ip.middle_name,
+                        "birth_date": ip.birth_date,
+                        "citizenship": ip.citizenship,
+                        "gender": ip.gender,
+                        "is_self_employed": ip.is_self_employed,
+                        "passport_series": ip.passport_series,
+                        "passport_number": ip.passport_number,
+                        "passport_issued_at": ip.passport_issued_at,
+                        "passport_issued_by": ip.passport_issued_by,
+                        "passport_department_code": ip.passport_department_code,
+                        "snils": ip.snils,
+                        "inn": ip.inn,
+                        "phone": ip.phone,
+                        "email": ip.email,
+                        "account_number": ip.account_number,
+                        "bank_name": ip.bank_name,
+                        "bik": ip.bik,
+                        "correspondent_account": ip.correspondent_account,
+                    })
+                elif profile.profile_type == "sole_proprietor" and profile.sole_proprietor_profile:
+                    sp = profile.sole_proprietor_profile
+                    employee_profile.update({
+                        "last_name": sp.last_name,
+                        "first_name": sp.first_name,
+                        "middle_name": sp.middle_name,
+                        "inn": sp.inn,
+                        "ogrnip": sp.ogrnip,
+                        "phone": sp.phone,
+                        "email": sp.email,
+                        "account_number": sp.account_number,
+                        "bank_name": sp.bank_name,
+                        "bik": sp.bik,
+                        "correspondent_account": sp.correspondent_account,
+                    })
+                elif profile.profile_type == "legal" and profile.legal_profile:
+                    lp = profile.legal_profile
+                    employee_profile.update({
+                        "full_name": lp.full_name,
+                        "inn": lp.inn,
+                        "ogrn": lp.ogrn,
+                        "phone": lp.phone,
+                        "email": lp.email,
+                        "account_number": lp.account_number,
+                        "bank_name": lp.bank_name,
+                        "bik": lp.bik,
+                        "correspondent_account": lp.correspondent_account,
+                    })
+
+                docs_stmt = (
+                    select(ProfileDocument)
+                    .where(ProfileDocument.profile_id == profile.id)
+                    .order_by(ProfileDocument.document_type)
+                )
+                docs_result = await session.execute(docs_stmt)
+                profile_documents = [
+                    {
+                        "id": d.id,
+                        "document_type": d.document_type,
+                        "file_key": d.file_key,
+                        "original_filename": d.original_filename,
+                    }
+                    for d in docs_result.scalars().all()
+                ]
+
             return {
                 "id": contract.id,
                 "contract_number": contract.contract_number,
@@ -1265,6 +1374,10 @@ class ContractService:
                 "signed_at": contract.signed_at,
                 "terminated_at": contract.terminated_at,
                 "termination_date": contract.termination_date,
+                "signed_pdf_key": signed_pdf_key,
+                "pep_metadata": contract.pep_metadata,
+                "employee_profile": employee_profile,
+                "profile_documents": profile_documents,
                 "owner": {
                     "id": owner.id,
                     "telegram_id": owner.telegram_id,

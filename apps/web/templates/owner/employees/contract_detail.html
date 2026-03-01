@@ -13,14 +13,18 @@
                         <code>{{ contract.contract_number }}</code>
                         <span class="badge ms-2 
                             {% if contract.status == 'active' %}bg-success
+                            {% elif contract.status == 'pending_acceptance' %}bg-info
                             {% elif contract.status == 'draft' %}bg-warning
                             {% elif contract.status == 'suspended' %}bg-warning
                             {% elif contract.status == 'terminated' %}bg-secondary
+                            {% elif contract.status == 'expired' %}bg-dark
                             {% else %}bg-light text-dark{% endif %}">
                             {% if contract.status == 'active' %}Активен
+                            {% elif contract.status == 'pending_acceptance' %}Ожидает подписания
                             {% elif contract.status == 'draft' %}Черновик
                             {% elif contract.status == 'suspended' %}Приостановлен
                             {% elif contract.status == 'terminated' %}Расторгнут
+                            {% elif contract.status == 'expired' %}Истёк
                             {% else %}{{ contract.status }}{% endif %}
                         </span>
                     </p>
@@ -29,6 +33,11 @@
                     <a href="/owner/employees/{{ contract.employee.id }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-2"></i>К сотруднику
                     </a>
+                    {% if contract.signed_pdf_key %}
+                    <a href="/api/media/{{ contract.signed_pdf_key }}" class="btn btn-outline-success" target="_blank">
+                        <i class="fas fa-file-pdf me-2"></i>Скачать подписанный PDF
+                    </a>
+                    {% endif %}
                     <a href="/owner/employees/contract/{{ contract.id }}/pdf" class="btn btn-outline-info">
                         <i class="fas fa-file-pdf me-2"></i>Скачать PDF
                     </a>
@@ -55,6 +64,20 @@
                         <i class="fas fa-file-text me-2"></i>Содержание
                     </button>
                 </li>
+                {% if contract.employee_profile %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab" aria-controls="profile" aria-selected="false">
+                        <i class="fas fa-user me-2"></i>Профиль сотрудника
+                    </button>
+                </li>
+                {% endif %}
+                {% if contract.profile_documents %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="documents-tab" data-bs-toggle="tab" data-bs-target="#documents" type="button" role="tab" aria-controls="documents" aria-selected="false">
+                        <i class="fas fa-id-card me-2"></i>Документы
+                    </button>
+                </li>
+                {% endif %}
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
                         <i class="fas fa-history me-2"></i>История изменений
@@ -136,6 +159,16 @@
                             </div>
                             {% endif %}
                             
+                            {% if contract.pep_metadata %}
+                            <div class="mb-3">
+                                <strong>ПЭП:</strong><br>
+                                <small class="text-muted">
+                                    {% if contract.pep_metadata.channel == 'telegram' %}Telegram OTP{% elif contract.pep_metadata.channel == 'esia' %}Госуслуги{% else %}{{ contract.pep_metadata.channel }}{% endif %}
+                                    {% if contract.pep_metadata.signed_ip %}<br>IP: {{ contract.pep_metadata.signed_ip }}{% endif %}
+                                </small>
+                            </div>
+                            {% endif %}
+                            
                             {% if contract.terminated_at %}
                             <div class="mb-3">
                                 <strong>Дата расторжения:</strong><br>
@@ -196,6 +229,156 @@
             </div>
                 </div>
                 
+                <!-- Вкладка "Профиль сотрудника" -->
+                {% if contract.employee_profile %}
+                <div class="tab-pane fade" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-user me-2"></i>{{ contract.employee_profile.display_name }}
+                            </h5>
+                            <span class="badge {% if contract.employee_profile.kyc_status == 'verified' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {% if contract.employee_profile.kyc_status == 'verified' %}Верифицирован{% else %}Не верифицирован{% endif %}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            {% set p = contract.employee_profile %}
+                            {% if p.profile_type == 'individual' %}
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3">Личные данные</h6>
+                                    <table class="table table-sm">
+                                        <tr><td class="text-muted" style="width:40%">Фамилия</td><td>{{ p.last_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Имя</td><td>{{ p.first_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Отчество</td><td>{{ p.middle_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Дата рождения</td><td>{{ p.birth_date.strftime('%d.%m.%Y') if p.birth_date else '—' }}</td></tr>
+                                        <tr><td class="text-muted">Гражданство</td><td>{% if p.citizenship == 'rf' %}РФ{% elif p.citizenship == 'foreign' %}Иностранное{% else %}{{ p.citizenship or '—' }}{% endif %}</td></tr>
+                                        <tr><td class="text-muted">Самозанятый</td><td>{{ 'Да' if p.is_self_employed else 'Нет' }}</td></tr>
+                                        <tr><td class="text-muted">ИНН</td><td>{{ p.inn or '—' }}</td></tr>
+                                        <tr><td class="text-muted">СНИЛС</td><td>{{ p.snils or '—' }}</td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3">Паспорт</h6>
+                                    <table class="table table-sm">
+                                        <tr><td class="text-muted" style="width:40%">Серия / Номер</td><td>{{ p.passport_series or '' }} {{ p.passport_number or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Дата выдачи</td><td>{{ p.passport_issued_at.strftime('%d.%m.%Y') if p.passport_issued_at else '—' }}</td></tr>
+                                        <tr><td class="text-muted">Кем выдан</td><td>{{ p.passport_issued_by or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Код подразделения</td><td>{{ p.passport_department_code or '—' }}</td></tr>
+                                    </table>
+                                    <h6 class="text-muted mb-3 mt-4">Контакты</h6>
+                                    <table class="table table-sm">
+                                        <tr><td class="text-muted" style="width:40%">Телефон</td><td>{{ p.phone or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Email</td><td>{{ p.email or '—' }}</td></tr>
+                                    </table>
+                                    <h6 class="text-muted mb-3 mt-4">Банковские реквизиты</h6>
+                                    <table class="table table-sm">
+                                        <tr><td class="text-muted" style="width:40%">Р/с</td><td>{{ p.account_number or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Банк</td><td>{{ p.bank_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">БИК</td><td>{{ p.bik or '—' }}</td></tr>
+                                        <tr><td class="text-muted">К/с</td><td>{{ p.correspondent_account or '—' }}</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {% elif p.profile_type == 'sole_proprietor' %}
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3">Данные ИП</h6>
+                                    <table class="table table-sm">
+                                        <tr><td class="text-muted" style="width:40%">Фамилия</td><td>{{ p.last_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Имя</td><td>{{ p.first_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Отчество</td><td>{{ p.middle_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">ИНН</td><td>{{ p.inn or '—' }}</td></tr>
+                                        <tr><td class="text-muted">ОГРНИП</td><td>{{ p.ogrnip or '—' }}</td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3">Контакты и реквизиты</h6>
+                                    <table class="table table-sm">
+                                        <tr><td class="text-muted" style="width:40%">Телефон</td><td>{{ p.phone or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Email</td><td>{{ p.email or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Р/с</td><td>{{ p.account_number or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Банк</td><td>{{ p.bank_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">БИК</td><td>{{ p.bik or '—' }}</td></tr>
+                                        <tr><td class="text-muted">К/с</td><td>{{ p.correspondent_account or '—' }}</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {% elif p.profile_type == 'legal' %}
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3">Данные юрлица</h6>
+                                    <table class="table table-sm">
+                                        <tr><td class="text-muted" style="width:40%">Наименование</td><td>{{ p.full_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">ИНН</td><td>{{ p.inn or '—' }}</td></tr>
+                                        <tr><td class="text-muted">ОГРН</td><td>{{ p.ogrn or '—' }}</td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted mb-3">Контакты и реквизиты</h6>
+                                    <table class="table table-sm">
+                                        <tr><td class="text-muted" style="width:40%">Телефон</td><td>{{ p.phone or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Email</td><td>{{ p.email or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Р/с</td><td>{{ p.account_number or '—' }}</td></tr>
+                                        <tr><td class="text-muted">Банк</td><td>{{ p.bank_name or '—' }}</td></tr>
+                                        <tr><td class="text-muted">БИК</td><td>{{ p.bik or '—' }}</td></tr>
+                                        <tr><td class="text-muted">К/с</td><td>{{ p.correspondent_account or '—' }}</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Вкладка "Документы сотрудника" -->
+                {% if contract.profile_documents %}
+                <div class="tab-pane fade" id="documents" role="tabpanel" aria-labelledby="documents-tab">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-id-card me-2"></i>Сканы документов
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                {% for doc in contract.profile_documents %}
+                                <div class="col-md-4 col-lg-3">
+                                    <div class="card h-100">
+                                        <a href="/api/media/{{ doc.file_key }}" target="_blank" class="text-decoration-none">
+                                            <img src="/api/media/{{ doc.file_key }}" 
+                                                 class="card-img-top" 
+                                                 alt="{{ doc.document_type }}"
+                                                 style="max-height: 200px; object-fit: contain; background: #f8f9fa; padding: 0.5rem;"
+                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                            <div class="d-none align-items-center justify-content-center" style="height:200px; background:#f8f9fa;">
+                                                <i class="fas fa-file fa-3x text-muted"></i>
+                                            </div>
+                                        </a>
+                                        <div class="card-body text-center p-2">
+                                            <small class="fw-bold">
+                                                {% if doc.document_type == 'passport_main' %}Паспорт (главная)
+                                                {% elif doc.document_type == 'passport_registration' %}Паспорт (прописка)
+                                                {% elif doc.document_type == 'inn_scan' %}ИНН
+                                                {% elif doc.document_type == 'snils_scan' %}СНИЛС
+                                                {% else %}{{ doc.document_type }}{% endif %}
+                                            </small>
+                                            {% if doc.original_filename %}
+                                            <br><small class="text-muted">{{ doc.original_filename }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Вкладка "История" -->
                 <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
                     <div class="card">
