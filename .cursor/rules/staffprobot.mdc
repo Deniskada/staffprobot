@@ -80,6 +80,26 @@ URLHelper.get_web_url("/owner/objects")
 
 В шаблонах для CSS/JS использовать `| static_version`.
 
+### 4.7. Telegram-уведомления: ссылки с авто-логином
+
+Каждое Telegram-сообщение, связанное с действием, **обязано** содержать смысловую ссылку на соответствующий раздел ЛК.
+
+Правила:
+1. В шаблоне `base_templates.py` добавлять `$link_url` в конец telegram-варианта.
+2. `NotificationDispatcher._inject_auto_login_url()` автоматически подставляет URL с одноразовым auto-login токеном.
+3. Маппинг тип → путь определяется в `NotificationActionService.get_action_url()`.
+4. Прямые отправки через `bot.send_message()` должны использовать `build_auto_login_url()`:
+
+```python
+from core.auth.auto_login import build_auto_login_url
+url = await build_auto_login_url(telegram_id, "/employee/offers/123", base_url)
+```
+
+5. При добавлении нового типа уведомления:
+   - Добавить маппинг в `NotificationActionService.get_action_url()`
+   - Добавить `$link_url` в Telegram-шаблон
+   - Передавать `object_id`/`contract_id`/`shift_id` в `data` при `create_notification()`
+
 ## 5) Документация и планирование (активный контур)
 
 - **Roadmap**: `doc/plans/roadmap.md` (формат фазы/версии/эпики).

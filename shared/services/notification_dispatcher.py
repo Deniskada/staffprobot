@@ -14,6 +14,7 @@ from domain.entities.user import User
 from sqlalchemy import select
 
 from .notification_service import NotificationService
+from .notification_action_service import NotificationActionService
 from .senders.telegram_sender import get_telegram_sender
 from .senders.email_sender import get_email_sender
 from .senders.sms_sender import get_sms_sender
@@ -29,6 +30,7 @@ class NotificationDispatcher:
     def __init__(self):
         """Инициализация диспетчера."""
         self.notification_service = NotificationService()
+        self.action_service = NotificationActionService()
         self.telegram_sender = get_telegram_sender()
         self.email_sender = get_email_sender()
         self.sms_sender = get_sms_sender()
@@ -133,18 +135,21 @@ class NotificationDispatcher:
         """
         try:
             if notification.channel_enum == NotificationChannel.TELEGRAM:
-                # Проверяем наличие telegram_id
                 if not user.telegram_id:
                     logger.warning(
                         f"User {user.id} has no telegram_id (notification_id={notification.id})"
                     )
                     return False
                 
-                # Отправляем через Telegram
+                variables = dict(notification.data or {})
+                variables = await self._inject_auto_login_url(
+                    notification, user, variables
+                )
+                
                 return await self.telegram_sender.send_notification(
                     notification=notification,
                     telegram_id=user.telegram_id,
-                    variables=notification.data
+                    variables=variables
                 )
                 
             elif notification.channel_enum == NotificationChannel.EMAIL:
@@ -196,6 +201,39 @@ class NotificationDispatcher:
             )
             return False
     
+    async def _inject_auto_login_url(
+        self,
+        notification: Notification,
+        user: User,
+        variables: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Генерирует auto-login URL и добавляет link_url/accept_url в переменные."""
+        try:
+            from core.auth.auto_login import build_auto_login_url
+            from core.utils.url_helper import URLHelper
+
+            base_url = await URLHelper.get_web_url()
+            user_role = user.role or "employee"
+
+            action_path = self.action_service.get_action_url(notification, user_role)
+            if action_path:
+                auto_url = await build_auto_login_url(
+                    user.telegram_id, action_path, base_url
+                )
+                variables["link_url"] = auto_url
+
+                if "accept_url" in variables:
+                    variables["accept_url"] = auto_url
+
+            if "link_url" not in variables:
+                variables["link_url"] = ""
+
+        except Exception as e:
+            logger.warning(f"Auto-login URL injection failed: {e}")
+            variables.setdefault("link_url", "")
+
+        return variables
+
     async def dispatch_scheduled_notifications(self) -> Dict[str, Any]:
         """
         Отправка запланированных уведомлений.

@@ -177,6 +177,47 @@ async def login(
         })
 
 
+@router.get("/auto")
+async def auto_login(
+    request: Request,
+    t: str = Query(None, description="One-time auto-login token"),
+    next: str = Query("/dashboard", alias="next", description="Redirect path"),
+):
+    """Авто-логин через одноразовый токен из ссылок бота."""
+    from core.auth.auto_login import validate_auto_login_token
+
+    if not t:
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+
+    telegram_id = await validate_auto_login_token(t)
+    if not telegram_id:
+        logger.warning(f"Auto-login: invalid or expired token")
+        return RedirectResponse(
+            url=f"/auth/login?error=token_expired",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    user = await user_manager.get_user_by_telegram_id(telegram_id)
+    if not user:
+        logger.warning(f"Auto-login: user not found for tg {telegram_id}")
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
+
+    token = await auth_service.create_token({
+        "id": user["id"],
+        "telegram_id": user["telegram_id"],
+        "username": user["username"],
+        "first_name": user["first_name"],
+        "last_name": user["last_name"],
+        "role": user.get("role", "employee"),
+    })
+
+    safe_next = next if next.startswith("/") else "/dashboard"
+    response = RedirectResponse(url=safe_next, status_code=status.HTTP_302_FOUND)
+    response.set_cookie(key="access_token", value=token, httponly=True, secure=False)
+    logger.info(f"Auto-login: user {telegram_id} authenticated, redirect to {safe_next}")
+    return response
+
+
 @router.get("/logout")
 async def logout():
     """Выход из системы"""

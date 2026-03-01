@@ -99,12 +99,19 @@ async def _send_offer_reminders_async():
                     if remaining <= timedelta(days=1):
                         urgent = "\n⚠️ Срок подписания истекает менее чем через 24 часа!"
 
+                from core.auth.auto_login import build_auto_login_url
+                from core.utils.url_helper import URLHelper
+                base_url = await URLHelper.get_web_url()
+                offer_url = await build_auto_login_url(
+                    employee.telegram_id, f"/employee/offers/{contract.id}", base_url
+                )
+
                 text = (
                     f"📋 Напоминание: у вас есть неподписанный договор\n\n"
                     f"«{contract.title}» (№ {contract.contract_number})\n"
                     f"Создан: {contract.created_at.strftime('%d.%m.%Y')}"
                     f"{urgent}\n\n"
-                    f"Перейдите в раздел «Договоры» для подписания."
+                    f"🔗 Подписать: {offer_url}"
                 )
 
                 await bot.send_message(chat_id=employee.telegram_id, text=text)
@@ -122,11 +129,17 @@ async def _send_offer_reminders_async():
                     owner = await session.get(User, contract.owner_id)
                     if owner and owner.telegram_id:
                         emp_name = employee.first_name or f"ID {employee.id}"
+                        owner_url = await build_auto_login_url(
+                            owner.telegram_id,
+                            f"/owner/employees/contract/{contract.id}",
+                            base_url,
+                        )
                         owner_text = (
                             f"⏰ Сотрудник {emp_name} не подписал договор\n\n"
                             f"«{contract.title}» (№ {contract.contract_number})\n"
                             f"Создан: {contract.created_at.strftime('%d.%m.%Y')}\n"
-                            f"Прошло более 3 дней."
+                            f"Прошло более 3 дней.\n\n"
+                            f"🔗 {owner_url}"
                         )
                         await bot.send_message(chat_id=owner.telegram_id, text=owner_text)
                         sent_owner += 1

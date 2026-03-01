@@ -67,13 +67,32 @@ class NotificationActionService:
             ]:
                 contract_id = data.get("contract_id")
                 if contract_id:
-                    if user_role == "owner":
+                    if user_role == "employee":
+                        return f"/employee/offers/{contract_id}"
+                    elif user_role == "owner":
                         return f"/owner/employees/contract/{contract_id}"
                     elif user_role == "manager":
                         return f"/manager/contracts/{contract_id}"
                 employee_id = data.get("employee_id")
                 if employee_id:
                     return f"{role_prefix}/employees/{employee_id}"
+            
+            # Оферты
+            if notif_type in [
+                NotificationType.OFFER_SENT,
+                NotificationType.OFFER_TERMS_CHANGED,
+            ]:
+                contract_id = data.get("contract_id")
+                if contract_id:
+                    return f"/employee/offers/{contract_id}"
+            
+            if notif_type in [
+                NotificationType.OFFER_ACCEPTED,
+                NotificationType.OFFER_REJECTED,
+            ]:
+                contract_id = data.get("contract_id")
+                if contract_id:
+                    return f"/owner/employees/contract/{contract_id}"
             
             # Отзывы
             if notif_type in [

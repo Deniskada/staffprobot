@@ -20,7 +20,7 @@ class NotificationTemplateManager:
 <p><strong>Время смены:</strong> $shift_time<br>
 <strong>Адрес:</strong> $object_address</p>
 <p>Не забудьте отметиться по геолокации!</p>""",
-            "telegram": "🔔 *Напоминание о смене*\n\nПривет, $user_name!\n\nТвоя смена начинается через *$time_until* на объекте *$object_name*.\n\n⏰ Время: $shift_time\n📍 Адрес: $object_address\n\n⚠️ Не забудь отметиться по геолокации!"
+            "telegram": "🔔 *Напоминание о смене*\n\nПривет, $user_name!\n\nТвоя смена начинается через *$time_until* на объекте *$object_name*.\n\n⏰ Время: $shift_time\n📍 Адрес: $object_address\n\n⚠️ Не забудь отметиться по геолокации!\n\n🔗 $link_url"
         },
         NotificationType.SHIFT_CONFIRMED: {
             "title": "Смена запланирована сотрудником",
@@ -62,7 +62,7 @@ class NotificationTemplateManager:
 <p><strong>Плановое время:</strong> $shift_time<br>
 <strong>Сотрудник:</strong> $employee_name</p>
 <p>Смена была запланирована, но сотрудник не приступил к работе.</p>""",
-            "telegram": "⚠️ *Смена не состоялась*\n\nСмена на объекте *$object_name* не состоялась.\n\n⏰ Плановое время: $shift_time\n👤 Сотрудник: $employee_name\n\nСмена была запланирована, но сотрудник не приступил к работе."
+            "telegram": "⚠️ *Смена не состоялась*\n\nСмена на объекте *$object_name* не состоялась.\n\n⏰ Плановое время: $shift_time\n👤 Сотрудник: $employee_name\n\n🔗 $link_url"
         }
     }
     
@@ -77,7 +77,8 @@ class NotificationTemplateManager:
 <p><strong>Начало действия:</strong> $start_date<br>
 <strong>Окончание:</strong> $end_date<br>
 <strong>Почасовая ставка:</strong> $hourly_rate руб.</p>
-<p>Добро пожаловать в команду!</p>"""
+<p>Добро пожаловать в команду!</p>""",
+            "telegram": "✅ *Договор подписан*\n\nПоздравляем, $user_name!\n\nДоговор *№$contract_number* успешно подписан.\n\n📅 Начало: $start_date\n💰 Ставка: $hourly_rate руб/ч\n\n🔗 $link_url"
         },
         NotificationType.CONTRACT_TERMINATED: {
             "title": "Договор расторгнут",
@@ -87,7 +88,8 @@ class NotificationTemplateManager:
 <p>Договор <strong>№$contract_number</strong> был расторгнут.</p>
 <p><strong>Дата расторжения:</strong> $termination_date<br>
 <strong>Причина:</strong> $termination_reason</p>
-<p>Спасибо за сотрудничество!</p>"""
+<p>Спасибо за сотрудничество!</p>""",
+            "telegram": "📋 *Договор расторгнут*\n\nДоговор *№$contract_number* расторгнут.\n\n📅 Дата: $termination_date\n📝 Причина: $termination_reason\n\n🔗 $link_url"
         },
         NotificationType.CONTRACT_EXPIRING: {
             "title": "Договор истекает",
@@ -96,7 +98,8 @@ class NotificationTemplateManager:
 <p>Внимание, <strong>$user_name</strong>!</p>
 <p>Ваш договор <strong>№$contract_number</strong> истекает через <strong>$days_left дней</strong>.</p>
 <p><strong>Дата окончания:</strong> $end_date</p>
-<p>Пожалуйста, свяжитесь с вашим работодателем для продления.</p>"""
+<p>Пожалуйста, свяжитесь с вашим работодателем для продления.</p>""",
+            "telegram": "⚠️ *Договор истекает*\n\nДоговор *№$contract_number* истекает через *$days_left дн*.\n\n📅 Окончание: $end_date\n\n🔗 $link_url"
         },
         NotificationType.CONTRACT_UPDATED: {
             "title": "Договор обновлен",
@@ -106,7 +109,8 @@ class NotificationTemplateManager:
 <p>Договор <strong>№$contract_number</strong> был обновлен.</p>
 <p><strong>Изменения:</strong></p>
 <p>$changes</p>
-<p>Пожалуйста, ознакомьтесь с новыми условиями.</p>"""
+<p>Пожалуйста, ознакомьтесь с новыми условиями.</p>""",
+            "telegram": "📝 *Договор обновлён*\n\nДоговор *№$contract_number* обновлён.\n\n$changes\n\n🔗 $link_url"
         }
     }
     
@@ -128,14 +132,14 @@ class NotificationTemplateManager:
 <p>Сотрудник <strong>$employee_name</strong> принял оферту <strong>«$offer_title»</strong>.</p>
 <p>Договор <strong>№$contract_number</strong> вступил в силу.</p>
 <p>Подписанный документ доступен в разделе «Договоры».</p>""",
-            "telegram": "✅ *Оферта принята*\n\nСотрудник *$employee_name* принял оферту *«$offer_title»*.\n\n📄 Договор №$contract_number вступил в силу."
+            "telegram": "✅ *Оферта принята*\n\nСотрудник *$employee_name* принял оферту *«$offer_title»*.\n\n📄 Договор №$contract_number вступил в силу.\n\n🔗 $link_url"
         },
         NotificationType.OFFER_REJECTED: {
             "title": "Оферта отклонена",
             "plain": "Сотрудник $employee_name отклонил оферту «$offer_title».",
             "html": """<h2>Оферта отклонена ❌</h2>
 <p>Сотрудник <strong>$employee_name</strong> отклонил оферту <strong>«$offer_title»</strong>.</p>""",
-            "telegram": "❌ *Оферта отклонена*\n\nСотрудник *$employee_name* отклонил оферту *«$offer_title»*."
+            "telegram": "❌ *Оферта отклонена*\n\nСотрудник *$employee_name* отклонил оферту *«$offer_title»*.\n\n🔗 $link_url"
         },
         NotificationType.OFFER_TERMS_CHANGED: {
             "title": "Условия оферты изменены",
@@ -144,7 +148,7 @@ class NotificationTemplateManager:
 <p>Здравствуйте, <strong>$user_name</strong>!</p>
 <p>Условия оферты <strong>«$offer_title»</strong> обновлены.</p>
 <p>Изменения вступают в силу автоматически (п. 10.3 оферты).</p>""",
-            "telegram": "📝 *Условия оферты изменены*\n\nУсловия оферты *«$offer_title»* обновлены.\nИзменения вступают в силу автоматически (п. 10.3)."
+            "telegram": "📝 *Условия оферты изменены*\n\nУсловия оферты *«$offer_title»* обновлены.\nИзменения вступают в силу автоматически (п. 10.3).\n\n🔗 $link_url"
         }
     }
     
@@ -344,7 +348,7 @@ class NotificationTemplateManager:
 <p>Объект <strong>'$object_name'</strong> открылся вовремя.</p>
 <p><strong>Время открытия:</strong> $open_time<br>
 <strong>Сотрудник:</strong> $employee_name</p>""",
-            "telegram": "✅ *Объект открылся*\n\n📍 $object_name\n⏰ Время: $open_time\n👤 Сотрудник: $employee_name"
+            "telegram": "✅ *Объект открылся*\n\n📍 $object_name\n⏰ Время: $open_time\n👤 Сотрудник: $employee_name\n\n🔗 $link_url"
         },
         NotificationType.OBJECT_CLOSED: {
             "title": "Объект закрылся",
@@ -353,7 +357,7 @@ class NotificationTemplateManager:
 <p>Объект <strong>'$object_name'</strong> закрылся.</p>
 <p><strong>Время закрытия:</strong> $close_time<br>
 <strong>Сотрудник:</strong> $employee_name</p>""",
-            "telegram": "🔒 *Объект закрылся*\n\n📍 $object_name\n⏰ Время: $close_time\n👤 Сотрудник: $employee_name"
+            "telegram": "🔒 *Объект закрылся*\n\n📍 $object_name\n⏰ Время: $close_time\n👤 Сотрудник: $employee_name\n\n🔗 $link_url"
         },
         NotificationType.OBJECT_LATE_OPENING: {
             "title": "Объект открылся с опозданием",
@@ -364,7 +368,7 @@ class NotificationTemplateManager:
 <p><strong>Плановое время:</strong> $planned_time<br>
 <strong>Фактическое время:</strong> $actual_time<br>
 <strong>Сотрудник:</strong> $employee_name</p>""",
-            "telegram": "⚠️ *ОПОЗДАНИЕ!*\n\n📍 $object_name\n⏱ Опоздание: *$delay_minutes мин*\n\n📅 Плановое время: $planned_time\n⏰ Фактическое: $actual_time\n👤 Сотрудник: $employee_name"
+            "telegram": "⚠️ *ОПОЗДАНИЕ!*\n\n📍 $object_name\n⏱ Опоздание: *$delay_minutes мин*\n\n📅 Плановое время: $planned_time\n⏰ Фактическое: $actual_time\n👤 Сотрудник: $employee_name\n\n🔗 $link_url"
         },
         NotificationType.OBJECT_NO_SHIFTS_TODAY: {
             "title": "Нет смен на объекте",
@@ -374,7 +378,7 @@ class NotificationTemplateManager:
 <p>На объекте <strong>'$object_name'</strong> нет запланированных смен на сегодня.</p>
 <p><strong>Дата:</strong> $date<br>
 <strong>Адрес:</strong> $object_address</p>""",
-            "telegram": "⚠️ *НЕТ СМЕН!*\n\n📍 $object_name\n📅 Дата: $date\n📌 $object_address\n\nНет запланированных смен на сегодня!"
+            "telegram": "⚠️ *НЕТ СМЕН!*\n\n📍 $object_name\n📅 Дата: $date\n📌 $object_address\n\nНет запланированных смен на сегодня!\n\n🔗 $link_url"
         },
         NotificationType.OBJECT_EARLY_CLOSING: {
             "title": "Объект закрылся раньше",
@@ -385,7 +389,7 @@ class NotificationTemplateManager:
 <p><strong>Плановое время:</strong> $planned_time<br>
 <strong>Фактическое время:</strong> $actual_time<br>
 <strong>Сотрудник:</strong> $employee_name</p>""",
-            "telegram": "⚠️ *РАННЕЕ ЗАКРЫТИЕ!*\n\n📍 $object_name\n⏱ Раньше на: *$early_minutes мин*\n\n📅 Плановое время: $planned_time\n⏰ Фактическое: $actual_time\n👤 Сотрудник: $employee_name"
+            "telegram": "⚠️ *РАННЕЕ ЗАКРЫТИЕ!*\n\n📍 $object_name\n⏱ Раньше на: *$early_minutes мин*\n\n📅 Плановое время: $planned_time\n⏰ Фактическое: $actual_time\n👤 Сотрудник: $employee_name\n\n🔗 $link_url"
         }
     }
     
@@ -401,7 +405,7 @@ class NotificationTemplateManager:
 <strong>Объект:</strong> $object_name<br>
 <strong>Сотрудник:</strong> $employee_name<br>
 <strong>Дата:</strong> $incident_date</p>""",
-            "telegram": "⚠️ *Инцидент создан*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n🔴 Критичность: $severity\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата: $incident_date"
+            "telegram": "⚠️ *Инцидент создан*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n🔴 Критичность: $severity\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата: $incident_date\n\n🔗 $link_url"
         },
         NotificationType.INCIDENT_RESOLVED: {
             "title": "Инцидент решён",
@@ -412,7 +416,7 @@ class NotificationTemplateManager:
 <strong>Объект:</strong> $object_name<br>
 <strong>Сотрудник:</strong> $employee_name<br>
 <strong>Дата решения:</strong> $resolved_date</p>""",
-            "telegram": "✅ *Инцидент решён*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата решения: $resolved_date"
+            "telegram": "✅ *Инцидент решён*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата решения: $resolved_date\n\n🔗 $link_url"
         },
         NotificationType.INCIDENT_REJECTED: {
             "title": "Инцидент отклонён",
@@ -423,7 +427,7 @@ class NotificationTemplateManager:
 <strong>Объект:</strong> $object_name<br>
 <strong>Сотрудник:</strong> $employee_name<br>
 <strong>Дата отклонения:</strong> $rejected_date</p>""",
-            "telegram": "❌ *Инцидент отклонён*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата отклонения: $rejected_date"
+            "telegram": "❌ *Инцидент отклонён*\n\n📋 Инцидент #$incident_number\n\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата отклонения: $rejected_date\n\n🔗 $link_url"
         },
         NotificationType.INCIDENT_CANCELLED: {
             "title": "Инцидент отменён",
@@ -435,7 +439,7 @@ class NotificationTemplateManager:
 <strong>Объект:</strong> $object_name<br>
 <strong>Сотрудник:</strong> $employee_name<br>
 <strong>Дата отмены:</strong> $cancelled_date</p>""",
-            "telegram": "🚫 *Инцидент отменён*\n\n📋 Инцидент #$incident_number\n\n📝 Причина: $cancellation_reason\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата отмены: $cancelled_date"
+            "telegram": "🚫 *Инцидент отменён*\n\n📋 Инцидент #$incident_number\n\n📝 Причина: $cancellation_reason\n📂 Категория: $category\n📍 Объект: $object_name\n👤 Сотрудник: $employee_name\n📅 Дата отмены: $cancelled_date\n\n🔗 $link_url"
         }
     }
     
