@@ -1347,6 +1347,8 @@ class ContractService:
                         "document_type": d.document_type,
                         "file_key": d.file_key,
                         "original_filename": d.original_filename,
+                        "mime_type": d.mime_type,
+                        "is_pdf": (d.mime_type or "").startswith("application/pdf") or (d.file_key or "").lower().endswith(".pdf"),
                     }
                     for d in docs_result.scalars().all()
                 ]
