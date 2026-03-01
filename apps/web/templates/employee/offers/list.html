@@ -1,0 +1,70 @@
+{% extends "employee/base_employee.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <h3 class="mb-4"><i class="bi bi-file-earmark-check"></i> Мои договоры</h3>
+
+            {% if not contracts %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> У вас пока нет договоров.
+            </div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Название</th>
+                            <th>Номер</th>
+                            <th>Шаблон</th>
+                            <th>Дата создания</th>
+                            <th>Статус</th>
+                            <th class="text-end">Действие</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in contracts %}
+                        <tr>
+                            <td>{{ c.title }}</td>
+                            <td><small class="text-muted">{{ c.contract_number }}</small></td>
+                            <td>{{ c.template_name or '—' }}</td>
+                            <td>{{ c.created_at.strftime('%d.%m.%Y') if c.created_at else '—' }}</td>
+                            <td>
+                                {% if c.status == 'pending_acceptance' %}
+                                    <span class="badge bg-warning text-dark">Ожидает подписания</span>
+                                {% elif c.status == 'active' %}
+                                    <span class="badge bg-success">Подписан</span>
+                                {% elif c.status == 'rejected' %}
+                                    <span class="badge bg-danger">Отклонён</span>
+                                {% elif c.status == 'draft' %}
+                                    <span class="badge bg-secondary">Черновик</span>
+                                {% elif c.status == 'terminated' %}
+                                    <span class="badge bg-dark">Расторгнут</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ c.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if c.status == 'pending_acceptance' and c.is_offer %}
+                                    <a href="/employee/offers/{{ c.id }}" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-pen"></i> Акцептировать
+                                    </a>
+                                {% elif c.status == 'active' %}
+                                    <a href="/employee/offers/{{ c.id }}" class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-eye"></i> Просмотр
+                                    </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

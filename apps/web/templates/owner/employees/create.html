@@ -124,80 +124,12 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="first_name" class="form-label">Имя</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           id="first_name" 
-                                           name="first_name" 
-                                           placeholder="Введите имя">
-                                </div>
                             </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="last_name" class="form-label">Фамилия</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           id="last_name" 
-                                           name="last_name" 
-                                           placeholder="Введите фамилию">
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="phone" class="form-label">Телефон</label>
-                                    <input type="tel" 
-                                           class="form-control" 
-                                           id="phone" 
-                                           name="phone" 
-                                           placeholder="+7 (999) 123-45-67">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="email" class="form-label">Email</label>
-                                    <input type="email" 
-                                           class="form-control" 
-                                           id="email" 
-                                           name="email" 
-                                           placeholder="user@example.com">
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="birth_date" class="form-label">Дата рождения</label>
-                                    <input type="date" 
-                                           class="form-control" 
-                                           id="birth_date" 
-                                           name="birth_date">
-                                </div>
-                            </div>
-                        </div>
 
                         <hr class="my-4">
                         <h5 class="mb-3">Условия договора</h5>
 
                         <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="title" class="form-label">
-                                        Название договора <span class="text-danger">*</span>
-                                    </label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           id="title" 
-                                           name="title" 
-                                           required
-                                           placeholder="Например: Трудовой договор с Ивановым И.И.">
-                                </div>
-                            </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="hourly_rate" class="form-label">Почасовая ставка (₽) <span class="text-danger">*</span></label>
@@ -220,34 +152,6 @@
                                             <i class="fas fa-info-circle text-muted" 
                                                data-bs-toggle="tooltip" 
                                                title="Если включено, при открытии смены будет использоваться ставка из этого договора, а не из объекта или тайм-слота"></i>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="payment_system_id" class="form-label">
-                                        Система оплаты труда
-                                        <i class="fas fa-info-circle text-muted" 
-                                           data-bs-toggle="tooltip" 
-                                           title="Определяет метод расчета заработной платы"></i>
-                                    </label>
-                                    <select class="form-select" id="payment_system_id" name="payment_system_id">
-                                        <option value="1" selected>Простая повременная</option>
-                                        <option value="2">Окладная</option>
-                                        <option value="3">Повременно-премиальная</option>
-                                    </select>
-                                    <div class="form-check mt-2">
-                                        <input type="checkbox" 
-                                               class="form-check-input" 
-                                               id="use_contract_payment_system" 
-                                               name="use_contract_payment_system"
-                                               value="1">
-                                        <label class="form-check-label" for="use_contract_payment_system">
-                                            Использовать систему оплаты из договора
-                                            <i class="fas fa-info-circle text-muted" 
-                                               data-bs-toggle="tooltip" 
-                                               title="Если включено, при расчете выплат будет использоваться система оплаты из договора, а не из объекта (с наследованием от подразделения)"></i>
                                         </label>
                                     </div>
                                 </div>
@@ -804,23 +708,6 @@ function createDynamicField(field) {
 
 
 }); // Конец DOMContentLoaded
-
-// Форматирование телефона
-const phoneInput = document.getElementById('phone');
-if (phoneInput) {
-    phoneInput.addEventListener('input', function(e) {
-        let value = e.target.value.replace(/\D/g, '');
-        if (value.length > 0) {
-            if (value[0] === '8') {
-                value = '7' + value.slice(1);
-            }
-            if (value[0] === '7' && value.length > 1) {
-                value = '+7 (' + value.slice(1, 4) + ') ' + value.slice(4, 7) + '-' + value.slice(7, 9) + '-' + value.slice(9, 11);
-            }
-        }
-        e.target.value = value;
-    });
-}
 
 // Функция для переключения прав управляющего
 function toggleManagerPermissions() {

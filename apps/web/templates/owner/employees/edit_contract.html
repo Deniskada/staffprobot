@@ -29,20 +29,6 @@
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="title" class="form-label">
-                                Название договора <span class="text-danger">*</span>
-                            </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="title" 
-                                   name="title" 
-                                   required
-                                   value="{{ contract.title }}"
-                                   placeholder="Например: Трудовой договор с Ивановым И.И.">
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
                             <label for="template_id" class="form-label">Шаблон договора</label>
                             <select class="form-select" id="template_id" name="template_id">
                                 <option value="">Выберите шаблон (необязательно)</option>
@@ -87,35 +73,6 @@
                                     <i class="fas fa-info-circle text-muted" 
                                        data-bs-toggle="tooltip" 
                                        title="Приоритет над ставками объекта и тайм-слота"></i>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="payment_system_id" class="form-label">
-                                Система оплаты труда
-                                <i class="fas fa-info-circle text-muted" 
-                                   data-bs-toggle="tooltip" 
-                                   title="Определяет метод расчета заработной платы"></i>
-                            </label>
-                            <select class="form-select" id="payment_system_id" name="payment_system_id">
-                                <option value="1" {% if contract.payment_system_id == 1 %}selected{% endif %}>Простая повременная</option>
-                                <option value="2" {% if contract.payment_system_id == 2 %}selected{% endif %}>Окладная</option>
-                                <option value="3" {% if contract.payment_system_id == 3 %}selected{% endif %}>Повременно-премиальная</option>
-                            </select>
-                            <div class="form-check mt-2">
-                                <input type="checkbox" 
-                                       class="form-check-input" 
-                                       id="use_contract_payment_system" 
-                                       name="use_contract_payment_system"
-                                       value="1"
-                                       {% if contract.use_contract_payment_system %}checked{% endif %}>
-                                <label class="form-check-label" for="use_contract_payment_system">
-                                    Использовать систему оплаты из договора
-                                    <i class="fas fa-info-circle text-muted" 
-                                       data-bs-toggle="tooltip" 
-                                       title="Приоритет над системой объекта (с наследованием от подразделения)"></i>
                                 </label>
                             </div>
                         </div>

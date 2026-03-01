@@ -68,6 +68,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.url.path.startswith('/employee/offers') %}active{% endif %}" href="/employee/offers">
+                            <i class="bi bi-file-earmark-check"></i> Договоры
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/employee/reviews">
                             <i class="bi bi-star"></i> Отзывы
                         </a>

@@ -64,20 +64,14 @@ class NotificationService:
                     logger.error(f"User {user_id} not found")
                     return None
                 
-                # В БД колонки имеют тип enum, но модель использует String
-                # Унифицированный формат: все enum поля используют .value (lowercase строки)
-                # Это соответствует значениям enum в Python (SHIFT_STARTED = "shift_started")
-                # Используем raw SQL с CAST для явного приведения типов при записи в enum колонки
                 type_value = type.value if hasattr(type, 'value') else str(type)
                 channel_value = channel.value if hasattr(channel, 'value') else str(channel)
                 status_value = NotificationStatus.PENDING.value if hasattr(NotificationStatus.PENDING, 'value') else str(NotificationStatus.PENDING)
                 priority_value = priority.value if hasattr(priority, 'value') else str(priority)
                 
-                # Используем raw SQL для вставки с явным приведением типов (CAST) для enum колонок
                 insert_sql = """
                     INSERT INTO notifications (user_id, type, channel, status, priority, title, message, data, scheduled_at)
-                    VALUES (:user_id, CAST(:type AS notificationtype), CAST(:channel AS notificationchannel),
-                            CAST(:status AS notificationstatus), CAST(:priority AS notificationpriority),
+                    VALUES (:user_id, :type, :channel, :status, :priority,
                             :title, :message, CAST(:data AS jsonb), :scheduled_at)
                     RETURNING id
                 """
@@ -360,11 +354,10 @@ class NotificationService:
                 if channel:
                     sql = text("""
                         UPDATE notifications 
-                        SET status = CAST(:status AS notificationstatus), 
-                            read_at = :read_at
+                        SET status = :status, read_at = :read_at
                         WHERE user_id = :user_id
-                          AND CAST(channel AS VARCHAR) = :channel
-                          AND CAST(status AS VARCHAR) != 'read'
+                          AND channel = :channel
+                          AND status != 'read'
                     """)
                     params = {
                         "status": NotificationStatus.READ.value,
@@ -375,10 +368,9 @@ class NotificationService:
                 else:
                     sql = text("""
                         UPDATE notifications 
-                        SET status = CAST(:status AS notificationstatus), 
-                            read_at = :read_at
+                        SET status = :status, read_at = :read_at
                         WHERE user_id = :user_id
-                          AND CAST(status AS VARCHAR) != 'read'
+                          AND status != 'read'
                     """)
                     params = {
                         "status": NotificationStatus.READ.value,

@@ -6677,11 +6677,11 @@ async def owner_employee_edit(
 async def owner_employees_create_contract(
     request: Request,
     employee_telegram_id: int = Form(...),
-    title: str = Form(...),
+    title: str = Form(""),
     content: str = Form(""),
     hourly_rate: Optional[float] = Form(None),
     use_contract_rate: bool = Form(False),
-    payment_system_id: Optional[int] = Form(1),  # По умолчанию simple_hourly
+    payment_system_id: Optional[int] = Form(None),
     use_contract_payment_system: bool = Form(False),
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),
@@ -6709,7 +6709,6 @@ async def owner_employees_create_contract(
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
         
-        # Обновляем профиль сотрудника, если указаны поля
         from sqlalchemy import select
         from domain.entities.user import User, UserRole
         
@@ -6717,60 +6716,18 @@ async def owner_employees_create_contract(
         result = await db.execute(employee_query)
         employee_user = result.scalar_one_or_none()
         
-        first_name_value = (first_name or "").strip()
-        last_name_value = (last_name or "").strip()
-        phone_value = (phone or "").strip()
-        email_value = (email or "").strip()
-        birth_date_value = (birth_date or "").strip() if birth_date is not None else ""
-        
         if not employee_user:
-            # Создаем нового пользователя, если его нет в базе
-            if not first_name_value:
-                first_name_value = f"Сотрудник {employee_telegram_id}"
             employee_user = User(
                 telegram_id=employee_telegram_id,
                 username=None,
-                first_name=first_name_value,
-                last_name=last_name_value or None,
-                phone=phone_value or None,
-                email=email_value or None,
+                first_name=f"Сотрудник {employee_telegram_id}",
                 role=UserRole.EMPLOYEE.value,
                 roles=[UserRole.EMPLOYEE.value],
                 is_active=True
             )
-            if birth_date_value:
-                try:
-                    employee_user.birth_date = datetime.strptime(birth_date_value, "%Y-%m-%d")
-                except ValueError:
-                    employee_user.birth_date = None
             db.add(employee_user)
             await db.commit()
             await db.refresh(employee_user)
-        else:
-            updated = False
-            if first_name_value:
-                employee_user.first_name = first_name_value
-                updated = True
-            if last_name is not None:
-                employee_user.last_name = last_name_value or None
-                updated = True
-            if phone is not None:
-                employee_user.phone = phone_value or None
-                updated = True
-            if email is not None:
-                employee_user.email = email_value or None
-                updated = True
-            if birth_date is not None:
-                if birth_date_value:
-                    try:
-                        employee_user.birth_date = datetime.strptime(birth_date_value, "%Y-%m-%d")
-                    except ValueError:
-                        employee_user.birth_date = None
-                else:
-                    employee_user.birth_date = None
-                updated = True
-            if updated:
-                await db.commit()
         
         # Получаем данные формы для динамических полей
         form_data = await request.form()
@@ -7106,11 +7063,11 @@ async def owner_contract_edit_form(
 async def owner_contract_edit(
     contract_id: int,
     request: Request,
-    title: str = Form(...),
+    title: str = Form(""),
     content: str = Form(""),
     hourly_rate: Optional[float] = Form(None),
     use_contract_rate: bool = Form(False),
-    payment_system_id: Optional[int] = Form(1),
+    payment_system_id: Optional[int] = Form(None),
     use_contract_payment_system: bool = Form(False),
     start_date: str = Form(...),
     end_date: Optional[str] = Form(None),

@@ -42,13 +42,17 @@ async def _dispatch_all_scheduled():
     async with get_celery_session() as session:
         now = datetime.now(timezone.utc)
 
+        from sqlalchemy import or_
         rows = await session.execute(
             select(Notification).where(
                 and_(
                     cast(Notification.status, String) == NotificationStatus.PENDING.value,
-                    Notification.scheduled_at <= now,
+                    or_(
+                        Notification.scheduled_at <= now,
+                        Notification.scheduled_at.is_(None),
+                    ),
                 )
-            ).order_by(Notification.scheduled_at)
+            ).order_by(Notification.scheduled_at.nulls_first())
         )
         notifications = list(rows.scalars().all())
         stats["processed"] = len(notifications)

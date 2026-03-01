@@ -4,8 +4,7 @@
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from apps.web.middleware.role_middleware import require_employee_or_manager
+from apps.web.middleware.role_middleware import require_employee_or_applicant
 from typing import Optional
 
 router = APIRouter()
@@ -17,7 +16,7 @@ async def employee_reviews_page(
     request: Request,
     target_type: Optional[str] = None,
     target_id: Optional[int] = None,
-    current_user: dict = Depends(require_employee_or_manager)
+    current_user: dict = Depends(require_employee_or_applicant)
 ):
     """Страница отзывов сотрудника."""
     return templates.TemplateResponse("employee/reviews.html", {

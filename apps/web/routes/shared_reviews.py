@@ -27,7 +27,7 @@ async def create_review(
     content: Optional[str] = Form(None, description="Содержание отзыва"),
     is_anonymous: bool = Form(False, description="Анонимный отзыв"),
     media_files: Optional[List[UploadFile]] = File(None, description="Медиа-файлы"),
-    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
+    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.APPLICANT, UserRole.SUPERADMIN])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -143,7 +143,7 @@ async def get_my_reviews(
     target_id: Optional[int] = None,
     limit: int = 20,
     offset: int = 0,
-    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
+    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.APPLICANT, UserRole.SUPERADMIN])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -275,7 +275,7 @@ async def get_my_reviews(
 async def get_available_targets(
     request: Request,
     target_type: str,
-    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
+    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.APPLICANT, UserRole.SUPERADMIN])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -343,7 +343,7 @@ async def get_available_targets(
 async def get_review_details(
     request: Request,
     review_id: int,
-    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPERADMIN])),
+    current_user: dict = Depends(require_any_role([UserRole.OWNER, UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.APPLICANT, UserRole.SUPERADMIN])),
     db: AsyncSession = Depends(get_db_session)
 ):
     """

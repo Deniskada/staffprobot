@@ -26,6 +26,7 @@ REQUIRED_INDIVIDUAL_FIELDS: List[Tuple[str, str]] = [
     ("passport_number", "Номер паспорта"),
     ("passport_issued_at", "Дата выдачи паспорта"),
     ("passport_issued_by", "Кем выдан паспорт"),
+    ("inn", "ИНН"),
     ("snils", "СНИЛС"),
     ("phone", "Телефон"),
     ("email", "Электронная почта"),
@@ -90,9 +91,23 @@ class OfferService:
         if not ip.registration_address_id:
             missing.append({"field": "registration_address", "label": REQUIRED_ADDRESS_LABEL})
 
+        # Проверка загруженных сканов документов (без создания S3-клиента)
+        from shared.services.profile_document_service import ALLOWED_DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS
+        from domain.entities.profile_document import ProfileDocument
+        doc_result = await session.execute(
+            select(ProfileDocument.document_type)
+            .where(ProfileDocument.profile_id == profile.id)
+        )
+        existing_docs = {row[0] for row in doc_result.fetchall()}
+        missing_docs = [
+            {"document_type": dt, "label": DOCUMENT_TYPE_LABELS[dt]}
+            for dt in ALLOWED_DOCUMENT_TYPES if dt not in existing_docs
+        ]
+
         return {
-            "complete": len(missing) == 0,
+            "complete": len(missing) == 0 and len(missing_docs) == 0,
             "missing_fields": missing,
+            "missing_documents": missing_docs,
             "profile_id": profile.id,
         }
 
@@ -133,7 +148,7 @@ class OfferService:
             "id": contract.id,
             "contract_number": contract.contract_number,
             "title": contract.title,
-            "content": contract.content or (template.content if template else ""),
+            "content": (template.content if template and template.content and "<" in template.content else None) or contract.content or "",
             "status": contract.status,
             "is_offer": is_offer,
             "template_name": template.name if template else None,
@@ -223,6 +238,45 @@ class OfferService:
             "status": "accepted",
             "contract_id": contract.id,
             "file_key": file_key,
+        }
+
+    async def reject_offer(
+        self,
+        session: AsyncSession,
+        contract_id: int,
+        employee_user_id: int,
+        reason: str,
+    ) -> Dict[str, Any]:
+        """Отказ от оферты с указанием причины."""
+        stmt = select(Contract).where(
+            Contract.id == contract_id,
+            Contract.employee_id == employee_user_id,
+            Contract.status == "pending_acceptance",
+        )
+        result = await session.execute(stmt)
+        contract = result.scalar_one_or_none()
+        if not contract:
+            raise ValueError("Оферта не найдена или уже обработана")
+
+        contract.status = "rejected"
+        contract.rejection_reason = reason
+
+        await session.commit()
+        logger.info("Offer rejected", contract_id=contract.id, employee_user_id=employee_user_id)
+
+        # Имя сотрудника для уведомления
+        employee_name = ""
+        try:
+            ip_details = await self.get_employee_details_for_contract(session, employee_user_id)
+            employee_name = ip_details.get("employee_fio", "")
+        except Exception:
+            pass
+
+        return {
+            "status": "rejected",
+            "contract_id": contract.id,
+            "owner_id": contract.owner_id,
+            "employee_name": employee_name,
         }
 
     async def get_employee_details_for_contract(

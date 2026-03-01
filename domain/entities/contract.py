@@ -82,6 +82,9 @@ class Contract(Base):
     termination_date = Column(Date, nullable=True)  # Дата увольнения
     settlement_policy = Column(String(32), nullable=False, default="schedule")  # 'schedule' | 'termination_date'
     
+    # Отказ от оферты
+    rejection_reason = Column(String(1000), nullable=True, comment="Причина отказа сотрудника от оферты")
+
     # Метаданные ПЭП (простой электронной подписи)
     pep_metadata = Column(JSON, nullable=True, comment="Метаданные ПЭП: channel, otp_hash, esia_oid, signed_ip")
     

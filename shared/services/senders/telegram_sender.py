@@ -354,21 +354,10 @@ class TelegramNotificationSender:
             return False
 
 
-# Глобальный экземпляр отправщика
-_telegram_sender: Optional[TelegramNotificationSender] = None
-
-
 def get_telegram_sender() -> TelegramNotificationSender:
     """
-    Получение глобального экземпляра Telegram отправщика.
-    
-    Returns:
-        Экземпляр TelegramNotificationSender
+    Создание экземпляра Telegram отправщика.
+    Каждый вызов создаёт новый экземпляр — безопасно для Celery (asyncio.run).
     """
-    global _telegram_sender
-    
-    if _telegram_sender is None:
-        _telegram_sender = TelegramNotificationSender()
-    
-    return _telegram_sender
+    return TelegramNotificationSender()
 

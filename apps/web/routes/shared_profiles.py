@@ -51,7 +51,7 @@ def _validate_required_details(profile_type: str, details: Dict[str, Any]) -> No
 @router.get("/")
 async def list_profiles(
     request: Request,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Список профилей текущего пользователя."""
@@ -80,7 +80,7 @@ async def list_profiles(
 @router.get("/{profile_id}")
 async def get_profile(
     profile_id: int,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Получить один профиль по ID."""
@@ -104,7 +104,7 @@ async def get_profile(
 @router.post("/")
 async def create_profile(
     request: Request,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Создать новый профиль."""
@@ -134,7 +134,7 @@ async def create_profile(
 async def update_profile(
     profile_id: int,
     request: Request,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Обновить профиль."""
@@ -161,7 +161,7 @@ async def update_profile(
 @router.delete("/{profile_id}")
 async def delete_profile(
     profile_id: int,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Архивировать профиль."""
@@ -185,7 +185,7 @@ async def delete_profile(
 @router.post("/{profile_id}/set-default")
 async def set_default_profile(
     profile_id: int,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Сделать профиль профилем по умолчанию."""
@@ -209,7 +209,7 @@ async def set_default_profile(
 @router.post("/{profile_id}/kyc/start")
 async def start_kyc_verification(
     profile_id: int,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Инициировать KYC‑верификацию профиля через провайдера (госуслуги)."""
@@ -234,7 +234,7 @@ async def start_kyc_verification(
 async def mark_profile_verified(
     profile_id: int,
     request: Request,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """

@@ -210,13 +210,12 @@ class ContractService:
             if hourly_rate <= 0:
                 raise ValueError("Ставка должна быть больше 0")
             
-            # Получаем название договора (теперь обязательное поле)
-            title = contract_data.get("title")
-            if not title or title.strip() == "":
-                raise ValueError("Название договора обязательно")
-            
             # Генерируем номер договора
             contract_number = await self._generate_contract_number(owner.id)
+            
+            title = (contract_data.get("title") or "").strip()
+            if not title:
+                title = f"Договор {contract_number}"
             
             # Генерируем контент из шаблона, если нужно
             content = contract_data.get("content")
@@ -284,15 +283,8 @@ class ContractService:
             if end_date and isinstance(end_date, str):
                 end_date = date.fromisoformat(end_date)
             
-            # Определяем начальный статус: для оферт — pending_acceptance
-            initial_status = "active"
-            is_offer = False
-            if template and template.contract_type_id:
-                from domain.entities.contract_type import ContractType as CT
-                ct_obj = await session.get(CT, template.contract_type_id)
-                if ct_obj and ct_obj.code == "offer":
-                    initial_status = "pending_acceptance"
-                    is_offer = True
+            # Все договоры начинают со статуса pending_acceptance — сотрудник должен подписать
+            initial_status = "pending_acceptance"
 
             # Создаем договор
             contract = Contract(
@@ -383,23 +375,32 @@ class ContractService:
             await cache.clear_pattern("api_employees:*")
             await cache.clear_pattern("api_objects:*")
 
-            # Если оферта — уведомляем сотрудника
-            if is_offer:
-                try:
-                    from shared.services.notification_service import NotificationService
-                    from domain.entities.notification import NotificationType
-                    ns = NotificationService(session)
-                    await ns.create_notification(
-                        user_id=employee.id,
-                        notification_type=NotificationType.OFFER_SENT,
-                        data={
-                            "contract_id": contract.id,
-                            "contract_title": contract.title,
-                            "accept_url": f"/employee/offers/{contract.id}",
-                        },
-                    )
-                except Exception as notify_err:
-                    logger.error(f"Failed to send offer notification: {notify_err}")
+            # Уведомляем сотрудника о необходимости подписать договор
+            try:
+                from shared.services.notification_service import NotificationService
+                from domain.entities.notification import (
+                    NotificationType, NotificationChannel
+                )
+                from core.utils.url_helper import URLHelper
+                
+                web_url = await URLHelper.get_web_url()
+                accept_url = f"{web_url}/employee/offers/{contract.id}"
+                
+                ns = NotificationService()
+                await ns.create_notification(
+                    user_id=employee.id,
+                    type=NotificationType.OFFER_SENT,
+                    channel=NotificationChannel.TELEGRAM,
+                    title="Договор направлен на подписание",
+                    message=f"Вам направлен договор «{contract.title}».\nПодпишите в личном кабинете: {accept_url}",
+                    data={
+                        "contract_id": contract.id,
+                        "contract_title": contract.title,
+                        "accept_url": accept_url,
+                    },
+                )
+            except Exception as notify_err:
+                logger.error(f"Failed to send contract notification: {notify_err}", exc_info=True)
 
             return contract
     
@@ -1704,7 +1705,10 @@ class ContractService:
             
             # Обновляем поля
             if "title" in contract_data:
-                contract.title = contract_data["title"]
+                new_title = (contract_data["title"] or "").strip()
+                if not new_title:
+                    new_title = f"Договор {contract.contract_number}"
+                contract.title = new_title
             if "content" in contract_data:
                 contract.content = contract_data["content"]
             if "hourly_rate" in contract_data:
@@ -1812,6 +1816,31 @@ class ContractService:
             if "payment_schedule_id" in contract_data:
                 contract.payment_schedule_id = contract_data["payment_schedule_id"]
             
+            # Обновляем шаблон; при смене — сбрасываем подпись
+            template_changed = False
+            if "template_id" in contract_data:
+                new_template_id = contract_data["template_id"]
+                if new_template_id != old_values.get("template_id"):
+                    template_changed = True
+                contract.template_id = new_template_id
+            
+            if template_changed and contract.status in ("active", "signed"):
+                contract.status = "pending_acceptance"
+                contract.signed_at = None
+                contract.pep_metadata = None
+                contract.is_active = False
+                
+                # Перегенерируем контент из нового шаблона
+                new_template_id = contract.template_id
+                if new_template_id:
+                    tmpl_query = select(ContractTemplate).where(ContractTemplate.id == new_template_id)
+                    tmpl_result = await session.execute(tmpl_query)
+                    new_tmpl = tmpl_result.scalar_one_or_none()
+                    if new_tmpl and new_tmpl.content:
+                        contract.content = new_tmpl.content
+                
+                logger.info(f"Contract {contract.id}: template changed, reset to pending_acceptance")
+            
             # Собираем изменения для протоколирования
             new_values = {
                 'hourly_rate': contract.hourly_rate,
@@ -1861,6 +1890,35 @@ class ContractService:
                     await self._check_and_update_employee_role(session, contract.employee_id)
             
             logger.info(f"Updated contract: {contract.id}")
+            
+            # При смене шаблона — уведомляем сотрудника о необходимости переподписать
+            if template_changed and contract.status == "pending_acceptance":
+                try:
+                    from shared.services.notification_service import NotificationService
+                    from domain.entities.notification import (
+                        NotificationType, NotificationChannel
+                    )
+                    from core.utils.url_helper import URLHelper
+                    
+                    web_url = await URLHelper.get_web_url()
+                    accept_url = f"{web_url}/employee/offers/{contract.id}"
+                    
+                    ns = NotificationService()
+                    await ns.create_notification(
+                        user_id=contract.employee_id,
+                        type=NotificationType.OFFER_SENT,
+                        channel=NotificationChannel.TELEGRAM,
+                        title="Договор изменён — требуется подписание",
+                        message=f"Шаблон договора «{contract.title}» был изменён.\nПодпишите обновлённый договор: {accept_url}",
+                        data={
+                            "contract_id": contract.id,
+                            "contract_title": contract.title,
+                            "accept_url": accept_url,
+                        },
+                    )
+                except Exception as notify_err:
+                    logger.error(f"Failed to send template change notification: {notify_err}", exc_info=True)
+            
             return True
     
     async def terminate_contract(

@@ -25,6 +25,7 @@ celery_app = Celery(
         "core.celery.tasks.bot_monitoring_tasks",
         "core.celery.tasks.ssl_tasks",  # SSL сертификаты: проверка и обновление
         "core.celery.tasks.birthday_tasks",  # Поздравления с Днём Рождения
+        "core.celery.tasks.offer_tasks",  # Напоминания о неподписанных офертах
     ]
 )
 
@@ -168,6 +169,11 @@ celery_app.conf.update(
         'send-holiday-greetings': {
             'task': 'send_holiday_greetings',
             'schedule': crontab(hour=6, minute=0),
+        },
+        # Напоминания о неподписанных офертах — ежедневно в 11:00 МСК (08:00 UTC)
+        'send-offer-reminders': {
+            'task': 'send_offer_reminders',
+            'schedule': crontab(hour=8, minute=0),
         },
     },
     
