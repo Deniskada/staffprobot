@@ -1,4 +1,9 @@
-"""Авто-логин через одноразовые токены в ссылках бота."""
+"""Авто-логин через токены в ссылках бота.
+
+Токен живёт TOKEN_TTL (10 мин) и может использоваться многократно
+в пределах этого окна — Telegram делает prefetch ссылок для превью,
+что «съедает» одноразовые токены до клика пользователя.
+"""
 
 import uuid
 from datetime import timedelta
@@ -12,7 +17,7 @@ TOKEN_TTL = timedelta(minutes=10)
 
 
 async def generate_auto_login_token(telegram_id: int) -> str:
-    """Генерирует одноразовый токен для авто-логина и сохраняет в Redis."""
+    """Генерирует токен для авто-логина и сохраняет в Redis (TTL 10 мин)."""
     token = uuid.uuid4().hex
     key = f"{TOKEN_PREFIX}:{token}"
     await cache.set(key, {"telegram_id": telegram_id}, ttl=TOKEN_TTL)
@@ -20,12 +25,11 @@ async def generate_auto_login_token(telegram_id: int) -> str:
 
 
 async def validate_auto_login_token(token: str) -> Optional[int]:
-    """Проверяет токен, возвращает telegram_id и удаляет токен (одноразовый)."""
+    """Проверяет токен, возвращает telegram_id. Токен не удаляется — истекает по TTL."""
     key = f"{TOKEN_PREFIX}:{token}"
     data = await cache.get(key)
     if not data:
         return None
-    await cache.delete(key)
     return data.get("telegram_id")
 
 
