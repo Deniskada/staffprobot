@@ -144,6 +144,12 @@ function spOpenProfileWizard(type, existingProfile = null) {
   if (existingProfile && existingProfile.details) {
     spFillFormFromDetails(existingProfile);
   }
+
+  // Пытаемся восстановить черновик, если он есть
+  if (spRestoreAutosave()) {
+    spIsDirty = true;
+    spUpdateSaveButtonsState();
+  }
 }
 
 function spFillFormFromDetails(profile) {
@@ -501,6 +507,7 @@ async function spSaveProfile(closeAfter) {
     }
     spIsDirty = false;
     spUpdateSaveButtonsState();
+    spClearAutosave();
     if (closeAfter) {
       const target = typeof spCloseRedirectUrl !== "undefined"
         ? spCloseRedirectUrl
@@ -890,6 +897,7 @@ document.addEventListener("DOMContentLoaded", function () {
   spBindDirtyHandlers();
   spBindTabHandlers();
   spBindAddressFocusHandlers();
+  spInitAutosave();
 
   spLoadProfiles().then(function () {
     if (typeof spSelectedProfileId !== "undefined" && spSelectedProfileId) {
@@ -900,4 +908,88 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 });
+
+
+// ─── Автосохранение в localStorage ───────────────────────────
+
+function _spAutosaveKey() {
+  return "profile_draft_" + (spCurrentProfileId || "new") + "_" + spCurrentType;
+}
+
+let _spAutosaveTimer = null;
+
+function _spAutosaveToStorage() {
+  const form = document.getElementById("spProfileForm");
+  if (!form) return;
+  const data = {};
+  new FormData(form).forEach(function (val, key) {
+    data[key] = val;
+  });
+  data._step = spCurrentStepIndex();
+  data._type = spCurrentType;
+  try {
+    localStorage.setItem(_spAutosaveKey(), JSON.stringify(data));
+    _spShowAutosaveIndicator();
+  } catch (e) { /* quota exceeded */ }
+}
+
+function _spShowAutosaveIndicator() {
+  let el = document.getElementById("spAutosaveStatus");
+  if (!el) {
+    el = document.createElement("span");
+    el.id = "spAutosaveStatus";
+    el.className = "text-muted small ms-2";
+    const stepLabel = document.getElementById("spWizardStepLabel");
+    if (stepLabel && stepLabel.parentNode) {
+      stepLabel.parentNode.appendChild(el);
+    }
+  }
+  el.textContent = "черновик сохранён";
+  el.style.opacity = "1";
+  setTimeout(function () { el.style.opacity = "0"; }, 2000);
+}
+
+function spRestoreAutosave() {
+  const key = _spAutosaveKey();
+  let raw;
+  try { raw = localStorage.getItem(key); } catch (e) { return false; }
+  if (!raw) return false;
+  let data;
+  try { data = JSON.parse(raw); } catch (e) { return false; }
+
+  const form = document.getElementById("spProfileForm");
+  if (!form) return false;
+
+  Object.keys(data).forEach(function (k) {
+    if (k.startsWith("_")) return;
+    const el = form.elements[k];
+    if (!el) return;
+    if (el.type === "checkbox") {
+      el.checked = data[k] === "on" || data[k] === true;
+    } else if (el.type !== "file") {
+      el.value = data[k];
+    }
+  });
+
+  if (data._step) spSetStep(parseInt(data._step, 10) || 0);
+  spIsDirty = true;
+  spUpdateSaveButtonsState();
+  return true;
+}
+
+function spClearAutosave() {
+  try { localStorage.removeItem(_spAutosaveKey()); } catch (e) {}
+}
+
+function spInitAutosave() {
+  const form = document.getElementById("spProfileForm");
+  if (!form) return;
+
+  function onFormChange() {
+    clearTimeout(_spAutosaveTimer);
+    _spAutosaveTimer = setTimeout(_spAutosaveToStorage, 1000);
+  }
+  form.addEventListener("input", onFormChange);
+  form.addEventListener("change", onFormChange);
+}
 

@@ -6696,6 +6696,7 @@ async def owner_employees_create_contract(
     birth_date: Optional[str] = Form(None),
     inherit_payment_schedule: bool = Form(True),
     payment_schedule_id: Optional[int] = Form(None),
+    expires_at: Optional[str] = Form(None),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -6708,6 +6709,7 @@ async def owner_employees_create_contract(
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+        expires_at_obj = datetime.strptime(expires_at, "%Y-%m-%d") if expires_at else None
         
         from sqlalchemy import select
         from domain.entities.user import User, UserRole
@@ -6762,7 +6764,8 @@ async def owner_employees_create_contract(
             "manager_permissions": manager_permissions_dict if manager_permissions_dict else None,
             "values": dynamic_values if dynamic_values else None,
             "inherit_payment_schedule": inherit_payment_schedule,
-            "payment_schedule_id": payment_schedule_id
+            "payment_schedule_id": payment_schedule_id,
+            "expires_at": expires_at_obj,
         }
         
         contract = await contract_service.create_contract(current_user["id"], contract_data)
@@ -7077,6 +7080,7 @@ async def owner_contract_edit(
     manager_permissions: List[str] = Form(default=[]),
     inherit_payment_schedule: bool = Form(True),
     payment_schedule_id: Optional[int] = Form(None),
+    expires_at: Optional[str] = Form(None),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -7089,6 +7093,7 @@ async def owner_contract_edit(
         # Парсим даты
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+        expires_at_obj = datetime.strptime(expires_at, "%Y-%m-%d") if expires_at else None
         
         # Получаем данные формы для динамических полей
         form_data = await request.form()
@@ -7122,7 +7127,8 @@ async def owner_contract_edit(
             "manager_permissions": manager_permissions_dict if manager_permissions_dict else None,
             "values": dynamic_values if dynamic_values else None,
             "inherit_payment_schedule": inherit_payment_schedule,
-            "payment_schedule_id": payment_schedule_id
+            "payment_schedule_id": payment_schedule_id,
+            "expires_at": expires_at_obj,
         }
         
         # Получаем внутренний ID пользователя

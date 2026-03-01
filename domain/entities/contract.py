@@ -85,6 +85,9 @@ class Contract(Base):
     # Отказ от оферты
     rejection_reason = Column(String(1000), nullable=True, comment="Причина отказа сотрудника от оферты")
 
+    # Срок действия оферты (NULL = бессрочно)
+    expires_at = Column(DateTime(timezone=True), nullable=True, comment="Срок действия оферты, после которого автоматически истекает")
+
     # Метаданные ПЭП (простой электронной подписи)
     pep_metadata = Column(JSON, nullable=True, comment="Метаданные ПЭП: channel, otp_hash, esia_oid, signed_ip")
     

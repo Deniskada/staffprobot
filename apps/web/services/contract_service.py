@@ -297,7 +297,7 @@ class ContractService:
                 values=values if values else None,
                 hourly_rate=hourly_rate,
                 use_contract_rate=use_contract_rate,
-                payment_system_id=contract_data.get("payment_system_id", 1),  # По умолчанию simple_hourly
+                payment_system_id=contract_data.get("payment_system_id", 1),
                 use_contract_payment_system=use_contract_payment_system,
                 start_date=start_date,
                 end_date=end_date,
@@ -305,6 +305,7 @@ class ContractService:
                 is_manager=contract_data.get("is_manager", False),
                 manager_permissions=contract_data.get("manager_permissions"),
                 status=initial_status,
+                expires_at=contract_data.get("expires_at"),
             )
             
             session.add(contract)
@@ -1815,6 +1816,8 @@ class ContractService:
                 contract.inherit_payment_schedule = contract_data["inherit_payment_schedule"]
             if "payment_schedule_id" in contract_data:
                 contract.payment_schedule_id = contract_data["payment_schedule_id"]
+            if "expires_at" in contract_data:
+                contract.expires_at = contract_data["expires_at"]
             
             # Обновляем шаблон; при смене — сбрасываем подпись
             template_changed = False

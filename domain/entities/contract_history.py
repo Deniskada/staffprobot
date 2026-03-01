@@ -14,6 +14,13 @@ class ContractChangeType(str, enum.Enum):
     CREATED = "created"
     UPDATED = "updated"
     STATUS_CHANGED = "status_changed"
+    TEMPLATE_CHANGED = "template_changed"
+    SIGNED = "signed"
+    REJECTED = "rejected"
+    DOCUMENT_UPLOADED = "document_uploaded"
+    REMINDER_SENT = "reminder_sent"
+    EXPIRED = "expired"
+    VIEWED = "viewed"
 
 
 class ContractHistory(Base):

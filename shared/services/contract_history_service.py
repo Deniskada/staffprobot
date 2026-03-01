@@ -13,6 +13,38 @@ from domain.entities.user import User
 from core.logging.logger import logger
 
 
+async def log_contract_event(
+    session: AsyncSession,
+    contract_id: int,
+    change_type: str | ContractChangeType,
+    changed_by: int | None = None,
+    details: dict | None = None,
+    metadata: dict | None = None,
+) -> ContractHistory:
+    """
+    Упрощённый хелпер для логирования одного события договора.
+    Записывает одну строку с field_name='event' и деталями в new_value.
+    """
+    change_type_val = change_type.value if isinstance(change_type, ContractChangeType) else change_type
+    entry = ContractHistory(
+        contract_id=contract_id,
+        changed_by=changed_by,
+        change_type=change_type_val,
+        field_name="event",
+        new_value=details,
+        change_metadata=metadata,
+    )
+    session.add(entry)
+    await session.flush()
+    logger.info(
+        "Contract event logged",
+        contract_id=contract_id,
+        change_type=change_type_val,
+        changed_by=changed_by,
+    )
+    return entry
+
+
 class ContractHistoryService:
     """Сервис для протоколирования и получения истории изменений договоров."""
     

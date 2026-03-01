@@ -144,6 +144,18 @@ class OfferService:
         if not is_offer and contract.status == "pending_acceptance":
             is_offer = True
 
+        # Получаем file_key подписанного PDF из последней версии
+        signed_pdf_key = None
+        if contract.status == "active":
+            ver_stmt = (
+                select(ContractVersion.file_key)
+                .where(ContractVersion.contract_id == contract.id, ContractVersion.file_key.isnot(None))
+                .order_by(ContractVersion.created_at.desc())
+                .limit(1)
+            )
+            ver_result = await session.execute(ver_stmt)
+            signed_pdf_key = ver_result.scalar_one_or_none()
+
         return {
             "id": contract.id,
             "contract_number": contract.contract_number,
@@ -155,6 +167,8 @@ class OfferService:
             "start_date": contract.start_date,
             "signed_at": contract.signed_at,
             "owner_id": contract.owner_id,
+            "signed_pdf_key": signed_pdf_key,
+            "expires_at": contract.expires_at,
         }
 
     async def accept_offer(
@@ -228,6 +242,16 @@ class OfferService:
         )
         session.add(version)
 
+        # Логируем событие подписания
+        from shared.services.contract_history_service import log_contract_event
+        from domain.entities.contract_history import ContractChangeType
+        await log_contract_event(
+            session, contract.id, ContractChangeType.SIGNED,
+            changed_by=employee_user_id,
+            details={"file_key": file_key},
+            metadata=pep_metadata,
+        )
+
         await session.commit()
         logger.info(
             "Offer accepted",
@@ -260,6 +284,14 @@ class OfferService:
 
         contract.status = "rejected"
         contract.rejection_reason = reason
+
+        from shared.services.contract_history_service import log_contract_event
+        from domain.entities.contract_history import ContractChangeType
+        await log_contract_event(
+            session, contract.id, ContractChangeType.REJECTED,
+            changed_by=employee_user_id,
+            details={"reason": reason},
+        )
 
         await session.commit()
         logger.info("Offer rejected", contract_id=contract.id, employee_user_id=employee_user_id)

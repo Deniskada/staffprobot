@@ -423,6 +423,26 @@ async def upload_profile_document(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Логируем загрузку документа для всех pending-контрактов сотрудника
+    try:
+        from shared.services.contract_history_service import log_contract_event
+        from domain.entities.contract_history import ContractChangeType
+        pending = await db.execute(
+            select(Contract.id).where(
+                Contract.employee_id == user_id,
+                Contract.status == "pending_acceptance",
+            )
+        )
+        for (cid,) in pending.fetchall():
+            await log_contract_event(
+                db, cid, ContractChangeType.DOCUMENT_UPLOADED,
+                changed_by=user_id,
+                details={"document_type": document_type, "filename": file.filename},
+            )
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to log document upload event: {e}")
+
     return result
 
 

@@ -30,6 +30,12 @@
             </div>
 
             {% if contract.status == 'pending_acceptance' %}
+            {% if contract.expires_at %}
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-clock-history"></i>
+                Срок подписания: до <strong>{{ contract.expires_at | format_datetime_local }}</strong>
+            </div>
+            {% endif %}
             {# ══════ ШАГ 1: Профиль и реквизиты ══════ #}
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -229,10 +235,17 @@
             </div>
 
             {% elif contract.status == 'active' %}
-            <div class="alert alert-success">
-                <i class="bi bi-check-circle"></i> Оферта подписана
-                {% if contract.signed_at %}
-                    {{ contract.signed_at | format_datetime_local }}
+            <div class="alert alert-success d-flex align-items-center justify-content-between">
+                <div>
+                    <i class="bi bi-check-circle"></i> Оферта подписана
+                    {% if contract.signed_at %}
+                        {{ contract.signed_at | format_datetime_local }}
+                    {% endif %}
+                </div>
+                {% if contract.signed_pdf_key %}
+                <a href="/api/media/{{ contract.signed_pdf_key }}" class="btn btn-outline-success btn-sm" target="_blank">
+                    <i class="bi bi-file-earmark-pdf"></i> Скачать PDF
+                </a>
                 {% endif %}
             </div>
             {% elif contract.status == 'rejected' %}
@@ -262,8 +275,11 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('document_type', docType);
             formData.append('file', file);
 
+            const slot = document.getElementById('slot-' + docType);
+            if (slot) slot.classList.add('border-primary');
+
             statusEl.className = 'mt-2 text-info';
-            statusEl.textContent = 'Загрузка...';
+            statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Загрузка ' + file.name + '...';
             statusEl.style.display = 'block';
 
             try {
@@ -274,15 +290,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await resp.json();
                 if (resp.ok) {
                     statusEl.className = 'mt-2 text-success';
-                    statusEl.textContent = 'Документ загружен';
+                    statusEl.innerHTML = '<i class="bi bi-check-circle"></i> Документ загружен';
+                    if (slot) {
+                        slot.classList.remove('border-primary');
+                        slot.classList.add('border-success');
+                    }
                     setTimeout(() => location.reload(), 800);
                 } else {
                     statusEl.className = 'mt-2 text-danger';
                     statusEl.textContent = data.detail || 'Ошибка загрузки';
+                    if (slot) slot.classList.remove('border-primary');
                 }
             } catch (e) {
                 statusEl.className = 'mt-2 text-danger';
                 statusEl.textContent = 'Ошибка сети';
+                if (slot) slot.classList.remove('border-primary');
             }
         });
     });
