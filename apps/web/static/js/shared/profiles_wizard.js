@@ -383,13 +383,15 @@ async function spEditProfileFromList(id) {
 
 async function spSaveProfile(closeAfter) {
   const form = document.getElementById("spProfileForm");
-  if (!form || !form.reportValidity()) {
-    return;
-  }
+  if (!form) return;
   const fd = new FormData(form);
   const displayName = (fd.get("display_name") || "").toString().trim();
   if (!displayName) {
-    alert("Пожалуйста, укажите название профиля");
+    spSetStep(0);
+    setTimeout(() => {
+      const el = document.getElementById("spDisplayName");
+      if (el) { el.focus(); el.reportValidity(); }
+    }, 100);
     return;
   }
   const payload = {
@@ -489,8 +491,8 @@ async function spSaveProfile(closeAfter) {
       body: JSON.stringify(payload),
     });
     const data = await resp.json();
-    if (!data.success) {
-      alert(data.error || "Ошибка сохранения профиля");
+    if (!resp.ok || !data.success) {
+      alert(data.detail || data.error || "Ошибка сохранения профиля");
       return;
     }
     spCurrentProfileId = (data.profile && data.profile.id) || spCurrentProfileId;
@@ -700,7 +702,7 @@ function spUpdateSaveButtonsState() {
   const saveBtn = document.getElementById("spWizardSave");
   const saveCloseBtn = document.getElementById("spWizardSaveClose");
   const stepIdx = spCurrentStepIndex();
-  const enabled = spIsDirty && stepIdx >= 1;
+  const enabled = stepIdx >= 1;
   if (saveBtn) saveBtn.disabled = !enabled;
   if (saveCloseBtn) saveCloseBtn.disabled = !enabled;
 }

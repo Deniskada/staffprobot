@@ -868,13 +868,15 @@ async function spEditProfileFromList(id) {
 
 async function spSaveProfile(closeAfter) {
   const form = document.getElementById("spProfileForm");
-  if (!form.reportValidity()) {
-    return;
-  }
+  if (!form) return;
   const fd = new FormData(form);
   const displayName = fd.get("display_name")?.trim() || "";
   if (!displayName) {
-    alert("Пожалуйста, укажите название профиля");
+    spSetStep(0);
+    setTimeout(() => {
+      const el = document.getElementById("spDisplayName");
+      if (el) { el.focus(); el.reportValidity(); }
+    }, 100);
     return;
   }
   const payload = {
@@ -1182,7 +1184,7 @@ function spUpdateSaveButtonsState() {
   const saveBtn = document.getElementById("spWizardSave");
   const saveCloseBtn = document.getElementById("spWizardSaveClose");
   const stepIdx = spCurrentStepIndex();
-  const enabled = spIsDirty && stepIdx >= 1;
+  const enabled = stepIdx >= 1;
   if (saveBtn) saveBtn.disabled = !enabled;
   if (saveCloseBtn) saveCloseBtn.disabled = !enabled;
 }
