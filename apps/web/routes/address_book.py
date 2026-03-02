@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/addresses", tags=["addresses"])
 async def search_addresses(
     q: str = Query("", description="Строка поиска по адресу"),
     limit: int = Query(20, ge=1, le=100),
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Поиск по базе адресов по подстроке."""
@@ -59,7 +59,7 @@ async def search_addresses(
 @router.post("/")
 async def create_address(
     request: Request,
-    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE])),
+    current_user=Depends(require_any_role([UserRole.OWNER, UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.APPLICANT])),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Создать новый адрес в базе."""

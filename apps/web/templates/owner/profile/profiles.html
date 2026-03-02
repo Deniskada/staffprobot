@@ -1350,7 +1350,7 @@ document.addEventListener("DOMContentLoaded", function () {
           full_address: addrDto.full_address,
           city: addrDto.city || "",
         };
-        const resp = await fetch("/api/addresses", {
+        const resp = await fetch("/api/addresses/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
