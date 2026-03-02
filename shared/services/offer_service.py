@@ -213,6 +213,7 @@ class OfferService:
         # Обновляем договор
         contract.content = content
         contract.status = "active"
+        contract.is_active = True
         contract.signed_at = now
         contract.pep_metadata = pep_metadata
 
