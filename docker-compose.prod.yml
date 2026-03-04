@@ -205,6 +205,7 @@ services:
   celery_worker:
     image: staffprobot-celery_worker:latest
     container_name: staffprobot_celery_worker_prod
+    # 512M: auto_close_shifts OOM на 256M (SIGKILL)
     command: python scripts/start_celery_worker.py
     env_file: .env
     volumes:
@@ -238,10 +239,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 512M
           cpus: '0.25'
         reservations:
-          memory: 128M
+          memory: 256M
           cpus: '0.1'
 
   celery_beat:

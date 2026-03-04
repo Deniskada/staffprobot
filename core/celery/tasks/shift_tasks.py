@@ -45,15 +45,13 @@ def auto_close_shifts(self):
             async with get_celery_session() as session:
                 now_utc = datetime.now(pytz.UTC)
                 closed_count = 0
+                closed_object_ids = set()
                 errors = []
                 
-                # 1. Спонтанные смены: eager-load object
-                from domain.entities.org_structure import OrgStructureUnit
+                # 1. Фактические смены (Shift) — без org_unit для экономии памяти
                 active_shifts_query = (
                     select(Shift)
-                    .options(
-                        selectinload(Shift.object).selectinload(Object.org_unit)
-                    )
+                    .options(selectinload(Shift.object))
                     .join(Object)
                     .filter(
                         and_(
@@ -313,17 +311,17 @@ def auto_close_shifts(self):
                                 except Exception as e:
                                     logger.error(f"Error auto-opening consecutive shift for Shift {shift.id}: {e}")
                                     # Не прерываем основной процесс
+                            closed_object_ids.add(shift.object_id)
+                            await session.commit()
                     except Exception as e:
                         error_msg = f"Error auto-closing spontaneous shift {shift.id}: {e}"
                         logger.error(error_msg)
                         errors.append(error_msg)
                 
-                # 2. Запланированные: eager-load object
+                # 2. Запланированные расписания — без org_unit для экономии памяти
                 confirmed_schedules_query = (
                     select(ShiftSchedule)
-                    .options(
-                        selectinload(ShiftSchedule.object).selectinload(Object.org_unit)
-                    )
+                    .options(selectinload(ShiftSchedule.object))
                     .join(Object)
                     .filter(
                         and_(
@@ -582,13 +580,12 @@ def auto_close_shifts(self):
                             except Exception as e:
                                 logger.error(f"Error auto-opening consecutive shift for schedule {schedule.id}: {e}")
                                 # Не прерываем основной процесс
+                            closed_object_ids.add(schedule.object_id)
+                            await session.commit()
                     except Exception as e:
                         error_msg = f"Error auto-closing planned shift {schedule.id}: {e}"
                         logger.error(error_msg)
                         errors.append(error_msg)
-                
-                # Сохраняем изменения смен (async)
-                await session.commit()
                 
                 logger.info(f"Auto-closed {closed_count} shifts")
                 
@@ -599,17 +596,6 @@ def auto_close_shifts(self):
                     from domain.entities.object_opening import ObjectOpening
                     
                     opening_service = ObjectOpeningService(session)
-                    
-                    # Собираем уникальные object_id из закрытых смен
-                    closed_object_ids = set()
-                    for shift in active_shifts:
-                        if shift.status == 'completed':  # Только если смена была закрыта
-                            closed_object_ids.add(shift.object_id)
-                    
-                    for schedule in confirmed_schedules:
-                        if schedule.status == 'completed':  # Только если смена была закрыта
-                            closed_object_ids.add(schedule.object_id)
-                    
                     logger.info(f"Checking {len(closed_object_ids)} objects for auto-closing ObjectOpening")
                     
                     # Для каждого объекта проверяем активные смены
