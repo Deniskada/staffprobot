@@ -1,0 +1,19 @@
+name: YooKassa
+type: payment-provider
+protocol: https-api
+
+patterns:
+  - billing-payment-pattern
+  - webhook-payment-confirmation
+
+webhooks:
+  - payment_succeeded
+  - payment_canceled
+
+common_errors:
+  - invalid_signature
+  - expired_payment
+
+best_practices:
+  - validate_signature
+  - reconcile_by_payment_id

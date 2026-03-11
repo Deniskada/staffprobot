@@ -21,6 +21,23 @@ alwaysApply: true
 - Показать результат.
 - Дождаться подтверждения.
 
+## 2.1) Коммит с эндлогом (#endlog)
+
+По команде **«Сделай коммит с эндлогом»** или **/endlog**:
+1. Добавить записи в `doc/changelog-entries.md` (формат: `## YYYY — Заголовок`, блоки Problem, Engineering, Business value, Tech).
+2. Обновить публичный changelog:
+   - `doc/changelog-public.ru.md`
+   - `doc/changelog-public.en.md`
+3. Обновить портфолио-слой:
+   - `doc/portfolio-engineering.ru.md`
+   - `doc/portfolio-engineering.en.md`
+4. Обновить продуктовый слой:
+   - `doc/product-overview.ru.md`
+   - `doc/product-overview.en.md`
+   - `doc/system-map.md`
+5. Пересобрать инженерный лог (`doc/engineering-log.md`) из `doc/changelog-entries.md`.
+6. Закоммитить изменения с маркером **#endlog**.
+
 ## 3) Docker (dev)
 
 - **Запуск**: `docker compose -f docker-compose.dev.yml up -d`

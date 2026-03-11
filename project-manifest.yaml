@@ -1,0 +1,40 @@
+project:
+  name: StaffProBot
+  slug: staffprobot
+  domain: workforce_automation
+  description: Shift, staff and payroll automation platform
+
+architecture:
+  type: automation-platform
+  core: fastapi-bot-core
+  database: postgresql-postgis
+
+channels:
+  - web
+  - telegram-bot
+
+integrations:
+  payments:
+    provider: YooKassa
+  notifications:
+    provider: Telegram Bot API
+  geodata:
+    provider: PostGIS
+
+features:
+  - role-based-routing
+  - shifts-calendar
+  - payroll
+  - contracts
+  - auto-login-notifications
+
+tech:
+  backend: Python FastAPI
+  database: PostgreSQL PostGIS
+  infrastructure: Docker Compose
+
+docs:
+  product-overview-ru: doc/product-overview.ru.md
+  product-overview-en: doc/product-overview.en.md
+  system-map: doc/system-map.md
+  engineering-log: doc/engineering-log.md

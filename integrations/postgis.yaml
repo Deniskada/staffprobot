@@ -1,0 +1,17 @@
+name: PostGIS
+type: geodata-engine
+protocol: sql
+
+patterns:
+  - geofence-validation-pattern
+  - spatial-query-pattern
+
+webhooks: []
+
+common_errors:
+  - invalid_geometry
+  - srid_mismatch
+
+best_practices:
+  - spatial_indexing
+  - use_consistent_srid
