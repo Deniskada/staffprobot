@@ -21,6 +21,7 @@ StaffProBot provides one backend for the Telegram bot and the web app. Objects h
 - **Reviews and ratings:** Reviews for employees and objects; moderation; appeals; reports.
 - **Notifications:** Telegram and web; types (shift, contract, offer, reminders, etc.); auto-login URL in every Telegram message (NotificationActionService.get_action_url).
 - **Telegram bot:** Planning, reports (including Excel), object selection by location, PIN for web, view shifts and offers.
+- **Multi-messenger readiness:** The bot logic is designed to be reused across messengers (Telegram now, MAX next) via adapters and a normalized update DTO.
 - **DevOps:** Docker Compose (dev/prod), health checks, GitHub Actions (test, lint, security, deploy to 155.212.217.38), deployments table.
 
 ## Architecture Overview
