@@ -70,55 +70,28 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /get_chat_id - показывает ID текущего чата."""
+    """Обработчик /get_chat_id — делегирует в UnifiedBotRouter."""
+    from shared.bot_unified import TgAdapter, TgMessenger, unified_router
+
+    nu = TgAdapter.parse(update)
+    if nu:
+        messenger = TgMessenger(update, context)
+        try:
+            if await unified_router.handle(nu, messenger):
+                return
+        except Exception as e:
+            logger.error(f"get_chat_id_command: router error: {e}", exc_info=True)
+    # Fallback: старый вывод
     chat = update.effective_chat
-    if not chat:
-        return
-    
-    chat_type = chat.type  # 'private', 'group', 'supergroup', 'channel'
-    chat_id = chat.id
-    
-    # Для групп и супергрупп показываем ID как есть
-    # Telegram API возвращает:
-    # - Обычная группа (group): -4814585284
-    # - Супергруппа (supergroup): -1004814585284
-    # Оба формата работают для отправки сообщений
-    display_chat_id = chat_id
-    
-    if chat_type == 'private':
-        response_text = f"""
-ℹ️ <b>ID чата</b>
-
-📱 Это личный чат
-🆔 Chat ID: <code>{chat_id}</code>
-
-💡 Для получения ID группы:
-1. Добавьте бота в группу
-2. Напишите в группе команду /get_chat_id
-3. Скопируйте полученный ID
-"""
-    else:
-        chat_title = chat.title or "Без названия"
-        response_text = f"""
-ℹ️ <b>ID чата</b>
-
-💬 Группа: <b>{chat_title}</b>
-🔗 Тип: <i>{chat_type}</i>
-🆔 Chat ID: <code>{display_chat_id}</code>
-
-📋 Скопируйте этот ID и вставьте в настройки объекта или подразделения в разделе "Telegram группа для отчетов".
-
-✅ Бот будет отправлять фото/видео отчеты по задачам в эту группу.
-
-💡 Тип группы:
-• <b>group</b> - обычная группа (ID начинается с одного минуса: -123...)
-• <b>supergroup</b> - супергруппа (ID начинается с -100: -100123...)
-"""
-    
-    await update.message.reply_text(
-        response_text,
-        parse_mode='HTML'
-    )
+    if chat and update.message:
+        chat_type = chat.type
+        chat_id = chat.id
+        if chat_type == "private":
+            text = f"ℹ️ <b>ID чата</b>\n\n📱 Личный чат\n🆔 Chat ID: <code>{chat_id}</code>"
+        else:
+            title = chat.title or "Без названия"
+            text = f"ℹ️ <b>ID чата</b>\n\n💬 {title}\n🆔 Chat ID: <code>{chat_id}</code>"
+        await update.message.reply_text(text, parse_mode="HTML")
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

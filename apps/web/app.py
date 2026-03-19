@@ -299,6 +299,8 @@ app.include_router(employee_incidents.router, tags=["Сотрудник - Тик
 app.include_router(employee_offers.router, prefix="/employee", tags=["Сотрудник - Оферты"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Уведомления API"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Вебхуки"])
+from apps.web.routes import max_webhook
+app.include_router(max_webhook.router, tags=["MAX Bot"])
 app.include_router(calendar_api_router, tags=["Календарь - API"])
 app.include_router(shared_media.router, prefix="/api/media", tags=["Медиа-файлы"])
 app.include_router(shared_ratings.router, prefix="/api/ratings", tags=["Рейтинги"])

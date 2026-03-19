@@ -24,188 +24,28 @@ object_service = ObjectService()
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /start."""
-    try:
-        user = update.effective_user
-        if not user:
-            logger.error("start_command: update.effective_user is None")
-            return
-        
-        chat_id = update.effective_chat.id if update.effective_chat else None
-        if not chat_id:
-            logger.error(f"start_command: chat_id is None for user_id={user.id}")
-            return
-        
-        user_first_name = user.first_name or "Пользователь"
-        
-        # Инициализируем welcome_message по умолчанию, чтобы она всегда была определена
-        welcome_message = f"""
-👋 Привет, {user_first_name}!
+    """Обработчик команды /start — делегирует в UnifiedBotRouter."""
+    from shared.bot_unified import TgAdapter, TgMessenger, unified_router
 
-🎉 <b>Добро пожаловать в StaffProBot!</b>
-
-Выберите действие кнопкой ниже:
-
-💡 Что я умею:
-• Открывать и закрывать смены с геолокацией
-• Планировать смены заранее с уведомлениями
-• Создавать объекты
-• Вести учет времени
-• Формировать отчеты
-
-📍 <b>Геолокация:</b>
-• Проверка присутствия на объектах
-• Автоматический учет времени
-• Безопасность и контроль
-
-Используйте кнопки для быстрого доступа к функциям!
-"""
-        
-        logger.info(
-            f"start_command called: user_id={user.id}, username={user.username}, "
-            f"chat_id={chat_id}, first_name={user.first_name}"
-        )
-        
-        # Проверяем и регистрируем пользователя
-        # Используем asyncio.to_thread для синхронных вызовов БД, чтобы не блокировать event loop
+    nu = TgAdapter.parse(update)
+    if nu:
+        messenger = TgMessenger(update, context)
         try:
-            is_registered = await asyncio.to_thread(user_manager.is_user_registered, user.id)
-            logger.info(f"start_command: user {user.id} is_registered={is_registered}")
+            if await unified_router.handle(nu, messenger):
+                return
         except Exception as e:
-            logger.error(f"start_command: error checking user registration {user.id}: {e}", exc_info=True)
-            # Продолжаем работу, даже если проверка не удалась
-            is_registered = False
-        
-        if not is_registered:
-            try:
-                user_data = await asyncio.to_thread(
-                    user_manager.register_user,
-                    user.id,
-                    user.first_name or "",
-                    user.username,
-                    user.last_name,
-                    user.language_code
-                )
-                welcome_message = f"""
-👋 Привет, {user_first_name}!
-
-🎉 <b>Добро пожаловать в StaffProBot!</b>
-
-Вы успешно зарегистрированы в системе.
-Теперь вы можете использовать все функции бота.
-
-🔧 Выберите действие кнопкой ниже:
-
-💡 Что я умею:
-• Открывать и закрывать смены с геолокацией
-• Планировать смены заранее с уведомлениями
-• Создавать объекты
-• Вести учет времени
-• Формировать отчеты
-
-📍 <b>Геолокация:</b>
-• Проверка присутствия на объектах
-• Автоматический учет времени
-• Безопасность и контроль
-
-Используйте кнопки для быстрого доступа к функциям!
-"""
-                logger.info(
-                    f"New user registered: user_id={user.id}, username={user.username}, chat_id={chat_id}"
-                )
-            except Exception as e:
-                logger.error(f"start_command: error registering user {user.id}: {e}", exc_info=True)
-                # welcome_message уже определена по умолчанию, просто продолжаем
-        else:
-            # Обновляем активность существующего пользователя
-            try:
-                await asyncio.to_thread(user_manager.update_user_activity, user.id)
-            except Exception as e:
-                logger.warning(f"start_command: error updating user activity {user.id}: {e}", exc_info=True)
-            
-            welcome_message = f"""
-👋 Привет, {user_first_name}!
-
-🔄 <b>С возвращением в StaffProBot!</b>
-
-Рад снова вас видеть!
-
-🔧 Выберите действие кнопкой ниже:
-
-💡 Что я умею:
-• Открывать и закрывать смены с геолокацией
-• Планировать смены заранее с уведомлениями
-• Создавать объекты
-• Вести учет времени
-• Формировать отчеты
-
-📍 <b>Геолокация:</b>
-• Проверка присутствия на объектах
-• Автоматический учет времени
-• Безопасность и контроль
-
-Используйте кнопки для быстрого доступа к функциям!
-"""
-            logger.info(
-                f"Existing user returned: user_id={user.id}, username={user.username}, chat_id={chat_id}"
-            )
-        
-        # Создаем кнопки для основных действий
-        keyboard = [
-            [
-                InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object"),
-                InlineKeyboardButton("🔒 Закрыть объект", callback_data="close_object")
-            ],
-            [
-                InlineKeyboardButton("🔄 Открыть смену", callback_data="open_shift"),
-                InlineKeyboardButton("🔚 Закрыть смену", callback_data="close_shift")
-            ],
-            [
-                InlineKeyboardButton("📅 Запланировать смену", callback_data="schedule_shift"),
-                InlineKeyboardButton("📋 Мои планы", callback_data="view_schedule")
-            ],
-            [
-                InlineKeyboardButton("📊 Отчет", callback_data="get_report"),
-                InlineKeyboardButton("📝 Мои задачи", callback_data="my_tasks")
-            ],
-            [
-                InlineKeyboardButton("📈 Статус", callback_data="status"),
-                InlineKeyboardButton("🆔 Мой Telegram ID", callback_data="get_telegram_id")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Убеждаемся, что welcome_message определена перед отправкой
-        if not welcome_message:
-            welcome_message = "👋 Привет! Добро пожаловать в StaffProBot!"
-        
+            logger.error(f"start_command: router error: {e}", exc_info=True)
+    # Fallback: упрощённое приветствие
+    user = update.effective_user
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    if user and chat_id:
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=welcome_message,
-                parse_mode='HTML',
-                reply_markup=reply_markup
+                text="👋 Привет! Добро пожаловать в StaffProBot!",
             )
-            logger.info(f"start_command: message sent successfully to user_id={user.id}, chat_id={chat_id}")
-        except Exception as send_error:
-            logger.error(f"start_command: error sending message to {chat_id}: {send_error}", exc_info=True)
-            # При ошибке отправки сообщения пытаемся отправить упрощенное сообщение без форматирования
-            try:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="👋 Привет! Добро пожаловать в StaffProBot! Используйте кнопки ниже для работы.",
-                    reply_markup=reply_markup
-                )
-            except Exception as simple_send_error:
-                logger.error(f"start_command: failed to send simple message: {simple_send_error}")
-                # Если и упрощенное сообщение не отправляется, просто логируем ошибку
-                # Не отправляем сообщение об ошибке - это может привести к рекурсии
-        
-    except Exception as e:
-        import traceback
-        logger.error(f"start_command: unexpected error: {e}\n{traceback.format_exc()}")
-        # Не отправляем сообщение об ошибке здесь, чтобы избежать двойной отправки
-        # Ошибки уже обрабатываются в try-except блоках выше
+        except Exception as send_err:
+            logger.error(f"start_command: fallback send failed: {send_err}")
 
 
 # Импортируем утилиты

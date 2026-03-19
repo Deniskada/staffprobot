@@ -130,6 +130,10 @@ class Settings(BaseSettings):
     yandex_gpt_folder_id: str = os.getenv("YANDEX_GPT_FOLDER_ID", "")
     yandex_gpt_api_key: str = os.getenv("YANDEX_GPT_API_KEY", "")
 
+    # MAX Bot (platform-api.max.ru)
+    max_bot_token: Optional[str] = Field(default=None, env="MAX_BOT_TOKEN")
+    max_webhook_path: str = Field(default="/max/webhook", env="MAX_WEBHOOK_PATH")
+
     # GitHub (для интеграции с Issues API)
     github_token: Optional[str] = os.getenv("GITHUB_TOKEN")
     github_repo: str = os.getenv("GITHUB_REPO", "OWNER/REPO")  # Format: "owner/repo"
