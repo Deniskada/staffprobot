@@ -92,6 +92,7 @@ class TestMaxAdapter:
         raw = {
             "update_type": "bot_started",
             "chat_id": 555,
+            "user_id": "max_user_123",
             "payload": "auth_abc",
         }
         nu = MaxAdapter.parse(raw)
@@ -99,6 +100,8 @@ class TestMaxAdapter:
         assert nu.type == "message"
         assert nu.chat_id == "555"
         assert nu.text == "/start auth_abc"
+        assert nu.messenger == "max"
+        assert nu.external_user_id == "max_user_123"
 
     def test_parse_unknown_returns_none(self):
         assert MaxAdapter.parse({}) is None

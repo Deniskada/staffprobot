@@ -107,24 +107,41 @@
                 <div class="card-body">
                     <form method="post" action="/owner/employees/create">
                         <div class="row">
+                            {% if employee_id %}
+                            <div class="col-md-12">
+                                <input type="hidden" name="employee_id" value="{{ employee_id }}">
+                                <div class="alert alert-light border">
+                                    <strong>Сотрудник:</strong> {{ preselected_employee.display_name if preselected_employee else 'Сотрудник #' ~ employee_id }}
+                                </div>
+                            </div>
+                            {% else %}
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="employee_telegram_id" class="form-label">
-                                        Telegram ID сотрудника <span class="text-danger">*</span>
-                                    </label>
+                                    <label for="employee_select" class="form-label">Сотрудник</label>
+                                    <select class="form-select" id="employee_select" name="employee_id">
+                                        <option value="">— Выберите или введите Telegram ID ниже —</option>
+                                        {% for emp in available_employees or [] %}
+                                        <option value="{{ emp.id }}">{{ emp.display_name or (emp.first_name ~ ' ' ~ (emp.last_name or '')) }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="employee_telegram_id" class="form-label">Telegram ID (если не в списке)</label>
                                     <input type="number" 
                                            class="form-control" 
                                            id="employee_telegram_id" 
                                            name="employee_telegram_id" 
-                                           required
                                            {% if employee_telegram_id %}value="{{ employee_telegram_id }}"{% endif %}
                                            placeholder="Введите Telegram ID">
                                     <div class="form-text">
-                                        Попросите сотрудника отправить команду /start боту, чтобы получить его Telegram ID
+                                        Выберите сотрудника выше или введите Telegram ID
                                     </div>
                                 </div>
                             </div>
-                            </div>
+                            {% endif %}
+                        </div>
 
                         <hr class="my-4">
                         <h5 class="mb-3">Условия договора</h5>

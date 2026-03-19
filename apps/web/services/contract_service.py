@@ -150,52 +150,76 @@ class ContractService:
             result = await session.execute(query)
             return result.scalar_one_or_none()
     
+    async def create_contract_by_owner_id(
+        self,
+        owner_id: int,
+        contract_data: Dict[str, Any]
+    ) -> Optional[Contract]:
+        """Создание договора по внутренним user_id (owner_id, employee_id или employee_telegram_id)."""
+        emp_id = contract_data.get("employee_id")
+        emp_tg = contract_data.get("employee_telegram_id")
+        if emp_id is not None:
+            contract_data = {**contract_data, "employee_telegram_id": None}
+            contract_data["_employee_id"] = emp_id
+        data = {"owner_telegram_id": None, "_owner_id": owner_id, **contract_data}
+        return await self._create_contract_impl(data)
+
     async def create_contract(
         self,
         owner_telegram_id: int,
         contract_data: Dict[str, Any]
     ) -> Optional[Contract]:
-        """Создание договора с сотрудником."""
+        """Создание договора с сотрудником (legacy: по telegram_id)."""
+        return await self._create_contract_impl({
+            "owner_telegram_id": owner_telegram_id,
+            "_owner_id": None,
+            **contract_data
+        })
+
+    async def _create_contract_impl(self, data: Dict[str, Any]) -> Optional[Contract]:
+        """Внутренняя реализация создания договора."""
         async with get_async_session() as session:
-            # Находим владельца по telegram_id
-            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+            owner_id = data.get("_owner_id")
+            owner_telegram_id = data.get("owner_telegram_id")
+            if owner_id is not None:
+                owner_query = select(User).where(User.id == owner_id)
+            else:
+                owner_query = select(User).where(User.telegram_id == owner_telegram_id)
             owner_result = await session.execute(owner_query)
             owner = owner_result.scalar_one_or_none()
-            
             if not owner:
-                raise ValueError(f"Владелец с Telegram ID {owner_telegram_id} не найден")
-            
-            # Находим сотрудника по telegram_id
-            employee_query = select(User).where(User.telegram_id == contract_data["employee_telegram_id"])
+                raise ValueError("Владелец не найден")
+
+            emp_id = data.get("_employee_id")
+            emp_tg = data.get("employee_telegram_id")
+            if emp_id is not None:
+                employee_query = select(User).where(User.id == emp_id)
+            elif emp_tg is not None:
+                employee_query = select(User).where(User.telegram_id == emp_tg)
+            else:
+                raise ValueError("Укажите сотрудника: employee_id или employee_telegram_id")
             employee_result = await session.execute(employee_query)
             employee = employee_result.scalar_one_or_none()
-            
             if not employee:
-                raise ValueError(f"Сотрудник с Telegram ID {contract_data['employee_telegram_id']} не найден")
+                raise ValueError("Сотрудник не найден")
             
             # Проверяем пересечение объектов в активных договорах (опционально)
             # Пока разрешаем создание нескольких договоров с одним сотрудником
             # TODO: В будущем можно добавить проверку пересечения объектов
             
-            # Валидация обязательных полей
-            use_contract_rate = contract_data.get("use_contract_rate", False)
-            use_contract_payment_system = contract_data.get("use_contract_payment_system", False)
-            hourly_rate = contract_data.get("hourly_rate")
-            
-            # Если включен флаг use_contract_rate, hourly_rate обязателен
+            use_contract_rate = data.get("use_contract_rate", False)
+            use_contract_payment_system = data.get("use_contract_payment_system", False)
+            hourly_rate = data.get("hourly_rate")
+
             if use_contract_rate and not hourly_rate:
                 raise ValueError("При использовании ставки договора необходимо указать почасовую ставку")
-            
-            # Если включен флаг use_contract_payment_system, payment_system_id обязателен
-            if use_contract_payment_system and not contract_data.get("payment_system_id"):
+            if use_contract_payment_system and not data.get("payment_system_id"):
                 raise ValueError("При использовании системы оплаты договора необходимо указать систему оплаты")
-            
+
             if not hourly_rate:
-                # Пытаемся получить ставку из объекта
-                if contract_data.get("allowed_objects"):
-                    # Получаем ставку из первого объекта
+                if data.get("allowed_objects"):
                     from domain.entities.object import Object
-                    object_query = select(Object).where(Object.id == contract_data["allowed_objects"][0])
+                    object_query = select(Object).where(Object.id == data["allowed_objects"][0])
                     object_result = await session.execute(object_query)
                     object_entity = object_result.scalar_one_or_none()
                     
@@ -213,22 +237,21 @@ class ContractService:
             # Генерируем номер договора
             contract_number = await self._generate_contract_number(owner.id)
             
-            title = (contract_data.get("title") or "").strip()
+            title = (data.get("title") or "").strip()
             if not title:
                 title = f"Договор {contract_number}"
             
-            # Генерируем контент из шаблона, если нужно
-            content = contract_data.get("content")
-            values = contract_data.get("values", {})
+            content = data.get("content")
+            values = data.get("values", {})
             template = None
 
-            if contract_data.get("template_id"):
-                template_query = select(ContractTemplate).where(ContractTemplate.id == contract_data["template_id"])
+            if data.get("template_id"):
+                template_query = select(ContractTemplate).where(ContractTemplate.id == data["template_id"])
                 template_result = await session.execute(template_query)
                 template = template_result.scalar_one_or_none()
 
             if template and not content:
-                values = contract_data.get("values") or {}
+                values = data.get("values") or {}
 
                 if template:
                     if template.contract_type_id:
@@ -247,8 +270,8 @@ class ContractService:
                                     merged[k] = v
                             if isinstance(merged.get("customer"), dict) and "customer_profile_id" in merged["customer"]:
                                 merged["customer_profile_id"] = merged["customer"].get("customer_profile_id")
-                            sd = contract_data.get("start_date")
-                            ed = contract_data.get("end_date")
+                            sd = data.get("start_date")
+                            ed = data.get("end_date")
                             if sd:
                                 merged["work_start"] = sd.isoformat() if hasattr(sd, "isoformat") else str(sd)
                             if ed:
@@ -273,39 +296,37 @@ class ContractService:
                             template.content, values, owner, employee
                         )
             
-            # Парсим даты если они переданы как строки
             from datetime import date
-            start_date = contract_data["start_date"]
+            start_date = data["start_date"]
             if isinstance(start_date, str):
                 start_date = date.fromisoformat(start_date)
-            
-            end_date = contract_data.get("end_date")
+
+            end_date = data.get("end_date")
             if end_date and isinstance(end_date, str):
                 end_date = date.fromisoformat(end_date)
             
             # Все договоры начинают со статуса pending_acceptance — сотрудник должен подписать
             initial_status = "pending_acceptance"
 
-            # Создаем договор
             contract = Contract(
                 contract_number=contract_number,
                 owner_id=owner.id,
                 employee_id=employee.id,
-                template_id=contract_data.get("template_id"),
+                template_id=data.get("template_id"),
                 title=title,
                 content=content,
                 values=values if values else None,
                 hourly_rate=hourly_rate,
                 use_contract_rate=use_contract_rate,
-                payment_system_id=contract_data.get("payment_system_id", 1),
+                payment_system_id=data.get("payment_system_id", 1),
                 use_contract_payment_system=use_contract_payment_system,
                 start_date=start_date,
                 end_date=end_date,
-                allowed_objects=contract_data.get("allowed_objects", []),
-                is_manager=contract_data.get("is_manager", False),
-                manager_permissions=contract_data.get("manager_permissions"),
+                allowed_objects=data.get("allowed_objects", []),
+                is_manager=data.get("is_manager", False),
+                manager_permissions=data.get("manager_permissions"),
                 status=initial_status,
-                expires_at=contract_data.get("expires_at"),
+                expires_at=data.get("expires_at"),
             )
             
             session.add(contract)

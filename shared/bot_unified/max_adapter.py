@@ -23,11 +23,16 @@ class MaxAdapter:
             body = msg.get("body") or {}
             chat_id = str(recipient.get("chat_id", ""))
             text = (body.get("text") or "").strip()
-            # TODO: from_user из payload если есть
+            sender = msg.get("sender") or {}
             return NormalizedUpdate(
                 type="message",
                 chat_id=chat_id,
                 text=text,
+                messenger="max",
+                external_user_id=str(sender.get("user_id", "")) or None,
+                from_username=sender.get("username"),
+                first_name=sender.get("first_name"),
+                last_name=sender.get("last_name"),
                 raw=raw,
             )
 
@@ -42,6 +47,7 @@ class MaxAdapter:
                 type="callback",
                 chat_id=chat_id,
                 text="",
+                messenger="max",
                 callback_data=payload if isinstance(payload, str) else str(payload),
                 callback_id=str(callback_id) if callback_id else None,
                 raw=raw,
@@ -56,6 +62,7 @@ class MaxAdapter:
                 type="message",
                 chat_id=chat_id,
                 text=text,
+                messenger="max",
                 external_user_id=str(raw.get("user_id", "")) or None,
                 raw=raw,
             )

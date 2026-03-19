@@ -5634,6 +5634,54 @@ async def _create_excel_file(data: List[dict], filename: str):
     )
 
 
+@router.get("/messengers", response_class=HTMLResponse, name="owner_messengers")
+async def owner_messengers(
+    request: Request,
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Страница привязки мессенджеров (TG, MAX)."""
+    if current_user is None or isinstance(current_user, RedirectResponse):
+        raise HTTPException(status_code=401, detail="Пользователь не авторизован")
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Пользователь не найден")
+
+    from domain.entities.messenger_account import MessengerAccount
+    q = select(MessengerAccount.provider).where(MessengerAccount.user_id == user_id)
+    r = await db.execute(q)
+    providers = {row[0] for row in r.all()}
+
+    ctx = await get_owner_context(user_id, db)
+    return templates.TemplateResponse("owner/messengers.html", {
+        "request": request,
+        "current_user": current_user,
+        "available_interfaces": ctx["available_interfaces"],
+        "new_applications_count": ctx.get("new_applications_count", 0),
+        "has_telegram": "telegram" in providers,
+        "has_max": "max" in providers,
+    })
+
+
+@router.post("/messengers/max/link-code")
+async def owner_messengers_max_link_code(
+    current_user: dict = Depends(require_owner_or_superadmin),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Сгенерировать одноразовый код для привязки MAX. JSON: {code, expires_in}."""
+    if current_user is None or isinstance(current_user, RedirectResponse):
+        raise HTTPException(status_code=401, detail="Пользователь не авторизован")
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Пользователь не найден")
+
+    from shared.services.messenger_link_service import generate_max_link_code
+    code, expires_in = await generate_max_link_code(user_id)
+    if not code:
+        raise HTTPException(status_code=503, detail="Сервис недоступен")
+    return {"code": code, "expires_in": expires_in}
+
+
 @router.get("/profile", response_class=HTMLResponse, name="owner_profile")
 async def owner_profile(
     request: Request,
@@ -6403,7 +6451,8 @@ async def owner_employees_list(
 @router.get("/employees/create", response_class=HTMLResponse)
 async def owner_employees_create_form(
     request: Request,
-    employee_telegram_id: int = Query(None, description="Telegram ID сотрудника для предзаполнения"),
+    employee_telegram_id: int = Query(None, description="Telegram ID сотрудника (legacy)"),
+    employee_id: int = Query(None, description="Внутренний user_id сотрудника"),
     current_user: dict = Depends(require_owner_or_superadmin),
     db: AsyncSession = Depends(get_db_session)
 ):
@@ -6412,20 +6461,14 @@ async def owner_employees_create_form(
         from apps.web.services.contract_service import ContractService
         from apps.web.services.tag_service import TagService
         
-        # Получаем доступных сотрудников и объекты
         contract_service = ContractService()
-        owner_telegram_id = _telegram_id_from_current_user(current_user)
-        if not owner_telegram_id:
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
-        available_employees = await contract_service.get_available_employees(await get_user_id_from_current_user(current_user, db))
-        objects = await contract_service.get_owner_objects(owner_telegram_id)
-        
-        # Получаем внутренний ID пользователя для шаблонов
-        user_query = select(User).where(User.telegram_id == owner_telegram_id)
-        user_result = await db.execute(user_query)
-        user_obj = user_result.scalar_one_or_none()
-        internal_user_id = user_obj.id if user_obj else None
-        
+        available_employees = await contract_service.get_available_employees(user_id)
+        objects = await contract_service.get_available_objects_for_contract(user_id)
+        internal_user_id = user_id
+
         # Получаем профиль владельца для тегов
         tag_service = TagService()
         owner_profile = await tag_service.get_owner_profile(db, internal_user_id)
@@ -6488,7 +6531,9 @@ async def owner_employees_create_form(
                 "owner_tags": owner_tags,
                 "current_date": current_date,
                 "employee_telegram_id": employee_telegram_id,
-                "payment_schedules": payment_schedules  # Графики выплат
+                "employee_id": employee_id,
+                "preselected_employee": next((e for e in (available_employees or []) if e.get("id") == employee_id), None) if employee_id else None,
+                "payment_schedules": payment_schedules
             }
         )
     except Exception as e:
@@ -6518,20 +6563,27 @@ async def owner_employee_detail(
         
         if not employee_info:
             raise HTTPException(status_code=404, detail="У вас нет договоров с этим сотрудником")
-        
-        # Получаем данные для переключения интерфейсов
+
+        # Привязки мессенджеров (TG/MAX)
+        from domain.entities.messenger_account import MessengerAccount
+        ma_q = select(MessengerAccount.provider).where(MessengerAccount.user_id == employee_id)
+        ma_r = await db.execute(ma_q)
+        employee_providers = {r[0] for r in ma_r.all()}
+
         available_interfaces = await get_available_interfaces_for_user(user_id)
-        
+
         return templates.TemplateResponse(
             "owner/employees/detail.html",
             {
                 "request": request,
                 "title": f"Сотрудник {employee_info['first_name']} {employee_info['last_name'] or ''}",
                 "current_user": current_user,
-                "employee": employee_info,  # Полная информация из сервиса
-                "employee_contracts": employee_info["contracts"],  # Договоры из сервиса
-                "employee_accessible_objects": employee_info["accessible_objects"],  # Объекты из сервиса
-                "available_interfaces": available_interfaces
+                "employee": employee_info,
+                "employee_contracts": employee_info["contracts"],
+                "employee_accessible_objects": employee_info["accessible_objects"],
+                "available_interfaces": available_interfaces,
+                "employee_has_telegram": "telegram" in employee_providers,
+                "employee_has_max": "max" in employee_providers,
             }
         )
     except HTTPException:
@@ -6657,7 +6709,8 @@ async def owner_employee_edit(
 @router.post("/employees/create")
 async def owner_employees_create_contract(
     request: Request,
-    employee_telegram_id: int = Form(...),
+    employee_telegram_id: Optional[str] = Form(None),
+    employee_id: Optional[str] = Form(None),
     title: str = Form(""),
     content: str = Form(""),
     hourly_rate: Optional[float] = Form(None),
@@ -6684,33 +6737,49 @@ async def owner_employees_create_contract(
     """Создание договора с сотрудником."""
     try:
         from apps.web.services.contract_service import ContractService
-        
+
+        def _parse_int(v):
+            if v is None or (isinstance(v, str) and not v.strip()):
+                return None
+            try:
+                return int(v)
+            except (ValueError, TypeError):
+                return None
+        emp_id = _parse_int(employee_id)
+        emp_tg = _parse_int(employee_telegram_id)
+        if not emp_id and not emp_tg:
+            raise HTTPException(status_code=400, detail="Укажите сотрудника: выберите из списка или введите Telegram ID")
+
         contract_service = ContractService()
-        
-        # Парсим даты
+        user_id = await get_user_id_from_current_user(current_user, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Пользователь не найден")
+
+        if emp_id:
+            contract_data = {"employee_id": emp_id}
+        else:
+            from sqlalchemy import select
+            from domain.entities.user import User, UserRole
+            employee_query = select(User).where(User.telegram_id == emp_tg)
+            result = await db.execute(employee_query)
+            employee_user = result.scalar_one_or_none()
+            if not employee_user:
+                employee_user = User(
+                    telegram_id=emp_tg,
+                    username=None,
+                    first_name=f"Сотрудник {emp_tg}",
+                    role=UserRole.EMPLOYEE.value,
+                    roles=[UserRole.EMPLOYEE.value],
+                    is_active=True
+                )
+                db.add(employee_user)
+                await db.commit()
+                await db.refresh(employee_user)
+            contract_data = {"employee_telegram_id": emp_tg}
+
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
         expires_at_obj = datetime.strptime(expires_at, "%Y-%m-%d") if expires_at else None
-        
-        from sqlalchemy import select
-        from domain.entities.user import User, UserRole
-        
-        employee_query = select(User).where(User.telegram_id == employee_telegram_id)
-        result = await db.execute(employee_query)
-        employee_user = result.scalar_one_or_none()
-        
-        if not employee_user:
-            employee_user = User(
-                telegram_id=employee_telegram_id,
-                username=None,
-                first_name=f"Сотрудник {employee_telegram_id}",
-                role=UserRole.EMPLOYEE.value,
-                roles=[UserRole.EMPLOYEE.value],
-                is_active=True
-            )
-            db.add(employee_user)
-            await db.commit()
-            await db.refresh(employee_user)
         
         # Получаем данные формы для динамических полей
         form_data = await request.form()
@@ -6728,9 +6797,7 @@ async def owner_employees_create_contract(
             for permission in manager_permissions:
                 manager_permissions_dict[permission] = True
         
-        # Создаем договор
-        contract_data = {
-            "employee_telegram_id": employee_telegram_id,
+        contract_data.update({
             "title": title,
             "content": content if content else None,
             "hourly_rate": hourly_rate,
@@ -6747,9 +6814,9 @@ async def owner_employees_create_contract(
             "inherit_payment_schedule": inherit_payment_schedule,
             "payment_schedule_id": payment_schedule_id,
             "expires_at": expires_at_obj,
-        }
-        
-        contract = await contract_service.create_contract(current_user["id"], contract_data)
+        })
+
+        contract = await contract_service.create_contract_by_owner_id(user_id, contract_data)
         
         if contract:
             return RedirectResponse(url="/owner/employees", status_code=303)
@@ -7013,6 +7080,19 @@ async def owner_contract_edit_form(
         # Получаем данные для переключения интерфейсов
         available_interfaces = await get_available_interfaces_for_user(internal_user_id)
         
+        # Привязки мессенджеров сотрудника (TG/MAX)
+        employee_has_telegram = False
+        employee_has_max = False
+        if contract and contract.get("employee"):
+            emp_user_id = contract["employee"].get("id")
+            if emp_user_id:
+                from domain.entities.messenger_account import MessengerAccount
+                ma_q = select(MessengerAccount.provider).where(MessengerAccount.user_id == emp_user_id)
+                ma_r = await db.execute(ma_q)
+                providers = {r[0] for r in ma_r.all()}
+                employee_has_telegram = "telegram" in providers
+                employee_has_max = "max" in providers
+        
         # Получаем графики выплат (системные + кастомные владельца)
         from domain.entities.payment_schedule import PaymentSchedule
         schedules_query = select(PaymentSchedule).where(
@@ -7036,7 +7116,9 @@ async def owner_contract_edit_form(
                 "owner_tags": owner_tags,
                 "title": f"Редактирование договора {contract.get('title', 'Без названия')}",
                 "current_user": current_user,
-                "payment_schedules": payment_schedules  # Графики выплат
+                "payment_schedules": payment_schedules,
+                "employee_has_telegram": employee_has_telegram,
+                "employee_has_max": employee_has_max,
             }
         )
     except HTTPException:

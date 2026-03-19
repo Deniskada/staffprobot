@@ -15,6 +15,7 @@ class NormalizedUpdate:
     type: str  # "message" | "callback"
     chat_id: str
     text: str = ""
+    messenger: str = "telegram"  # "telegram" | "max" — источник апдейта
 
     callback_data: Optional[str] = None
     callback_id: Optional[str] = None

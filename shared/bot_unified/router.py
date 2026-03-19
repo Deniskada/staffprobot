@@ -45,6 +45,55 @@ async def _handle_start(update: NormalizedUpdate, messenger: Messenger) -> None:
     ext_id = update.external_user_id
     first_name = update.first_name or "Пользователь"
     chat_id = update.chat_id
+    text = (update.text or "").strip()
+
+    # MAX linking: /start CODE — привязка к user_id по одноразовому коду
+    if update.messenger == "max" and text.startswith("/start ") and ext_id:
+        parts = text.split(maxsplit=1)
+        if len(parts) == 2 and len(parts[1]) == 6 and parts[1].isalnum():
+            from shared.services.messenger_link_service import consume_max_link_code
+            from core.database.session import get_async_session
+            from domain.entities.messenger_account import MessengerAccount
+
+            user_id = await consume_max_link_code(parts[1])
+            if user_id:
+                async with get_async_session() as session:
+                    from sqlalchemy import select, and_
+                    q = select(MessengerAccount).where(
+                        and_(
+                            MessengerAccount.provider == "max",
+                            MessengerAccount.external_user_id == str(ext_id),
+                        )
+                    )
+                    ex = await session.execute(q)
+                    existing = ex.scalar_one_or_none()
+                    if not existing:
+                        session.add(
+                            MessengerAccount(
+                                user_id=user_id,
+                                provider="max",
+                                external_user_id=str(ext_id),
+                                chat_id=chat_id,
+                                username=update.from_username,
+                            )
+                        )
+                        await session.commit()
+                    await messenger.send_text(
+                        chat_id,
+                        "✅ MAX успешно привязан к вашему аккаунту. Теперь вы можете получать уведомления здесь."
+                    )
+                return
+            await messenger.send_text(
+                chat_id,
+                "❌ Код недействителен или истёк. Получите новый в ЛК → Профиль → Мессенджеры."
+            )
+            return
+        # MAX без кода — не регистрируем через MAX, даём инструкцию
+        await messenger.send_text(
+            chat_id,
+            "Для привязки MAX откройте личный кабинет StaffProBot, войдите и перейдите в Профиль → Мессенджеры.\nТам нажмите «Привязать MAX» и введите код в этом чате."
+        )
+        return
 
     if not ext_id:
         logger.error("start: external_user_id is None")

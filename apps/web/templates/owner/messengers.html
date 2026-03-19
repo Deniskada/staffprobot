@@ -1,0 +1,78 @@
+{% extends "owner/base_owner.html" %}
+
+{% block title %}Мессенджеры{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h1 class="h4 mb-4"><i class="bi bi-chat-dots me-2"></i>Мессенджеры</h1>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-telegram text-primary me-2"></i>Telegram</h5>
+                    {% if has_telegram %}
+                    <p class="text-success mb-0"><i class="bi bi-check-circle-fill"></i> Привязан</p>
+                    {% else %}
+                    <p class="text-muted mb-0">Привязывается при входе через Telegram</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-chat-square-text me-2"></i>MAX</h5>
+                    {% if has_max %}
+                    <p class="text-success mb-0"><i class="bi bi-check-circle-fill"></i> Привязан</p>
+                    {% else %}
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-link-max">
+                        <i class="bi bi-link-45deg me-1"></i>Привязать MAX
+                    </button>
+                    <div id="max-code-block" class="mt-3 d-none">
+                        <p class="small text-muted mb-1">Откройте бота StaffProBot в MAX и отправьте:</p>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control font-monospace" id="max-code" readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="btn-copy-code"><i class="bi bi-clipboard"></i></button>
+                        </div>
+                        <p class="small text-muted mt-1 mb-0"><code>/start <span id="max-code-display"></span></code></p>
+                        <p class="small text-warning mt-1">Код действителен 10 минут</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btn = document.getElementById('btn-link-max');
+    const block = document.getElementById('max-code-block');
+    const codeInput = document.getElementById('max-code');
+    const codeDisplay = document.getElementById('max-code-display');
+    const btnCopy = document.getElementById('btn-copy-code');
+    if (btn && block) {
+        btn.addEventListener('click', async function() {
+            try {
+                const r = await fetch('/owner/messengers/max/link-code', { method: 'POST' });
+                const data = await r.json();
+                if (data.code) {
+                    codeInput.value = '/start ' + data.code;
+                    codeDisplay.textContent = data.code;
+                    block.classList.remove('d-none');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+    }
+    if (btnCopy && codeInput) {
+        btnCopy.addEventListener('click', function() {
+            codeInput.select();
+            navigator.clipboard.writeText(codeInput.value);
+        });
+    }
+});
+</script>
+{% endblock %}

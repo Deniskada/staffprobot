@@ -16,7 +16,16 @@
                     <strong>Имя:</strong> {{ contract.employee.first_name }} {{ contract.employee.last_name or '' }}
                 </div>
                 <div class="col-md-6">
-                    <strong>Telegram ID:</strong> {{ contract.employee.telegram_id }}
+                    <strong>Мессенджеры:</strong>
+                    {% if employee_has_telegram %}
+                    <span class="badge bg-light text-dark">TG {% if contract.employee.telegram_id %}{{ contract.employee.telegram_id }}{% endif %}</span>
+                    {% endif %}
+                    {% if employee_has_max %}
+                    <span class="badge bg-info">MAX</span>
+                    {% endif %}
+                    {% if not employee_has_telegram and not employee_has_max %}
+                    <span class="text-muted">не привязаны</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
