@@ -103,7 +103,7 @@ async def _send_offer_reminders_async():
                 from core.utils.url_helper import URLHelper
                 base_url = await URLHelper.get_web_url()
                 offer_url = await build_auto_login_url(
-                    employee.telegram_id, f"/employee/offers/{contract.id}", base_url
+                    employee.id, f"/employee/offers/{contract.id}", base_url
                 )
 
                 text = (
@@ -130,7 +130,7 @@ async def _send_offer_reminders_async():
                     if owner and owner.telegram_id:
                         emp_name = employee.first_name or f"ID {employee.id}"
                         owner_url = await build_auto_login_url(
-                            owner.telegram_id,
+                            owner.id,
                             f"/owner/employees/contract/{contract.id}",
                             base_url,
                         )

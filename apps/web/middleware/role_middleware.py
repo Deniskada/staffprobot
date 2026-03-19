@@ -14,23 +14,26 @@ from apps.web.dependencies import get_current_user_dependency
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
-    """Получает внутренний ID пользователя из current_user."""
+    """Получает внутренний ID пользователя (users.id) из current_user."""
     if current_user is None:
         return None
-        
+
     if isinstance(current_user, dict):
-        # current_user - это словарь из JWT payload
-        telegram_id = current_user.get("id")
-        from sqlalchemy import select
-        from domain.entities.user import User
-        
-        user_query = select(User).where(User.telegram_id == telegram_id)
-        user_result = await session.execute(user_query)
-        user_obj = user_result.scalar_one_or_none()
-        return user_obj.id if user_obj else None
-    else:
-        # current_user - это объект User
-        return current_user.id
+        # JWT от auth: id = внутренний user_id
+        uid = current_user.get("id")
+        if uid is not None:
+            return int(uid)
+        # Fallback: старые токены с id=telegram_id
+        tid = current_user.get("telegram_id") or uid
+        if tid is not None:
+            from sqlalchemy import select
+            from domain.entities.user import User
+            user_query = select(User).where(User.telegram_id == tid)
+            user_result = await session.execute(user_query)
+            user_obj = user_result.scalar_one_or_none()
+            return user_obj.id if user_obj else None
+        return None
+    return getattr(current_user, "id", None)
 
 
 def require_any_role(roles: List[UserRole]):

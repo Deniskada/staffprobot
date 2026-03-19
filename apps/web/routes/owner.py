@@ -1020,10 +1020,8 @@ async def owner_objects_create_post(
             "cancellation_invalid_reason_fine": cancellation_invalid_reason_fine
         }
         
-        # Передаем telegram_id в create_object (метод ожидает telegram_id)
-        telegram_id = current_user['id']  # Это telegram_id из JWT payload
-        
-        new_object = await object_service.create_object(object_data, telegram_id)
+        owner_id = current_user["id"]  # Внутренний user_id из JWT
+        new_object = await object_service.create_object_by_owner_id(object_data, owner_id)
         logger.info(f"Object {new_object.id} created successfully")
             
         return RedirectResponse(url="/owner/objects", status_code=status.HTTP_302_FOUND)

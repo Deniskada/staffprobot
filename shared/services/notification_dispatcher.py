@@ -218,7 +218,7 @@ class NotificationDispatcher:
             action_path = self.action_service.get_action_url(notification, user_role)
             if action_path:
                 auto_url = await build_auto_login_url(
-                    user.telegram_id, action_path, base_url
+                    user.id, action_path, base_url
                 )
                 variables["link_url"] = auto_url
 

@@ -99,16 +99,16 @@ class UserManager:
                     return None
                 
                 return {
-                    "id": user.telegram_id,
+                    "id": user.id,
                     "telegram_id": user.telegram_id,
                     "username": user.username,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
-                    "role": user.role,  # Оставляем для обратной совместимости
-                    "roles": user.get_roles(),  # Добавляем множественные роли
+                    "role": user.role,
+                    "roles": user.get_roles(),
                     "is_active": user.is_active,
                     "created_at": user.created_at,
-                    "updated_at": user.updated_at
+                    "updated_at": user.updated_at,
                 }
         except Exception as e:
             logger.error(f"Failed to get user by telegram_id {telegram_id}: {e}")
@@ -142,37 +142,41 @@ class UserManager:
             return []
     
     async def get_user_by_id(self, user_id: int) -> Optional[dict]:
-        """Получение пользователя по ID."""
+        """Получение пользователя по внутреннему ID (users.id)."""
+        return await self.get_user_by_internal_id(user_id)
+
+    async def get_user_by_internal_id(self, internal_user_id: int) -> Optional[dict]:
+        """Получение пользователя по внутреннему ID (users.id)."""
         try:
-            with get_sync_session() as session:
-                query = select(User).where(User.telegram_id == user_id)
-                result = session.execute(query)
+            async with get_async_session() as session:
+                query = select(User).where(User.id == internal_user_id)
+                result = await session.execute(query)
                 user = result.scalar_one_or_none()
-                
+
                 if not user:
                     return None
-                
+
                 return {
-                    "id": user.telegram_id,
+                    "id": user.id,
                     "telegram_id": user.telegram_id,
                     "username": user.username,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
-                    "role": user.role,  # Оставляем для обратной совместимости
-                    "roles": user.get_roles(),  # Добавляем множественные роли
+                    "role": user.role,
+                    "roles": user.get_roles(),
                     "is_active": user.is_active,
                     "created_at": user.created_at,
-                    "updated_at": user.updated_at
+                    "updated_at": user.updated_at,
                 }
         except Exception as e:
-            logger.error(f"Failed to get user by id {user_id}: {e}")
+            logger.error(f"Failed to get user by internal id {internal_user_id}: {e}")
             return None
     
     async def update_user_role(self, user_id: int, role: str) -> bool:
-        """Обновление роли пользователя (обратная совместимость)."""
+        """Обновление роли пользователя. user_id = внутренний users.id."""
         try:
             with get_sync_session() as session:
-                query = select(User).where(User.telegram_id == user_id)
+                query = select(User).where(User.id == user_id)
                 result = session.execute(query)
                 user = result.scalar_one_or_none()
                 
@@ -193,10 +197,10 @@ class UserManager:
             return False
     
     async def update_user_roles(self, user_id: int, roles: list) -> bool:
-        """Обновление множественных ролей пользователя."""
+        """Обновление множественных ролей пользователя. user_id = внутренний users.id."""
         try:
             with get_sync_session() as session:
-                query = select(User).where(User.telegram_id == user_id)
+                query = select(User).where(User.id == user_id)
                 result = session.execute(query)
                 user = result.scalar_one_or_none()
                 
@@ -218,10 +222,10 @@ class UserManager:
             return False
     
     async def delete_user(self, user_id: int) -> bool:
-        """Удаление пользователя."""
+        """Удаление пользователя. user_id = внутренний users.id."""
         try:
             with get_sync_session() as session:
-                query = select(User).where(User.telegram_id == user_id)
+                query = select(User).where(User.id == user_id)
                 result = session.execute(query)
                 user = result.scalar_one_or_none()
                 

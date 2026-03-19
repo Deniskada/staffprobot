@@ -87,15 +87,21 @@ class ObjectService:
             logger.error(f"Error getting object {object_id} for owner {telegram_id}: {e}")
             raise
     
+    async def create_object_by_owner_id(self, object_data: Dict[str, Any], owner_id: int) -> Object:
+        """Создать объект по внутреннему owner_id (users.id)."""
+        return await self._create_object_impl(object_data, owner_id)
+
     async def create_object(self, object_data: Dict[str, Any], telegram_id: int) -> Object:
-        """Создать новый объект"""
+        """Создать новый объект (legacy: по telegram_id)."""
+        internal_id = await self._get_user_internal_id(telegram_id)
+        if not internal_id:
+            raise ValueError(f"User with telegram_id {telegram_id} not found")
+        return await self._create_object_impl(object_data, internal_id)
+
+    async def _create_object_impl(self, object_data: Dict[str, Any], owner_id: int) -> Object:
+        """Внутренняя реализация создания объекта."""
         try:
-            logger.info(f"Creating object for telegram_id {telegram_id} (type: {type(telegram_id)})")
-            # Получаем внутренний ID пользователя
-            internal_id = await self._get_user_internal_id(telegram_id)
-            if not internal_id:
-                raise ValueError(f"User with telegram_id {telegram_id} not found")
-            logger.info(f"Found internal_id {internal_id} for telegram_id {telegram_id}")
+            logger.info(f"Creating object for owner_id {owner_id}")
             
             # Парсим координаты
             coordinates = object_data.get('coordinates')
@@ -110,7 +116,7 @@ class ObjectService:
             # Создаем объект
             new_object = Object(
                 name=object_data['name'],
-                owner_id=internal_id,
+                owner_id=owner_id,
                 address=object_data.get('address', ''),
                 coordinates=f"{lat},{lon}",
                 opening_time=time.fromisoformat(object_data['opening_time']),

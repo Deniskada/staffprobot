@@ -189,17 +189,17 @@ async def auto_login(
     if not t:
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
 
-    telegram_id = await validate_auto_login_token(t)
-    if not telegram_id:
-        logger.warning(f"Auto-login: invalid or expired token")
+    user_id = await validate_auto_login_token(t)
+    if not user_id:
+        logger.warning("Auto-login: invalid or expired token")
         return RedirectResponse(
-            url=f"/auth/login?error=token_expired",
+            url="/auth/login?error=token_expired",
             status_code=status.HTTP_302_FOUND,
         )
 
-    user = await user_manager.get_user_by_telegram_id(telegram_id)
+    user = await user_manager.get_user_by_internal_id(user_id)
     if not user:
-        logger.warning(f"Auto-login: user not found for tg {telegram_id}")
+        logger.warning(f"Auto-login: user not found for user_id {user_id}")
         return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
 
     token = await auth_service.create_token({
@@ -214,7 +214,7 @@ async def auto_login(
     safe_next = next if next.startswith("/") else "/dashboard"
     response = RedirectResponse(url=safe_next, status_code=status.HTTP_302_FOUND)
     response.set_cookie(key="access_token", value=token, httponly=True, secure=False)
-    logger.info(f"Auto-login: user {telegram_id} authenticated, redirect to {safe_next}")
+    logger.info(f"Auto-login: user {user_id} authenticated, redirect to {safe_next}")
     return response
 
 
