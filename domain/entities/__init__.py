@@ -56,6 +56,9 @@ from .shift_cancellation import ShiftCancellation
 from .shift_cancellation_media import ShiftCancellationMedia
 from .owner_media_storage_option import OwnerMediaStorageOption
 from .subscription_option_log import SubscriptionOptionLog
+from .messenger_account import MessengerAccount
+from .profile_verification import ProfileVerification
+from .notification_target import NotificationTarget
 
 __all__ = [
     "Base",
@@ -124,4 +127,7 @@ __all__ = [
     "IncidentCategory",
     "IncidentItem",
     "Product",
+    "MessengerAccount",
+    "ProfileVerification",
+    "NotificationTarget",
 ]
