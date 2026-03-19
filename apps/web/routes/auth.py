@@ -313,6 +313,27 @@ async def register(
             res = await session.execute(q)
             existing = res.scalar_one_or_none()
         if existing:
+            # Убедиться, что есть запись в messenger_accounts
+            async with get_async_session() as session:
+                from domain.entities.messenger_account import MessengerAccount
+                from sqlalchemy import and_, select as sql_select
+                q = sql_select(MessengerAccount).where(
+                    and_(
+                        MessengerAccount.provider == "telegram",
+                        MessengerAccount.external_user_id == str(telegram_id),
+                    )
+                )
+                res = await session.execute(q)
+                if res.scalar_one_or_none() is None:
+                    ma = MessengerAccount(
+                        user_id=existing.id,
+                        provider="telegram",
+                        external_user_id=str(telegram_id),
+                        chat_id=str(telegram_id),
+                        username=username,
+                    )
+                    session.add(ma)
+                    await session.commit()
             # Апгрейдим до owner, если не владелец
             async with get_async_session() as session:
                 if UserRole.OWNER.value not in (existing.roles or [existing.role]):
@@ -330,6 +351,8 @@ async def register(
         
         # Создание пользователя в БД
         async with get_async_session() as session:
+            from domain.entities.messenger_account import MessengerAccount
+
             new_user = User(
                 telegram_id=telegram_id,
                 username=username,
@@ -343,6 +366,16 @@ async def register(
             session.add(new_user)
             await session.commit()
             await session.refresh(new_user)
+
+            ma = MessengerAccount(
+                user_id=new_user.id,
+                provider="telegram",
+                external_user_id=str(telegram_id),
+                chat_id=str(telegram_id),
+                username=username,
+            )
+            session.add(ma)
+            await session.commit()
             
             # Создаём профиль владельца с включенными всеми функциями
             from domain.entities.owner_profile import OwnerProfile

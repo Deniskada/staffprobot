@@ -144,6 +144,12 @@ class ObjectService:
             self.db.add(new_object)
             await self.db.commit()
             await self.db.refresh(new_object)
+
+            chat_id = object_data.get('telegram_report_chat_id')
+            if chat_id is not None:
+                from shared.services.notification_target_service import upsert_object_telegram_report_target
+                await upsert_object_telegram_report_target(self.db, new_object.id, chat_id)
+                await self.db.commit()
             
             # Планируем тайм-слоты до конца года (только если включена галочка)
             auto_create_timeslots = object_data.get('auto_create_timeslots', True)  # По умолчанию True
@@ -242,6 +248,11 @@ class ObjectService:
             
             await self.db.commit()
             await self.db.refresh(obj)
+
+            if 'telegram_report_chat_id' in object_data:
+                from shared.services.notification_target_service import upsert_object_telegram_report_target
+                await upsert_object_telegram_report_target(self.db, object_id, obj.telegram_report_chat_id)
+                await self.db.commit()
             
             logger.info(f"Updated object {object_id} for owner {owner_id}")
             

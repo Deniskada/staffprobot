@@ -395,7 +395,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 if obj:
                     object_name = obj.name
-                    telegram_chat_id = obj.get_effective_report_chat_id()
+                    from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+                    telegram_chat_id = await get_telegram_report_chat_id_for_object(session, obj)
                 
                 if not telegram_chat_id:
                     await update.message.reply_text(

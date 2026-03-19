@@ -177,14 +177,15 @@ async def _send_birthday_greetings_async():
                             except Exception as e:
                                 errors.append(f"manager {manager.id}: {e}")
 
-                # 4. Отправить в TG-группы объектов
+                # 4. Отправить в TG-группы объектов (notification_targets + legacy)
                 if object_ids:
+                    from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
                     objs_q = await session.execute(
                         select(Object).where(Object.id.in_(list(object_ids)))
                     )
                     objects = objs_q.scalars().all()
                     for obj in objects:
-                        chat_id = getattr(obj, "telegram_report_chat_id", None)
+                        chat_id = await get_telegram_report_chat_id_for_object(session, obj)
                         if chat_id and chat_id not in sent_to:
                             try:
                                 await bot.send_message(
@@ -232,6 +233,7 @@ async def _send_holiday_greetings_async():
     from core.config.settings import settings
     from domain.entities.user import User
     from domain.entities.object import Object
+    from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
     from shared.services.yandex_gpt_service import generate_holiday_greeting
     from telegram import Bot
 
@@ -279,13 +281,12 @@ async def _send_holiday_greetings_async():
             if holiday_pref.get("telegram", True) is False:
                 continue
 
-            # Получаем объекты владельца с telegram-группой
+            # Получаем активные объекты владельца
             objects_q = await session.execute(
                 select(Object).where(
                     and_(
                         Object.owner_id == owner.id,
                         Object.is_active == True,
-                        Object.telegram_report_chat_id.isnot(None),
                     )
                 )
             )
@@ -294,7 +295,7 @@ async def _send_holiday_greetings_async():
             sent_to: set = set()
 
             for obj in objects:
-                chat_id = obj.telegram_report_chat_id
+                chat_id = await get_telegram_report_chat_id_for_object(session, obj)
                 if not chat_id or chat_id in sent_to:
                     continue
                 try:

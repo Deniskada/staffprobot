@@ -9,6 +9,7 @@ from core.logging.logger import logger
 from core.database.connection import get_sync_session
 from core.database.session import get_async_session
 from domain.entities.user import User
+from domain.entities.messenger_account import MessengerAccount
 from sqlalchemy import select
 
 
@@ -32,17 +33,41 @@ class UserManager:
         """Отключено: не используем JSON."""
         return
     
-    def register_user(self, user_id: int, first_name: str, username: Optional[str] = None, 
+    def _ensure_messenger_account_tg(
+        self, session, user_id: int, telegram_id: int, username: Optional[str] = None
+    ) -> None:
+        """Добавить запись в messenger_accounts если её нет (provider=telegram)."""
+        from sqlalchemy import and_
+        q = select(MessengerAccount).where(
+            and_(
+                MessengerAccount.provider == "telegram",
+                MessengerAccount.external_user_id == str(telegram_id),
+            )
+        )
+        existing = session.execute(q).scalar_one_or_none()
+        if existing:
+            return
+        ma = MessengerAccount(
+            user_id=user_id,
+            provider="telegram",
+            external_user_id=str(telegram_id),
+            chat_id=str(telegram_id),
+            username=username,
+        )
+        session.add(ma)
+        session.commit()
+
+    def register_user(self, user_id: int, first_name: str, username: Optional[str] = None,
                      last_name: Optional[str] = None, language_code: Optional[str] = None) -> dict:
-        """Регистрируем нового пользователя."""
-        # Проверяем/создаем в базе данных
+        """Регистрируем нового пользователя. user_id = telegram_id от бота."""
         with get_sync_session() as session:
             query = select(User).where(User.telegram_id == user_id)
             existing_user = session.execute(query).scalar_one_or_none()
             if existing_user:
+                self._ensure_messenger_account_tg(session, existing_user.id, user_id, username)
                 logger.info(f"User already exists in DB: {user_id} ({first_name})")
                 return {
-                    "id": existing_user.telegram_id,
+                    "id": existing_user.id,
                     "first_name": existing_user.first_name,
                     "username": existing_user.username,
                     "last_name": existing_user.last_name,
@@ -59,9 +84,11 @@ class UserManager:
             )
             session.add(new_user)
             session.commit()
+            session.refresh(new_user)
+            self._ensure_messenger_account_tg(session, new_user.id, user_id, username)
             logger.info(f"Registered new user in DB: {user_id} ({first_name})")
             return {
-                "id": user_id,
+                "id": new_user.id,
                 "first_name": first_name,
                 "username": username,
                 "last_name": last_name,
@@ -368,13 +395,19 @@ class UserManager:
                         first_name=user_data["first_name"],
                         last_name=user_data.get("last_name"),
                         username=user_data.get("username"),
-                        role="owner",  # Пользователи, создающие объекты - владельцы
+                        role="owner",
                         roles=["owner"],
-                        is_active=user_data["is_active"]
+                        is_active=user_data["is_active"],
                     )
                     session.add(new_user)
-                
+
                 session.commit()
+                if not existing_user:
+                    session.refresh(new_user)
+                db_user = existing_user if existing_user else new_user
+                self._ensure_messenger_account_tg(
+                    session, db_user.id, user_data["id"], user_data.get("username")
+                )
                 logger.info(f"User {user_data['id']} saved to database successfully")
                 
         except Exception as e:

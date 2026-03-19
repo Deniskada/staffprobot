@@ -683,8 +683,9 @@ async def handle_cancellation_document_input(update: Update, context: ContextTyp
         object_result = await session.execute(object_query)
         obj = object_result.scalar_one_or_none()
         
-        # Определяем чат для отчетов с учетом наследования
-        report_chat_id = obj.get_effective_report_chat_id() if obj else None
+        # Определяем чат для отчетов (notification_targets + legacy)
+        from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+        report_chat_id = await get_telegram_report_chat_id_for_object(session, obj) if obj else None
         
         # Если есть группа для отчетов - запрашиваем фото через Media Orchestrator
         if report_chat_id:
@@ -903,9 +904,9 @@ async def handle_cancellation_done_photo(update: Update, context: ContextTypes.D
         
         if obj:
             storage_mode = await get_storage_mode(session, obj.owner_id, "cancellations")
-            # Определяем report_chat_id, если его нет в контексте
             if not report_chat_id:
-                report_chat_id = obj.get_effective_report_chat_id() if obj else None
+                from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+                report_chat_id = await get_telegram_report_chat_id_for_object(session, obj)
                 if report_chat_id:
                     context.user_data['report_chat_id'] = report_chat_id
                     logger.info("Determined report_chat_id from object", shift_id=shift_id, report_chat_id=report_chat_id)

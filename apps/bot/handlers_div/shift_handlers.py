@@ -523,8 +523,9 @@ async def _handle_close_shift(update: Update, context: ContextTypes.DEFAULT_TYPE
                 
                 # Если есть задачи - показываем их для подтверждения выполнения
                 if shift_tasks:
-                    # Получаем telegram_report_chat_id для медиа отчетов (с учетом наследования)
-                    telegram_chat_id = obj.get_effective_report_chat_id() if obj else None
+                    # Получаем telegram_report_chat_id для медиа отчетов (notification_targets + legacy)
+                    from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+                    telegram_chat_id = await get_telegram_report_chat_id_for_object(session, obj) if obj else None
                     
                     # Формируем текст с задачами
                     tasks_text = "📋 <b>Задачи на смену:</b>\n\n"
@@ -2053,21 +2054,10 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
                     logger.info(f"[MY_TASKS] Object found: {obj is not None}, telegram_report_chat_id: {obj.telegram_report_chat_id if obj else None}")
                     
                     if obj:
-                        telegram_chat_id = obj.telegram_report_chat_id
+                        from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+                        telegram_chat_id = await get_telegram_report_chat_id_for_object(session, obj)
                         object_name = obj.name
-                        
                         logger.info(f"[MY_TASKS] telegram_chat_id={telegram_chat_id}, object_name={object_name}")
-                        
-                        # Если нет в объекте - проверяем подразделение
-                        if not telegram_chat_id and obj.division_id:
-                            logger.info(f"[MY_TASKS] Checking division {obj.division_id} for telegram_chat_id")
-                            from domain.entities.org_structure_unit import OrgStructureUnit
-                            division_query = select(OrgStructureUnit).where(OrgStructureUnit.id == obj.division_id)
-                            division_result = await session.execute(division_query)
-                            division = division_result.scalar_one_or_none()
-                            if division:
-                                telegram_chat_id = division.telegram_chat_id
-                                logger.info(f"[MY_TASKS] Found telegram_chat_id in division: {telegram_chat_id}")
         
         logger.info(f"[MY_TASKS] Final telegram_chat_id check: {telegram_chat_id}")
         
@@ -2672,7 +2662,8 @@ async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYP
             owner_id = obj.owner_id
             storage_mode = await get_storage_mode(session, owner_id, "tasks")
             object_name = obj.name
-            telegram_chat_id = obj.get_effective_report_chat_id()
+            from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+            telegram_chat_id = await get_telegram_report_chat_id_for_object(session, obj)
 
             final_flow = await orchestrator.finish(
                 user_id, bot=context.bot, media_types=media_types, storage_mode=storage_mode
@@ -2829,8 +2820,8 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
             
             if obj:
                 object_name = obj.name
-                # Получаем telegram_report_chat_id для медиа отчетов (с учетом наследования)
-                telegram_chat_id = obj.get_effective_report_chat_id()
+                from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+                telegram_chat_id = await get_telegram_report_chat_id_for_object(session, obj)
             
             if not telegram_chat_id:
                 await update.message.reply_text(

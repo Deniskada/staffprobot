@@ -73,17 +73,26 @@ async def get_owner_context(user_id: int, session: AsyncSession):
 
 
 async def get_user_id_from_current_user(current_user, session):
-    """Получает внутренний ID пользователя из current_user"""
+    """Получает внутренний user_id из current_user. JWT: id=внутренний, telegram_id=Telegram."""
     if isinstance(current_user, dict):
-        # current_user - это словарь из JWT payload
-        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        # JWT от auth: id — внутренний user_id, telegram_id — для TG
+        if current_user.get("id") is not None:
+            return current_user["id"]
+        telegram_id = current_user.get("telegram_id")
+        if telegram_id is None:
+            return None
         user_query = select(User).where(User.telegram_id == telegram_id)
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
         return user_obj.id if user_obj else None
-    else:
-        # current_user - это объект User
-        return current_user.id
+    return getattr(current_user, "id", None)
+
+
+def _telegram_id_from_current_user(current_user):
+    """Получает telegram_id для отправки сообщений. JWT: telegram_id или id (legacy)."""
+    if not isinstance(current_user, dict):
+        return getattr(current_user, "telegram_id", None)
+    return current_user.get("telegram_id") or current_user.get("id")
 
 
 @router.get("/", response_class=HTMLResponse, name="owner_dashboard")
@@ -520,14 +529,7 @@ async def owner_features(request: Request, session: AsyncSession = Depends(get_d
     if user_role != "owner":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
-    telegram_id = current_user.get("id")
-    # Получить User.id
-    from sqlalchemy import select
-    from domain.entities.user import User
-    user_result = await session.execute(
-        select(User.id).where(User.telegram_id == telegram_id)
-    )
-    user_id = user_result.scalar_one_or_none()
+    user_id = await get_user_id_from_current_user(current_user, session)
     if not user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
@@ -551,16 +553,7 @@ async def owner_notifications_center(request: Request, session: AsyncSession = D
     if user_role != "owner":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
-    telegram_id = current_user.get("id")
-    
-    # Получить User.id для контекста
-    from sqlalchemy import select
-    from domain.entities.user import User
-    user_result = await session.execute(
-        select(User.id).where(User.telegram_id == telegram_id)
-    )
-    user_id = user_result.scalar_one_or_none()
-    
+    user_id = await get_user_id_from_current_user(current_user, session)
     if not user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
@@ -584,15 +577,7 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
     if user_role != "owner":
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     
-    telegram_id = current_user.get("id")
-    
-    # Получить User.id
-    from sqlalchemy import select
-    from domain.entities.user import User
-    user_result = await session.execute(
-        select(User.id).where(User.telegram_id == telegram_id)
-    )
-    user_id = user_result.scalar_one_or_none()
+    user_id = await get_user_id_from_current_user(current_user, session)
     if not user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
@@ -690,15 +675,7 @@ async def owner_notifications_save(
     if not current_user or current_user.get("role") != "owner":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     
-    telegram_id = current_user.get("id")
-    
-    # Получить User.id
-    from sqlalchemy import select
-    from domain.entities.user import User
-    user_result = await session.execute(
-        select(User.id).where(User.telegram_id == telegram_id)
-    )
-    user_id = user_result.scalar_one_or_none()
+    user_id = await get_user_id_from_current_user(current_user, session)
     if not user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
@@ -763,7 +740,7 @@ async def owner_objects(
             # Получение объектов владельца из базы данных
             object_service = ObjectService(session)
             # Получаем telegram_id пользователя
-            telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+            telegram_id = _telegram_id_from_current_user(current_user)
             if not telegram_id:
                 raise HTTPException(status_code=400, detail="Пользователь не найден")
             
@@ -1051,7 +1028,7 @@ async def owner_objects_detail(request: Request, object_id: int):
             timeslot_service = TimeSlotService(session)
             
             # Получаем telegram_id пользователя
-            telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+            telegram_id = _telegram_id_from_current_user(current_user)
             if not telegram_id:
                 raise HTTPException(status_code=400, detail="Пользователь не найден")
             
@@ -1127,7 +1104,7 @@ async def owner_objects_edit(request: Request, object_id: int):
             # Получение данных объекта из базы данных с проверкой владельца
             object_service = ObjectService(session)
             # Получаем telegram_id пользователя
-            telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+            telegram_id = _telegram_id_from_current_user(current_user)
             if not telegram_id:
                 raise HTTPException(status_code=400, detail="Пользователь не найден")
             
@@ -1493,7 +1470,7 @@ async def owner_calendar(
             timeslot_service = TimeSlotService(session)
             
             # ОРИГИНАЛ: используем telegram_id владельца (а не внутренний id)
-            owner_telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+            owner_telegram_id = _telegram_id_from_current_user(current_user)
             
             # Получаем подразделения владельца
             from apps.web.services.org_structure_service import OrgStructureService
@@ -1798,7 +1775,7 @@ async def owner_calendar_week(
             timeslot_service = TimeSlotService(db)
             
             # ОРИГИНАЛ: используем telegram_id владельца (как в месячном календаре)
-            owner_telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+            owner_telegram_id = _telegram_id_from_current_user(current_user)
             objects = await object_service.get_objects_by_owner(owner_telegram_id)
             
             selected_object = None
@@ -1916,7 +1893,7 @@ async def owner_calendar_analysis(
         timeslot_service = TimeSlotService(db)
         
         # ОРИГИНАЛ: используем telegram_id владельца (как в месячном календаре)
-        owner_telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+        owner_telegram_id = _telegram_id_from_current_user(current_user)
         objects = await object_service.get_objects_by_owner(owner_telegram_id)
         
         selected_object = None
@@ -2124,7 +2101,7 @@ async def owner_fill_gaps(
         timeslot_service = TimeSlotService(db)
         
         # Получаем объект
-        owner_telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+        owner_telegram_id = _telegram_id_from_current_user(current_user)
         objects = await object_service.get_objects_by_owner(owner_telegram_id)
         
         target_object = None
@@ -2257,7 +2234,7 @@ async def owner_analysis_chart_data(
         timeslot_service = TimeSlotService(db)
         
         # Получаем объекты
-        owner_telegram_id = current_user.get("telegram_id") or current_user.get("telegram_id") or current_user.get("id")
+        owner_telegram_id = _telegram_id_from_current_user(current_user)
         objects = await object_service.get_objects_by_owner(owner_telegram_id)
         
         if object_id:
@@ -2543,14 +2520,10 @@ async def owner_calendar_api_data(
         if current_user is None or isinstance(current_user, RedirectResponse):
             raise HTTPException(status_code=401, detail="Пользователь не авторизован")
 
-        if isinstance(current_user, dict):
-            user_id = current_user.get("telegram_id") or current_user.get("id")
-        else:
-            user_id = getattr(current_user, "telegram_id", None)
-
-        if not user_id:
+        owner_telegram_id = _telegram_id_from_current_user(current_user) if isinstance(current_user, dict) else getattr(current_user, "telegram_id", None)
+        if not owner_telegram_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
-        cache_key_data = f"calendar_api_owner:{user_id}:{start_date}:{end_date}:{object_ids or 'all'}:{org_unit_ids or org_unit_id or 'all'}"
+        cache_key_data = f"calendar_api_owner:{owner_telegram_id}:{start_date}:{end_date}:{object_ids or 'all'}:{org_unit_ids or org_unit_id or 'all'}"
         cache_key = hashlib.md5(cache_key_data.encode()).hexdigest()
         
         # Проверяем кэш
@@ -2587,7 +2560,6 @@ async def owner_calendar_api_data(
             from apps.web.services.org_structure_service import OrgStructureService
             object_service = ObjectService(db)
             org_service = OrgStructureService(db)
-            owner_telegram_id = user_id
             all_objects = await object_service.get_objects_by_owner(owner_telegram_id)
             
             # Получаем все потомки выбранных подразделений
@@ -2614,7 +2586,7 @@ async def owner_calendar_api_data(
         # Получаем роль пользователя
         if isinstance(current_user, dict):
             user_role = current_user.get("role", "owner")
-            user_telegram_id = current_user.get("telegram_id") or current_user.get("id")
+            user_telegram_id = _telegram_id_from_current_user(current_user)
         else:
             # current_user - это объект User
             user_role = getattr(current_user, "role", "owner")
@@ -2778,7 +2750,7 @@ async def owner_calendar_api_objects(request: Request):
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     # Проверяем кэш
-    user_id_key = current_user.get("telegram_id") or current_user.get("id")
+    user_id_key = _telegram_id_from_current_user(current_user)
     from core.cache.redis_cache import cache
     cache_key = f"api_objects:{user_id_key}"
     cached_data = await cache.get(cache_key, serialize="json")
@@ -2843,7 +2815,7 @@ async def api_employees(request: Request):
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     # Проверяем кэш
-    user_id_key = current_user.get("telegram_id") or current_user.get("id")
+    user_id_key = _telegram_id_from_current_user(current_user)
     from core.cache.redis_cache import cache
     cache_key = f"api_employees:{user_id_key}"
     cached_data = await cache.get(cache_key, serialize="json")
@@ -4093,13 +4065,14 @@ async def owner_create_contract_template(request: Request):
             raise HTTPException(status_code=400, detail="Название и содержимое обязательны")
             
         contract_service = ContractService()
-        
+        async with get_async_session() as session:
+            created_by_id = await get_user_id_from_current_user(current_user, session)
         template_data = {
             "name": name,
             "description": description,
             "content": content,
             "version": version,
-            "created_by": current_user["id"],  # telegram_id
+            "created_by": created_by_id,
             "is_public": is_public,
             "fields_schema": None
         }
@@ -6310,12 +6283,14 @@ async def owner_employees_list(
         # Получаем реальных сотрудников из базы данных
         contract_service = ContractService()
         # Используем telegram_id для поиска пользователя в БД
-        user_id = current_user["id"]  # Это telegram_id из токена
+        owner_telegram_id = _telegram_id_from_current_user(current_user)
+        if not owner_telegram_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
         
         if show_former:
-            employees = await contract_service.get_all_contract_employees_by_telegram_id(user_id)
+            employees = await contract_service.get_all_contract_employees_by_telegram_id(owner_telegram_id)
         else:
-            employees = await contract_service.get_contract_employees_by_telegram_id(user_id)
+            employees = await contract_service.get_contract_employees_by_telegram_id(owner_telegram_id)
 
         # Фильтрация
         q_emp = (q_employee or "").strip().lower()
@@ -6393,7 +6368,8 @@ async def owner_employees_list(
         except Exception:
             pass
         
-        # Получаем данные для переключения интерфейсов
+        # Получаем данные для переключения интерфейсов (нужен внутренний user_id)
+        user_id = await get_user_id_from_current_user(current_user, db)
         available_interfaces = await get_available_interfaces_for_user(user_id)
         
         return templates.TemplateResponse(
@@ -6432,13 +6408,14 @@ async def owner_employees_create_form(
         
         # Получаем доступных сотрудников и объекты
         contract_service = ContractService()
-        # Используем telegram_id для поиска пользователя в БД
-        user_id = current_user["id"]  # Это telegram_id из токена
-        available_employees = await contract_service.get_available_employees(user_id)
-        objects = await contract_service.get_owner_objects(user_id)
+        owner_telegram_id = _telegram_id_from_current_user(current_user)
+        if not owner_telegram_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        available_employees = await contract_service.get_available_employees(await get_user_id_from_current_user(current_user, db))
+        objects = await contract_service.get_owner_objects(owner_telegram_id)
         
         # Получаем внутренний ID пользователя для шаблонов
-        user_query = select(User).where(User.telegram_id == user_id)
+        user_query = select(User).where(User.telegram_id == owner_telegram_id)
         user_result = await db.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
         internal_user_id = user_obj.id if user_obj else None
@@ -6987,10 +6964,13 @@ async def owner_contract_edit_form(
             raise HTTPException(status_code=404, detail="Договор не найден")
         
         # Получаем доступные объекты
-        objects = await contract_service.get_owner_objects(current_user["id"])
+        owner_telegram_id = _telegram_id_from_current_user(current_user)
+        if not owner_telegram_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        objects = await contract_service.get_owner_objects(owner_telegram_id)
         
         # Получаем внутренний ID пользователя для шаблонов
-        user_query = select(User).where(User.telegram_id == current_user["id"])
+        user_query = select(User).where(User.telegram_id == owner_telegram_id)
         user_result = await db.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
         internal_user_id = user_obj.id if user_obj else None
