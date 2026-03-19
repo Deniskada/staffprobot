@@ -1132,7 +1132,11 @@ async def owner_objects_edit(request: Request, object_id: int):
             org_units = await org_service.get_units_by_owner(user_id)
             org_tree = await org_service.get_org_tree(user_id)
             
-            # Преобразуем в формат для шаблона
+            # Report targets (TG/MAX) — из notification_targets
+            from shared.services.notification_target_service import get_object_report_targets, get_telegram_report_chat_id_for_object
+            report_targets = await get_object_report_targets(session, obj.id)
+            tg_chat = report_targets.get("telegram") or await get_telegram_report_chat_id_for_object(session, obj)
+
             object_data = {
                 "id": obj.id,
                 "name": obj.name,
@@ -1160,14 +1164,14 @@ async def owner_objects_edit(request: Request, object_id: int):
                 "cancellation_short_notice_fine": obj.cancellation_short_notice_fine if hasattr(obj, 'cancellation_short_notice_fine') else None,
                 "cancellation_invalid_reason_fine": obj.cancellation_invalid_reason_fine if hasattr(obj, 'cancellation_invalid_reason_fine') else None,
                 "inherit_telegram_chat": obj.inherit_telegram_chat if hasattr(obj, 'inherit_telegram_chat') else True,
-                "telegram_report_chat_id": obj.telegram_report_chat_id if hasattr(obj, 'telegram_report_chat_id') else None
+                "telegram_report_chat_id": tg_chat,
+                "max_report_chat_id": report_targets.get("max")
             }
-            
-            # Получаем данные для переключения интерфейсов
+
             user_id = await get_user_id_from_current_user(current_user, session)
             available_interfaces = await get_available_interfaces_for_user(user_id)
-            
-            # Загрузить подразделения (уже получили user_id и org_service выше, повторно создаем)
+
+            # Загрузить подразделения
             from apps.web.services.org_structure_service import OrgStructureService
             org_service = OrgStructureService(session)
             org_units = await org_service.get_units_by_owner(user_id)
@@ -1305,17 +1309,19 @@ async def owner_objects_edit_post(request: Request, object_id: int):
         inherit_telegram_chat = inherit_telegram_chat_value not in ["false", ""]
         telegram_report_chat_id = form_data.get("telegram_report_chat_id", "").strip()
         telegram_report_chat_id = telegram_report_chat_id if telegram_report_chat_id else None
-        
+        max_report_chat_id = form_data.get("max_report_chat_id", "").strip()
+        max_report_chat_id = max_report_chat_id if max_report_chat_id else None
+
         # Обработка подразделения
         org_unit_id_str = form_data.get("org_unit_id", "").strip()
         org_unit_id = int(org_unit_id_str) if org_unit_id_str else None
-        
+
         # Парсинг задач с новой структурой
         task_texts = form_data.getlist("task_texts[]")
         task_deductions = form_data.getlist("task_deductions[]")
         task_mandatory = form_data.getlist("task_mandatory[]")
         task_requires_media = form_data.getlist("task_requires_media[]")
-        
+
         logger.info(f"Task parsing (edit) - texts: {task_texts}, deductions: {task_deductions}, mandatory: {task_mandatory}, requires_media: {task_requires_media}")
         
         shift_tasks = []
@@ -1379,10 +1385,10 @@ async def owner_objects_edit_post(request: Request, object_id: int):
                 "cancellation_invalid_reason_fine": cancellation_invalid_reason_fine,
                 "inherit_telegram_chat": inherit_telegram_chat,
                 "telegram_report_chat_id": telegram_report_chat_id,
+                "max_report_chat_id": max_report_chat_id,
                 "org_unit_id": org_unit_id
             }
             
-            # Получаем внутренний ID пользователя
             user_id = await get_user_id_from_current_user(current_user, db)
             if not user_id:
                 raise HTTPException(status_code=400, detail="Пользователь не найден")

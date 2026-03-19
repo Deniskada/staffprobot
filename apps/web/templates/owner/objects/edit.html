@@ -491,6 +491,18 @@
                                                 Бот должен быть администратором группы с правами на отправку медиа.
                                             </div>
                                         </div>
+                                        <div class="mb-3">
+                                            <label for="max_report_chat_id" class="form-label">
+                                                ID чата MAX для отчётов
+                                                <i class="fas fa-info-circle text-muted" data-bs-toggle="tooltip" title="Чат MAX для фото/видео отчётов"></i>
+                                            </label>
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="max_report_chat_id" 
+                                                   name="max_report_chat_id" 
+                                                   value="{{ object.max_report_chat_id or '' }}"
+                                                   placeholder="chat_id из MAX">
+                                        </div>
                                     </div>
                                 </div>
                             </div>

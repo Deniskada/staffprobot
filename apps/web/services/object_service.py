@@ -251,9 +251,13 @@ class ObjectService:
 
             if 'telegram_report_chat_id' in object_data:
                 from shared.services.notification_target_service import upsert_object_telegram_report_target
-                await upsert_object_telegram_report_target(self.db, object_id, obj.telegram_report_chat_id)
+                await upsert_object_telegram_report_target(self.db, object_id, object_data['telegram_report_chat_id'])
                 await self.db.commit()
-            
+            if 'max_report_chat_id' in object_data:
+                from shared.services.notification_target_service import upsert_object_report_target
+                await upsert_object_report_target(self.db, object_id, "max", object_data['max_report_chat_id'])
+                await self.db.commit()
+
             logger.info(f"Updated object {object_id} for owner {owner_id}")
             
             # Инвалидация кэша объекта

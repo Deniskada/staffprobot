@@ -9,20 +9,21 @@ from domain.entities.notification_target import NotificationTarget
 from domain.entities.object import Object
 
 
-async def upsert_object_telegram_report_target(
+async def upsert_object_report_target(
     session: AsyncSession,
     object_id: int,
+    messenger: str,
     target_chat_id: Optional[str],
 ) -> None:
     """
-    Создать или обновить запись notification_targets для объекта (Telegram).
-    Если target_chat_id пустой — удалить/отключить.
+    Создать или обновить запись notification_targets для объекта.
+    messenger: telegram | max. target_chat_id пустой — отключить.
     """
     stmt = select(NotificationTarget).where(
         and_(
             NotificationTarget.scope_type == "object",
             NotificationTarget.scope_id == object_id,
-            NotificationTarget.messenger == "telegram",
+            NotificationTarget.messenger == messenger,
         )
     ).limit(1)
     result = await session.execute(stmt)
@@ -38,7 +39,7 @@ async def upsert_object_telegram_report_target(
                 NotificationTarget(
                     scope_type="object",
                     scope_id=object_id,
-                    messenger="telegram",
+                    messenger=messenger,
                     target_type="group",
                     target_chat_id=chat_id,
                     is_enabled=True,
@@ -46,6 +47,32 @@ async def upsert_object_telegram_report_target(
             )
     elif existing:
         existing.is_enabled = False
+
+
+async def upsert_object_telegram_report_target(
+    session: AsyncSession,
+    object_id: int,
+    target_chat_id: Optional[str],
+) -> None:
+    """Обёртка для Telegram (обратная совместимость)."""
+    await upsert_object_report_target(session, object_id, "telegram", target_chat_id)
+
+
+async def get_object_report_targets(
+    session: AsyncSession,
+    object_id: int,
+) -> dict[str, str]:
+    """Получить target_chat_id по messenger для объекта. Возвращает {telegram: ..., max: ...}."""
+    stmt = select(NotificationTarget.messenger, NotificationTarget.target_chat_id).where(
+        and_(
+            NotificationTarget.scope_type == "object",
+            NotificationTarget.scope_id == object_id,
+            NotificationTarget.is_enabled.is_(True),
+        )
+    )
+    result = await session.execute(stmt)
+    rows = result.all()
+    return {r[0]: r[1] for r in rows if r[1]}
 
 
 async def get_telegram_report_chat_id_for_object(
