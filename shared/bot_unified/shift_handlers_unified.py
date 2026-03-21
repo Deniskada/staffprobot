@@ -253,8 +253,6 @@ async def handle_open_planned_shift_callback(
 ) -> bool:
     """Обработка open_planned_shift:N — сохранить state, запросить геолокацию."""
     from apps.bot.services.shift_schedule_service import ShiftScheduleService
-    from core.database.session import get_async_session
-    from shared.services.object_opening_service import ObjectOpeningService
 
     chat_id = update.chat_id
     shift_schedule_service = ShiftScheduleService()
@@ -276,16 +274,7 @@ async def handle_open_planned_shift_callback(
         )
         return True
 
-    async with get_async_session() as session:
-        opening_service = ObjectOpeningService(session)
-        is_open = await opening_service.is_object_open(object_id)
-    if not is_open:
-        await messenger.send_text(
-            chat_id,
-            "⚠️ Объект закрыт. Сначала откройте объект.",
-            keyboard=[[{"text": "🏢 Открыть объект", "callback_data": "open_object"}]],
-        )
-        return True
+    # Объект может быть закрыт: при отправке геолокации ShiftService.open_shift сам откроет объект.
 
     await user_state_manager.create_state(
         user_id=internal_user_id,
@@ -433,9 +422,11 @@ async def handle_location_message(
             await user_state_manager.clear_state(internal_user_id)
             return True
 
+        from apps.bot.services.shift_schedule_service import ShiftScheduleService
         from domain.entities.object import Object
         from core.geolocation.location_validator import LocationValidator
 
+        db_user_id: Optional[int] = None
         async with get_async_session() as session:
             opening_service = ObjectOpeningService(session)
             user_res = await session.execute(select(User).where(User.id == internal_user_id))
@@ -444,6 +435,7 @@ async def handle_location_message(
                 await messenger.send_text(chat_id, "❌ Пользователь не найден.")
                 await user_state_manager.clear_state(internal_user_id)
                 return True
+            db_user_id = db_user.id
 
             obj_res = await session.execute(select(Object).where(Object.id == object_id))
             obj = obj_res.scalar_one_or_none()
@@ -471,13 +463,34 @@ async def handle_location_message(
                 coordinates=coordinates,
             )
 
-        result = await shift_service.open_shift(
-            user_id=telegram_id or 0,
-            object_id=object_id,
-            coordinates=coordinates,
-            shift_type="spontaneous",
+        shift_schedule_service = ShiftScheduleService()
+        planned_shifts = await shift_schedule_service.get_user_planned_shifts_for_date(
+            user_telegram_id=telegram_id,
+            target_date=date.today(),
             internal_user_id=internal_user_id,
         )
+        schedule_for_object = next(
+            (s for s in planned_shifts if s.get("object_id") == object_id),
+            None,
+        )
+        if schedule_for_object:
+            result = await shift_service.open_shift(
+                user_id=telegram_id or 0,
+                object_id=object_id,
+                coordinates=coordinates,
+                shift_type="planned",
+                timeslot_id=schedule_for_object.get("time_slot_id"),
+                schedule_id=schedule_for_object.get("id"),
+                internal_user_id=internal_user_id,
+            )
+        else:
+            result = await shift_service.open_shift(
+                user_id=telegram_id or 0,
+                object_id=object_id,
+                coordinates=coordinates,
+                shift_type="spontaneous",
+                internal_user_id=internal_user_id,
+            )
         await user_state_manager.clear_state(internal_user_id)
         if result.get("success"):
             await messenger.send_text(
@@ -486,9 +499,21 @@ async def handle_location_message(
                 keyboard=START_KEYBOARD,
             )
         else:
+            if db_user_id:
+                async with get_async_session() as session:
+                    opening_service = ObjectOpeningService(session)
+                    try:
+                        await opening_service.close_object(
+                            object_id=object_id,
+                            user_id=db_user_id,
+                            coordinates=coordinates,
+                        )
+                    except ValueError:
+                        pass
+            err = result.get("error", "ошибка")
             await messenger.send_text(
                 chat_id,
-                f"✅ Объект открыт.\n⚠️ Смена: {result.get('error', 'ошибка')}",
+                f"❌ Объект открыт, но не удалось открыть смену:\n{err}",
                 keyboard=START_KEYBOARD,
             )
 

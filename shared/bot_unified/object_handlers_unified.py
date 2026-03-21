@@ -26,25 +26,8 @@ async def handle_open_object(
     telegram_id: Optional[int],
 ) -> bool:
     """Обработка open_object для MAX."""
-    from apps.bot.services.shift_schedule_service import ShiftScheduleService
-
     chat_id = update.chat_id
-    shift_schedule_service = ShiftScheduleService()
     today = date.today()
-    planned = await shift_schedule_service.get_user_planned_shifts_for_date(
-        user_telegram_id=telegram_id,
-        target_date=today,
-        internal_user_id=internal_user_id,
-    )
-    if planned:
-        text = "📅 <b>У вас есть запланированные смены!</b>\n\n"
-        text += "Используйте кнопку «Открыть смену» для их открытия."
-        await messenger.send_text(
-            chat_id,
-            text,
-            keyboard=[[{"text": "🔄 Открыть смену", "callback_data": "open_shift"}]],
-        )
-        return True
 
     async with get_async_session() as session:
         from shared.services.contract_validation_service import build_active_contract_filter

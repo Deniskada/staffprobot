@@ -135,7 +135,9 @@ class Settings(BaseSettings):
     max_webhook_path: str = Field(default="/max/webhook", env="MAX_WEBHOOK_PATH")
     max_webhook_base_url: Optional[str] = Field(default=None, env="MAX_WEBHOOK_BASE_URL")
     # Kill-switch: вебхук и исходящие вызовы MaxClient / группы отчётов MAX / персональные MAX-уведомления
-    max_features_enabled: bool = Field(default=True, env="MAX_FEATURES_ENABLED")
+    # Дефолт false: без явного MAX_FEATURES_ENABLED=true MAX не включается (безопасно для dev/тестов).
+    # На проде задавайте в compose: MAX_FEATURES_ENABLED=${MAX_FEATURES_ENABLED:-true}
+    max_features_enabled: bool = Field(default=False, env="MAX_FEATURES_ENABLED")
 
     # GitHub (для интеграции с Issues API)
     github_token: Optional[str] = os.getenv("GITHUB_TOKEN")

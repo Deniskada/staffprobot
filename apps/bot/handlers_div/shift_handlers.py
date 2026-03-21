@@ -364,27 +364,10 @@ async def _handle_open_planned_shift(update: Update, context: ContextTypes.DEFAU
                 parse_mode='HTML'
             )
             return
-        
-        # Проверяем: объект открыт?
-        async with get_async_session() as session:
-            from shared.services.object_opening_service import ObjectOpeningService
-            opening_service = ObjectOpeningService(session)
-            is_open = await opening_service.is_object_open(object_id)
-        
-        if not is_open:
-            # Объект закрыт - предлагаем сначала открыть объект
-            await query.edit_message_text(
-                text="⚠️ <b>Объект закрыт</b>\n\n"
-                     "Для открытия запланированной смены сначала откройте объект.\n\n"
-                     "Используйте кнопку 'Открыть объект' в главном меню.",
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🏢 Открыть объект", callback_data="open_object")
-                ]])
-            )
-            return
-        
-        # Объект открыт - продолжаем открытие смены
+
+        # Объект может быть закрыт: при геолокации ShiftService.open_shift сам откроет объект.
+
+        # Продолжаем открытие смены
         # Создаем состояние для запроса геолокации
         await user_state_manager.create_state(
             user_id=user_id,

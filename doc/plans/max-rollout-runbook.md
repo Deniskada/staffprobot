@@ -8,7 +8,8 @@
 
 - `MAX_BOT_TOKEN` — токен бота в [platform-api.max.ru](https://platform-api.max.ru).
 - `MAX_WEBHOOK_BASE_URL` — публичный HTTPS origin (без trailing slash); полный URL вебхука = base + путь из `MAX_WEBHOOK_PATH` (по умолчанию `/max/webhook`, см. `core/config/settings.py`).
-- `MAX_FEATURES_ENABLED` — `true` по умолчанию. Установите `false` для быстрого отката: вебхук отвечает 503, исходящие вызовы MAX (группы отчётов, личные уведомления, `MaxClient`) не выполняются.
+- `MAX_FEATURES_ENABLED` — в **коде** дефолт `false`; на **проде** в `docker-compose.prod.yml` пробрасывается `true`, если в `.env` не задано иное. `false` — быстрый откат: вебхук отвечает 503, исходящие вызовы MAX не выполняются.
+- **Один токен MAX = один URL вебхука** у платформы. Кто последний запустил `scripts/setup_max_webhook.py`, тот стенд и получает сообщения. Чтобы отвечал только прод: на деве убрать `MAX_BOT_TOKEN` из `.env` (или `MAX_FEATURES_ENABLED=false`), пересоздать `web`; на проде — токен, `MAX_WEBHOOK_BASE_URL=https://staffprobot.ru`, снова `setup_max_webhook.py`.
 - Web-сервис должен быть доступен из интернета по этому URL (firewall / reverse proxy).
 
 ## После деплоя
