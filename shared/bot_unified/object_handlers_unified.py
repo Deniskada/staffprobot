@@ -16,6 +16,7 @@ from sqlalchemy import select, and_
 from .messenger import Messenger
 from .normalized_update import NormalizedUpdate
 from .router import START_KEYBOARD
+from .user_resolver import user_state_storage_key
 
 
 async def handle_open_object(
@@ -80,8 +81,9 @@ async def handle_open_object(
 
         if len(closed) == 1:
             obj = closed[0]
+            sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
             await user_state_manager.create_state(
-                user_id=internal_user_id,
+                user_id=sk,
                 action=UserAction.OPEN_OBJECT,
                 step=UserStep.OPENING_OBJECT_LOCATION,
                 selected_object_id=obj["id"],
@@ -92,8 +94,9 @@ async def handle_open_object(
             )
             return True
 
+        sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
         await user_state_manager.create_state(
-            user_id=internal_user_id,
+            user_id=sk,
             action=UserAction.OPEN_OBJECT,
             step=UserStep.OBJECT_SELECTION,
         )
@@ -145,8 +148,9 @@ async def handle_close_object(
             )
             return True
 
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
     await user_state_manager.create_state(
-        user_id=internal_user_id,
+        user_id=sk,
         action=UserAction.CLOSE_OBJECT,
         step=UserStep.LOCATION_REQUEST,
         selected_object_id=object_id,
@@ -179,8 +183,9 @@ async def handle_select_object_to_open(
         await messenger.send_text(chat_id, "❌ Объект не найден.")
         return True
 
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
     await user_state_manager.create_state(
-        user_id=internal_user_id,
+        user_id=sk,
         action=UserAction.OPEN_OBJECT,
         step=UserStep.OPENING_OBJECT_LOCATION,
         selected_object_id=object_id,

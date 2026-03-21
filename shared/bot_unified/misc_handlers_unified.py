@@ -18,6 +18,7 @@ from sqlalchemy import select, and_
 from .messenger import Messenger
 from .normalized_update import NormalizedUpdate
 from .router import START_KEYBOARD
+from .user_resolver import user_state_storage_key
 
 
 def _max_media_flow_external_id(update: NormalizedUpdate) -> str:
@@ -218,14 +219,16 @@ async def handle_my_tasks(
         keyboard = []
     else:
         from core.state import user_state_manager, UserAction, UserStep
-        existing = await user_state_manager.get_state(internal_user_id)
+
+        sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
+        existing = await user_state_manager.get_state(sk)
         completed = (
             existing.completed_tasks
             if existing and existing.action == UserAction.MY_TASKS and existing.selected_shift_id == shift.id
             else []
         )
         await user_state_manager.create_state(
-            internal_user_id,
+            sk,
             action=UserAction.MY_TASKS,
             step=UserStep.OBJECT_SELECTION,
             selected_shift_id=shift.id,
@@ -256,6 +259,7 @@ async def handle_complete_task_v2(
     update: NormalizedUpdate,
     messenger: Messenger,
     internal_user_id: int,
+    telegram_id: Optional[int],
     entry_id: int,
 ) -> bool:
     """Отметка/снятие задачи Tasks v2. Без медиа — переключает is_completed."""
@@ -306,8 +310,9 @@ async def handle_complete_task_v2(
                 )
                 await orchestrator.close()
 
+                sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
                 await user_state_manager.create_state(
-                    internal_user_id,
+                    sk,
                     action=UserAction.MY_TASKS,
                     step=UserStep.TASK_V2_MEDIA_UPLOAD,
                     data={"pending_task_v2_entry_id": entry_id},
@@ -332,7 +337,7 @@ async def handle_complete_task_v2(
             entry.completed_at = datetime.utcnow()
             await session.commit()
 
-    await handle_my_tasks(update, messenger, internal_user_id, None)
+    await handle_my_tasks(update, messenger, internal_user_id, telegram_id)
     return True
 
 
@@ -340,6 +345,7 @@ async def handle_complete_my_task(
     update: NormalizedUpdate,
     messenger: Messenger,
     internal_user_id: int,
+    telegram_id: Optional[int],
     shift_id: int,
     task_idx: int,
 ) -> bool:
@@ -350,7 +356,8 @@ async def handle_complete_my_task(
     if update.callback_id and update.messenger != "max":
         await messenger.answer_callback(update.callback_id, "✅")
 
-    state = await user_state_manager.get_state(internal_user_id)
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
+    state = await user_state_manager.get_state(sk)
     if not state or state.action != UserAction.MY_TASKS or state.selected_shift_id != shift_id:
         await messenger.send_text(chat_id, "❌ Состояние утеряно. Нажмите «Мои задачи» заново.", keyboard=START_KEYBOARD)
         return True
@@ -374,9 +381,9 @@ async def handle_complete_my_task(
         completed.remove(task_idx)
     else:
         completed.append(task_idx)
-    await user_state_manager.update_state(internal_user_id, completed_tasks=completed)
+    await user_state_manager.update_state(sk, completed_tasks=completed)
 
-    await handle_my_tasks(update, messenger, internal_user_id, None)
+    await handle_my_tasks(update, messenger, internal_user_id, telegram_id)
     return True
 
 
@@ -651,7 +658,8 @@ async def handle_task_v2_done(
             completion_media=completion_media,
         )
 
-    await user_state_manager.clear_state(internal_user_id)
+    sk_done = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
+    await user_state_manager.clear_state(sk_done)
 
     if telegram_ok and max_ok:
         channels = []
@@ -691,6 +699,7 @@ async def handle_cancel_task_v2_media(
     update: NormalizedUpdate,
     messenger: Messenger,
     internal_user_id: int,
+    telegram_id: Optional[int],
 ) -> bool:
     """Отмена загрузки фото для задачи v2 (MAX)."""
     from core.state import user_state_manager
@@ -706,7 +715,8 @@ async def handle_cancel_task_v2_media(
         await orchestrator.cancel(messenger="max", external_id=ext_id)
     await orchestrator.close()
 
-    await user_state_manager.clear_state(internal_user_id)
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
+    await user_state_manager.clear_state(sk)
 
     await messenger.send_text(
         chat_id,

@@ -385,7 +385,9 @@ async def _try_dispatch_employee_callbacks(
             entry_id = int(callback_data.split(":", 1)[1])
             from .misc_handlers_unified import handle_complete_task_v2
 
-            return await handle_complete_task_v2(update, messenger, internal_id, entry_id)
+            return await handle_complete_task_v2(
+                update, messenger, internal_id, telegram_id, entry_id
+            )
         except (ValueError, IndexError):
             return False
     if callback_data.startswith("complete_my_task:"):
@@ -396,7 +398,7 @@ async def _try_dispatch_employee_callbacks(
             from .misc_handlers_unified import handle_complete_my_task
 
             return await handle_complete_my_task(
-                update, messenger, internal_id, shift_id, task_idx
+                update, messenger, internal_id, telegram_id, shift_id, task_idx
             )
         except (ValueError, IndexError):
             return False
@@ -413,7 +415,9 @@ async def _try_dispatch_employee_callbacks(
     if callback_data == "cancel_task_v2_media":
         from .misc_handlers_unified import handle_cancel_task_v2_media
 
-        return await handle_cancel_task_v2_media(update, messenger, internal_id)
+        return await handle_cancel_task_v2_media(
+            update, messenger, internal_id, telegram_id
+        )
 
     return False
 

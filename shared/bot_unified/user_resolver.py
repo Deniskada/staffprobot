@@ -56,6 +56,21 @@ async def resolve_to_internal_user_id(
         return await _do(sess)
 
 
+def user_state_storage_key(
+    messenger: str,
+    internal_user_id: int,
+    telegram_id: Optional[int],
+) -> int:
+    """
+    Ключ для user_state_manager.
+    В Telegram — telegram_id (как в handle_location / legacy), чтобы гео и колбэки
+    смотрели один и тот же ключ. В MAX — internal_user_id.
+    """
+    if messenger == "telegram" and telegram_id is not None:
+        return int(telegram_id)
+    return int(internal_user_id)
+
+
 async def resolve_for_services(
     provider: str,
     external_user_id: str,

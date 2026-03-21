@@ -12,6 +12,7 @@ from core.state import user_state_manager, UserAction, UserStep
 from .messenger import Messenger
 from .normalized_update import NormalizedUpdate
 from .router import START_KEYBOARD
+from .user_resolver import user_state_storage_key
 
 async def handle_open_shift(
     update: NormalizedUpdate,
@@ -52,8 +53,9 @@ async def handle_open_shift(
     )
 
     if planned_shifts:
+        sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
         await user_state_manager.create_state(
-            user_id=internal_user_id,
+            user_id=sk,
             action=UserAction.OPEN_SHIFT,
             step=UserStep.SHIFT_SELECTION,
         )
@@ -101,8 +103,9 @@ async def handle_open_shift(
         )
         return True
 
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
     await user_state_manager.create_state(
-        user_id=internal_user_id,
+        user_id=sk,
         action=UserAction.OPEN_SHIFT,
         step=UserStep.OBJECT_SELECTION,
         shift_type="spontaneous",
@@ -148,8 +151,9 @@ async def handle_close_shift(
         )
         return True
 
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
     await user_state_manager.create_state(
-        user_id=internal_user_id,
+        user_id=sk,
         action=UserAction.CLOSE_SHIFT,
         step=UserStep.OBJECT_SELECTION,
     )
@@ -183,8 +187,9 @@ async def handle_open_shift_object_callback(
     from sqlalchemy import select
 
     chat_id = update.chat_id
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
     await user_state_manager.create_state(
-        user_id=internal_user_id,
+        user_id=sk,
         action=UserAction.OPEN_SHIFT,
         step=UserStep.LOCATION_REQUEST,
         selected_object_id=object_id,
@@ -216,8 +221,9 @@ async def handle_close_shift_select_callback(
     from sqlalchemy import select
 
     chat_id = update.chat_id
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
     await user_state_manager.create_state(
-        user_id=internal_user_id,
+        user_id=sk,
         action=UserAction.CLOSE_SHIFT,
         step=UserStep.LOCATION_REQUEST,
         selected_shift_id=shift_id,
@@ -270,8 +276,9 @@ async def handle_open_planned_shift_callback(
 
     # Объект может быть закрыт: при отправке геолокации ShiftService.open_shift сам откроет объект.
 
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
     await user_state_manager.create_state(
-        user_id=internal_user_id,
+        user_id=sk,
         action=UserAction.OPEN_SHIFT,
         step=UserStep.LOCATION_REQUEST,
         selected_object_id=object_id,
@@ -320,19 +327,20 @@ async def handle_location_message(
     from sqlalchemy import select
 
     chat_id = update.chat_id
-    user_state = await user_state_manager.get_state(internal_user_id)
+    sk = user_state_storage_key(update.messenger, internal_user_id, telegram_id)
+    user_state = await user_state_manager.get_state(sk)
     if not user_state:
         await messenger.send_text(chat_id, "❌ Состояние утеряно. Начните заново.", keyboard=START_KEYBOARD)
         return True
 
-    await user_state_manager.update_state(internal_user_id, step=UserStep.PROCESSING)
+    await user_state_manager.update_state(sk, step=UserStep.PROCESSING)
     shift_service = ShiftService()
 
     if user_state.action == UserAction.OPEN_SHIFT:
         object_id = user_state.selected_object_id
         if not object_id:
             await messenger.send_text(chat_id, "❌ Объект не выбран.")
-            await user_state_manager.clear_state(internal_user_id)
+            await user_state_manager.clear_state(sk)
             return True
 
         result = await shift_service.open_shift(
@@ -344,7 +352,7 @@ async def handle_location_message(
             schedule_id=user_state.selected_schedule_id,
             internal_user_id=internal_user_id,
         )
-        await user_state_manager.clear_state(internal_user_id)
+        await user_state_manager.clear_state(sk)
         if result.get("success"):
             await messenger.send_text(
                 chat_id,
@@ -362,7 +370,7 @@ async def handle_location_message(
         shift_id = user_state.selected_shift_id
         if not shift_id:
             await messenger.send_text(chat_id, "❌ Смена не выбрана.")
-            await user_state_manager.clear_state(internal_user_id)
+            await user_state_manager.clear_state(sk)
             return True
 
         result = await shift_service.close_shift(
@@ -371,7 +379,7 @@ async def handle_location_message(
             coordinates=coordinates,
             internal_user_id=internal_user_id,
         )
-        await user_state_manager.clear_state(internal_user_id)
+        await user_state_manager.clear_state(sk)
         if result.get("success"):
             total_hours = result.get("total_hours", 0)
             total_payment = result.get("total_payment", 0)
@@ -413,7 +421,7 @@ async def handle_location_message(
         object_id = user_state.selected_object_id
         if not object_id:
             await messenger.send_text(chat_id, "❌ Объект не выбран.")
-            await user_state_manager.clear_state(internal_user_id)
+            await user_state_manager.clear_state(sk)
             return True
 
         from apps.bot.services.shift_schedule_service import ShiftScheduleService
@@ -427,7 +435,7 @@ async def handle_location_message(
             db_user = user_res.scalar_one_or_none()
             if not db_user:
                 await messenger.send_text(chat_id, "❌ Пользователь не найден.")
-                await user_state_manager.clear_state(internal_user_id)
+                await user_state_manager.clear_state(sk)
                 return True
             db_user_id = db_user.id
 
@@ -435,7 +443,7 @@ async def handle_location_message(
             obj = obj_res.scalar_one_or_none()
             if not obj:
                 await messenger.send_text(chat_id, "❌ Объект не найден.")
-                await user_state_manager.clear_state(internal_user_id)
+                await user_state_manager.clear_state(sk)
                 return True
 
             validator = LocationValidator()
@@ -448,7 +456,7 @@ async def handle_location_message(
                     f"❌ Слишком далеко! 📏 {val['distance_meters']:.0f}м",
                     keyboard=START_KEYBOARD,
                 )
-                await user_state_manager.clear_state(internal_user_id)
+                await user_state_manager.clear_state(sk)
                 return True
 
             await opening_service.open_object(
@@ -485,7 +493,7 @@ async def handle_location_message(
                 shift_type="spontaneous",
                 internal_user_id=internal_user_id,
             )
-        await user_state_manager.clear_state(internal_user_id)
+        await user_state_manager.clear_state(sk)
         if result.get("success"):
             await messenger.send_text(
                 chat_id,
@@ -516,7 +524,7 @@ async def handle_location_message(
         shift_id = user_state.selected_shift_id
         if not object_id or not shift_id:
             await messenger.send_text(chat_id, "❌ Данные неполные.")
-            await user_state_manager.clear_state(internal_user_id)
+            await user_state_manager.clear_state(sk)
             return True
 
         result = await shift_service.close_shift(
@@ -525,7 +533,7 @@ async def handle_location_message(
             coordinates=coordinates,
             internal_user_id=internal_user_id,
         )
-        await user_state_manager.clear_state(internal_user_id)
+        await user_state_manager.clear_state(sk)
         if result.get("success"):
             async with get_async_session() as session:
                 opening_service = ObjectOpeningService(session)
@@ -557,7 +565,7 @@ async def handle_location_message(
             )
 
     else:
-        await user_state_manager.clear_state(internal_user_id)
+        await user_state_manager.clear_state(sk)
         await messenger.send_text(chat_id, "❌ Неизвестное действие.", keyboard=START_KEYBOARD)
 
     return True
