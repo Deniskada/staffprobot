@@ -80,7 +80,21 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     user_id = update.effective_user.id
     location = update.message.location
-    
+
+    # Unified TG callbacks (open_shift и т.д.) пишут state по internal user id; legacy — по telegram id
+    state_key = user_id
+    user_state = await user_state_manager.get_state(state_key)
+    if not user_state:
+        from shared.bot_unified.user_resolver import resolve_for_services
+
+        internal_id, _ = await resolve_for_services("telegram", str(user_id))
+        if internal_id:
+            alt = await user_state_manager.get_state(internal_id)
+            if alt:
+                user_state = alt
+                state_key = internal_id
+    location_internal_id = state_key if state_key != user_id else None
+
     logger.info(
         f"Location received from user",
         user_id=user_id,
@@ -97,8 +111,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         longitude=update.message.location.longitude if update.message.location else None
     )
     
-    # Получаем состояние пользователя
-    user_state = await user_state_manager.get_state(user_id)
     if not user_state:
         logger.warning(
             f"[BUG3_DEBUG] No state found for user - location rejected",
@@ -113,6 +125,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     logger.info(
         f"[BUG3_DEBUG] User state retrieved",
         user_id=user_id,
+        state_key=state_key,
         action=user_state.action,
         step=user_state.step,
         has_location=bool(update.message.location)
@@ -128,10 +141,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         
         # AUTO-FIX: если action правильный, установим правильный step
         if user_state.action in [UserAction.OPEN_SHIFT, UserAction.OPEN_OBJECT]:
-            await user_state_manager.update_state(user_id, step=UserStep.LOCATION_REQUEST)
+            await user_state_manager.update_state(state_key, step=UserStep.LOCATION_REQUEST)
             logger.info(f"[BUG3_AUTOFIX] Auto-corrected step to LOCATION_REQUEST for action={user_state.action}")
         elif user_state.action in [UserAction.CLOSE_SHIFT, UserAction.CLOSE_OBJECT]:
-            await user_state_manager.update_state(user_id, step=UserStep.LOCATION_REQUEST)
+            await user_state_manager.update_state(state_key, step=UserStep.LOCATION_REQUEST)
             logger.info(f"[BUG3_AUTOFIX] Auto-corrected step to LOCATION_REQUEST for action={user_state.action}")
         else:
             await update.message.reply_text(
@@ -140,10 +153,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
     
     # Обновляем состояние на обработку
-    await user_state_manager.update_state(user_id, step=UserStep.PROCESSING)
+    await user_state_manager.update_state(state_key, step=UserStep.PROCESSING)
     
     # Получаем обновленное состояние после изменения step
-    user_state = await user_state_manager.get_state(user_id)
+    user_state = await user_state_manager.get_state(state_key)
     if not user_state:
         await update.message.reply_text("❌ Состояние утеряно. Попробуйте еще раз.")
         return
@@ -181,7 +194,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 if not entry or not entry.template:
                     await update.message.reply_text("❌ Задача не найдена")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 # Проверяем, не выполнена ли уже задача
@@ -194,7 +207,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     await update.message.reply_text(
                         "✅ Задача уже выполнена. Можете закрыть смену."
                     )
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 template = entry.template
@@ -206,7 +219,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 if not db_user:
                     await update.message.reply_text("❌ Пользователь не найден")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 # Получаем активную смену
@@ -221,7 +234,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 if not active_shift:
                     await update.message.reply_text("❌ Активная смена не найдена")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 # Получаем объект
@@ -244,14 +257,14 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         "<b>Настройки уведомлений</b> → «Группы отчётов объектов».",
                         parse_mode="HTML",
                     )
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 # Восстанавливаем final_flow из сохраненного состояния
                 collected_photos = user_state.data.get('final_flow_collected_photos', [])
                 if not collected_photos:
                     await update.message.reply_text("❌ Ошибка: медиа-файлы не найдены")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 final_flow = MediaFlowConfig(
@@ -280,18 +293,18 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 )
                 
                 # Очищаем состояние
-                await user_state_manager.clear_state(user_id)
+                await user_state_manager.clear_state(state_key)
                 
         except Exception as e:
             logger.exception(f"Error processing location for task v2: {e}")
             await update.message.reply_text("❌ Ошибка при обработке геопозиции. Попробуйте позже.")
-            await user_state_manager.clear_state(user_id)
+            await user_state_manager.clear_state(state_key)
         
         return
     
     # Получаем свежее состояние перед обработкой обычных действий
     # (на случай, если оно изменилось после обработки Tasks v2)
-    user_state = await user_state_manager.get_state(user_id)
+    user_state = await user_state_manager.get_state(state_key)
     if not user_state:
         await update.message.reply_text(
             "❌ Состояние утеряно. Попробуйте начать заново с /start."
@@ -313,7 +326,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 coordinates=coordinates,
                 shift_type=shift_type,
                 timeslot_id=timeslot_id,
-                schedule_id=schedule_id
+                schedule_id=schedule_id,
+                internal_user_id=location_internal_id,
             )
             
             if result['success']:
@@ -338,7 +352,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 )
                 
                 # Очищаем состояние ТОЛЬКО при успехе
-                await user_state_manager.clear_state(user_id)
+                await user_state_manager.clear_state(state_key)
                 
             else:
                 error_msg = f"❌ Ошибка при открытии смены: {result['error']}"
@@ -361,7 +375,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             result = await shift_service.close_shift(
                 user_id=user_id,
                 shift_id=user_state.selected_shift_id,
-                coordinates=coordinates
+                coordinates=coordinates,
+                internal_user_id=location_internal_id,
             )
             
             if result['success']:
@@ -494,7 +509,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                                     )
                 
                 # Очищаем состояние ТОЛЬКО при успехе
-                await user_state_manager.clear_state(user_id)
+                await user_state_manager.clear_state(state_key)
                 
             else:
                 error_msg = f"❌ Ошибка при закрытии смены: {result['error']}"
@@ -528,7 +543,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 if not db_user:
                     await update.message.reply_text("❌ Пользователь не найден.")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 # Получить объект
@@ -538,7 +553,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 if not obj:
                     await update.message.reply_text("❌ Объект не найден.")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 # Проверить расстояние
@@ -588,7 +603,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                             coordinates=coordinates,
                             shift_type='planned',
                             timeslot_id=schedule_for_object.get('time_slot_id'),
-                            schedule_id=schedule_for_object.get('id')
+                            schedule_id=schedule_for_object.get('id'),
+                            internal_user_id=location_internal_id,
                         )
                     else:
                         # Нет запланированной смены - открываем спонтанную
@@ -596,7 +612,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                             user_id=user_id,
                             object_id=obj.id,
                             coordinates=coordinates,
-                            shift_type='spontaneous'
+                            shift_type='spontaneous',
+                            internal_user_id=location_internal_id,
                         )
                     
                     if result['success']:
@@ -620,18 +637,18 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                             parse_mode='HTML',
                             reply_markup=InlineKeyboardMarkup(keyboard)
                         )
-                        await user_state_manager.clear_state(user_id)
+                        await user_state_manager.clear_state(state_key)
                     else:
                         # Откатываем открытие объекта
                         await opening_service.close_object(obj.id, db_user.id, coordinates)
                         await update.message.reply_text(
                             f"❌ Объект открыт, но не удалось открыть смену:\n{result['error']}"
                         )
-                        await user_state_manager.clear_state(user_id)
+                        await user_state_manager.clear_state(state_key)
                         
                 except ValueError as e:
                     await update.message.reply_text(f"❌ {str(e)}")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
         
         elif user_state.action == UserAction.CLOSE_OBJECT:
             # Закрытие объекта - СНАЧАЛА закрываем смену, ПОТОМ объект
@@ -662,14 +679,15 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             result = await shift_service.close_shift(
                 user_id=user_id,
                 shift_id=user_state.selected_shift_id,
-                coordinates=coordinates
+                coordinates=coordinates,
+                internal_user_id=location_internal_id,
             )
             
             if not result['success']:
                 await update.message.reply_text(
                     f"❌ Ошибка при закрытии смены: {result.get('error', 'Неизвестная ошибка')}"
                 )
-                await user_state_manager.clear_state(user_id)
+                await user_state_manager.clear_state(state_key)
                 return
             
             # 2. Закрыть объект
@@ -683,7 +701,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 if not db_user:
                     await update.message.reply_text("❌ Пользователь не найден.")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     return
                 
                 try:
@@ -707,11 +725,11 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         parse_mode='HTML',
                         reply_markup=InlineKeyboardMarkup(keyboard)
                     )
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
                     
                 except ValueError as e:
                     await update.message.reply_text(f"❌ {str(e)}")
-                    await user_state_manager.clear_state(user_id)
+                    await user_state_manager.clear_state(state_key)
         
         else:
             logger.warning(
@@ -723,7 +741,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text(
                 "❌ Непредвиденная ситуация. Попробуйте начать с /start"
             )
-            await user_state_manager.clear_state(user_id)
+            await user_state_manager.clear_state(state_key)
     
     except Exception as e:
         logger.error(f"Error processing location for user {user_id}: {e}")

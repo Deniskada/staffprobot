@@ -16,7 +16,6 @@ from sqlalchemy import select, and_
 from .messenger import Messenger
 from .normalized_update import NormalizedUpdate
 from .router import START_KEYBOARD
-from .shift_handlers_unified import LOCATION_FALLBACK_TEXT
 
 
 async def handle_open_object(
@@ -89,7 +88,7 @@ async def handle_open_object(
             )
             await messenger.send_text(
                 chat_id,
-                f"📍 <b>Открытие объекта</b>\n\nОбъект: <b>{obj['name']}</b>\n\n{LOCATION_FALLBACK_TEXT}",
+                f"📍 <b>Открытие объекта</b>\n\nОбъект: <b>{obj['name']}</b>",
             )
             return True
 
@@ -155,7 +154,7 @@ async def handle_close_object(
     )
     await messenger.send_text(
         chat_id,
-        f"📍 <b>Отправьте геопозицию для закрытия объекта</b>\n\n{LOCATION_FALLBACK_TEXT}",
+        "📍 <b>Отправьте геопозицию для закрытия объекта</b>",
     )
     return True
 
@@ -188,6 +187,6 @@ async def handle_select_object_to_open(
     )
     await messenger.send_text(
         chat_id,
-        f"📍 <b>Открытие объекта</b>\n\nОбъект: <b>{obj.name}</b>\n\n{LOCATION_FALLBACK_TEXT}",
+        f"📍 <b>Открытие объекта</b>\n\nОбъект: <b>{obj.name}</b>",
     )
     return True

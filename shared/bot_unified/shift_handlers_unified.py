@@ -13,12 +13,6 @@ from .messenger import Messenger
 from .normalized_update import NormalizedUpdate
 from .router import START_KEYBOARD
 
-LOCATION_FALLBACK_TEXT = (
-    "📍 MAX может не поддерживать кнопку геолокации. "
-    "Введите координаты в формате: 55.75,37.61"
-)
-
-
 async def handle_open_shift(
     update: NormalizedUpdate,
     messenger: Messenger,
@@ -203,7 +197,7 @@ async def handle_open_shift_object_callback(
     await messenger.send_text(
         chat_id,
         f"📍 <b>Отправьте геопозицию для открытия смены</b>\n\n"
-        f"🏢 Объект: <b>{obj_name}</b>\n\n{LOCATION_FALLBACK_TEXT}",
+        f"🏢 Объект: <b>{obj_name}</b>",
     )
     return True
 
@@ -239,7 +233,7 @@ async def handle_close_shift_select_callback(
     await messenger.send_text(
         chat_id,
         f"📍 <b>Отправьте геопозицию для закрытия смены</b>\n\n"
-        f"🏢 Объект: <b>{obj_name}</b>\n\n{LOCATION_FALLBACK_TEXT}",
+        f"🏢 Объект: <b>{obj_name}</b>",
     )
     return True
 
@@ -290,7 +284,7 @@ async def handle_open_planned_shift_callback(
     await messenger.send_text(
         chat_id,
         f"📍 <b>Отправьте геопозицию для открытия смены</b>\n\n"
-        f"🏢 Объект: <b>{obj_name}</b>\n🕐 {planned_str}\n\n{LOCATION_FALLBACK_TEXT}",
+        f"🏢 Объект: <b>{obj_name}</b>\n🕐 {planned_str}",
     )
     return True
 
