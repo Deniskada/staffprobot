@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from core.database.session import get_async_session, get_db_session
 from core.auth.user_manager import UserManager
 from apps.web.middleware.auth_middleware import require_owner_or_superadmin
+from apps.web.middleware.role_middleware import get_user_id_from_current_user as resolve_internal_user_id
 from domain.entities.shift import Shift
 from domain.entities.shift_schedule import ShiftSchedule
 from domain.entities.time_slot import TimeSlot
@@ -30,18 +31,6 @@ from apps.web.jinja import templates
 user_manager = UserManager()
 
 
-async def get_user_id_from_current_user(current_user, session):
-    """Получает внутренний ID пользователя из current_user"""
-    if isinstance(current_user, dict):
-        telegram_id = current_user.get("id")
-        user_query = select(User).where(User.telegram_id == telegram_id)
-        user_result = await session.execute(user_query)
-        user_obj = user_result.scalar_one_or_none()
-        return user_obj.id if user_obj else None
-    else:
-        return current_user.id
-
-
 @router.get("/plan", response_class=HTMLResponse)
 async def shifts_plan(
     request: Request,
@@ -57,7 +46,7 @@ async def shifts_plan(
             return current_user
         
         # Получаем внутренний ID владельца
-        user_id = await get_user_id_from_current_user(current_user, db)
+        user_id = await resolve_internal_user_id(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
         
@@ -124,7 +113,7 @@ async def get_schedule_object_id(
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
         
         # Получаем внутренний ID владельца
-        user_id = await get_user_id_from_current_user(current_user, db)
+        user_id = await resolve_internal_user_id(current_user, db)
         if not user_id:
             return JSONResponse({"error": "User not found"}, status_code=401)
         
@@ -176,23 +165,13 @@ async def shifts_list(
     current_user = await require_owner_or_superadmin(request)
     if isinstance(current_user, RedirectResponse):
         return current_user
-    
-    # Получаем ID пользователя из словаря
-    # current_user содержит telegram_id в поле "id", нужно получить внутренний ID из БД
-    if isinstance(current_user, dict):
-        telegram_id = current_user.get("id")
-        user_role = current_user.get("role")
-        # Получаем внутренний ID пользователя из БД
-        async with get_async_session() as temp_session:
-            user_query = select(User).where(User.telegram_id == telegram_id)
-            user_result = await temp_session.execute(user_query)
-            user_obj = user_result.scalar_one_or_none()
-            user_id = user_obj.id if user_obj else None
-    else:
-        user_id = current_user.id
-        user_role = current_user.role
-    
+
+    user_role = current_user.get("role") if isinstance(current_user, dict) else current_user.role
+
     async with get_async_session() as session:
+        user_id = await resolve_internal_user_id(current_user, session)
+        if user_role != "superadmin" and not user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
         # Базовый запрос для смен
         shifts_query = select(Shift).options(
             selectinload(Shift.object),
@@ -435,7 +414,7 @@ async def shift_detail(request: Request, shift_id: int, shift_type: Optional[str
     
     async with get_async_session() as session:
         # Получаем внутренний ID пользователя
-        user_id = await get_user_id_from_current_user(current_user, session)
+        user_id = await resolve_internal_user_id(current_user, session)
         if shift_type == "schedule":
             # Запланированная смена
             query = select(ShiftSchedule).options(
@@ -708,7 +687,7 @@ async def cancel_shift(request: Request, shift_id: int, shift_type: Optional[str
     
     async with get_async_session() as session:
         # Получаем внутренний ID пользователя
-        user_id = await get_user_id_from_current_user(current_user, session)
+        user_id = await resolve_internal_user_id(current_user, session)
         if not user_id:
             return JSONResponse({"success": False, "error": "Пользователь не найден"}, status_code=401)
 
@@ -826,7 +805,7 @@ async def toggle_task(request: Request, shift_id: int, task_id: int):
         return current_user
     
     async with get_async_session() as session:
-        user_id = await get_user_id_from_current_user(current_user, session)
+        user_id = await resolve_internal_user_id(current_user, session)
         
         from shared.services.shift_task_journal import ShiftTaskJournal
         journal = ShiftTaskJournal(session)
@@ -854,7 +833,7 @@ async def add_manual_task(request: Request, shift_id: int):
         return current_user
     
     async with get_async_session() as session:
-        user_id = await get_user_id_from_current_user(current_user, session)
+        user_id = await resolve_internal_user_id(current_user, session)
         form_data = await request.form()
         task_text = form_data.get("task_text", "").strip()
         
@@ -891,7 +870,7 @@ async def shifts_stats(request: Request):
     
     async with get_async_session() as session:
         # Получаем внутренний ID пользователя
-        user_id = await get_user_id_from_current_user(current_user, session)
+        user_id = await resolve_internal_user_id(current_user, session)
         # Получаем объекты владельца
         owner_objects = select(Object.id).where(Object.owner_id == user_id)
         

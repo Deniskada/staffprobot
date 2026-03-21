@@ -97,25 +97,31 @@ URLHelper.get_web_url("/owner/objects")
 
 В шаблонах для CSS/JS использовать `| static_version`.
 
-### 4.7. Telegram-уведомления: ссылки с авто-логином
+### 4.7. Уведомления TG / MAX: ссылки с авто-логином
 
-Каждое Telegram-сообщение, связанное с действием, **обязано** содержать смысловую ссылку на соответствующий раздел ЛК.
+Сообщения в **Telegram** и **MAX** (персональный канал `NotificationChannel.MAX`), связанные с действием в ЛК, **обязаны** содержать смысловую ссылку (`$link_url` в шаблоне).
 
 Правила:
-1. В шаблоне `base_templates.py` добавлять `$link_url` в конец telegram-варианта.
-2. `NotificationDispatcher._inject_auto_login_url()` автоматически подставляет URL с одноразовым auto-login токеном.
-3. Маппинг тип → путь определяется в `NotificationActionService.get_action_url()`.
-4. Прямые отправки через `bot.send_message()` должны использовать `build_auto_login_url()`:
+1. В `base_templates.py` в конец **telegram**-варианта добавлять `$link_url` (для MAX рендер идёт по тому же ключу, что и для Telegram).
+2. При отправке из `NotificationDispatcher` и Celery (`notification_tasks`) ссылка подставляется через **`enrich_variables_with_action_link()`** (`shared/services/notification_auto_login_vars.py`, внутренний **`user_id`**).
+3. Маппинг тип → путь — **`NotificationActionService.get_action_url()`**.
+4. Дублирование TG+MAX при создании записей: **`NotificationService.create_notification_telegram_and_max_if_linked()`** — вторая запись в канал `max`, если у пользователя есть привязка `messenger_accounts` (provider=max).
+5. Прямые отправки из бота — **`build_auto_login_url(user_id, path, base_url)`**, где **`user_id` — внутренний** `users.id`, не `telegram_id`:
 
 ```python
 from core.auth.auto_login import build_auto_login_url
-url = await build_auto_login_url(telegram_id, "/employee/offers/123", base_url)
+url = await build_auto_login_url(user_id, "/employee/offers/123", base_url)
 ```
 
-5. При добавлении нового типа уведомления:
-   - Добавить маппинг в `NotificationActionService.get_action_url()`
-   - Добавить `$link_url` в Telegram-шаблон
-   - Передавать `object_id`/`contract_id`/`shift_id` в `data` при `create_notification()`
+6. Новый тип уведомления:
+   - маппинг в `NotificationActionService.get_action_url()`
+   - `$link_url` в telegram-шаблоне
+   - в `data` передавать `object_id` / `contract_id` / `shift_id` и т.п.
+
+### 4.8. Группы отчётов объектов (фоновые рассылки TG / MAX)
+
+- **Новые** фоновые сообщения в **группы отчётов** объектов (праздники, служебные рассылки в чаты объектов и т.п.) — **только** через `shared.services.report_group_broadcast.send_object_report_group_text` (единая точка: `notification_targets` + legacy, учёт переключателей владельца `report_group_messengers`).
+- **Не** добавлять «голый» `bot.send_message(...)` в отчётный чат объекта; если найден старый путь — перевести на `send_object_report_group_text` и при необходимости **зеркалить в MAX** там же (не дублировать разрозненную логику).
 
 ## 5) Документация и планирование (активный контур)
 

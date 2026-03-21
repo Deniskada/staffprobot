@@ -16,25 +16,30 @@ class EmployeeObjectsService:
     def __init__(self):
         logger.info("EmployeeObjectsService initialized")
     
-    async def get_employee_objects(self, telegram_id: int) -> List[Dict[str, Any]]:
+    async def get_employee_objects(
+        self,
+        telegram_id: Optional[int] = None,
+        internal_user_id: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         """
-        Получает объекты, доступные пользователю (сотруднику по договорам или владельцу по собственности).
-        
-        Args:
-            telegram_id: Telegram ID пользователя
-            
-        Returns:
-            Список объектов с информацией о договорах
+        Получает объекты, доступные пользователю.
+        telegram_id: legacy. internal_user_id: для MAX (приоритет).
         """
         try:
             async with get_async_session() as session:
-                # Находим пользователя по telegram_id
-                user_query = select(User).where(User.telegram_id == telegram_id)
+                if internal_user_id is not None:
+                    user_query = select(User).where(User.id == internal_user_id)
+                elif telegram_id is not None:
+                    user_query = select(User).where(User.telegram_id == telegram_id)
+                else:
+                    return []
                 user_result = await session.execute(user_query)
                 user = user_result.scalar_one_or_none()
                 
                 if not user:
-                    logger.warning(f"User with telegram_id {telegram_id} not found")
+                    logger.warning(
+                        f"User not found (telegram_id={telegram_id}, internal_user_id={internal_user_id})"
+                    )
                     return []
                 
                 # Проверяем роль пользователя
@@ -174,21 +179,22 @@ class EmployeeObjectsService:
             logger.error(f"Error getting employee object {object_id} for {telegram_id}: {e}")
             return None
     
-    async def has_access_to_object(self, telegram_id: int, object_id: int) -> bool:
+    async def has_access_to_object(
+        self,
+        telegram_id: int,
+        object_id: int,
+        internal_user_id: Optional[int] = None,
+    ) -> bool:
         """
         Проверяет, есть ли у пользователя доступ к объекту (владелец или сотрудник по договору).
-        
-        Args:
-            telegram_id: Telegram ID пользователя
-            object_id: ID объекта
-            
-        Returns:
-            True если есть доступ, False иначе
+        internal_user_id: для MAX (приоритет над telegram_id).
         """
         try:
             async with get_async_session() as session:
-                # Находим пользователя по telegram_id
-                user_query = select(User).where(User.telegram_id == telegram_id)
+                if internal_user_id is not None:
+                    user_query = select(User).where(User.id == internal_user_id)
+                else:
+                    user_query = select(User).where(User.telegram_id == telegram_id)
                 user_result = await session.execute(user_query)
                 user = user_result.scalar_one_or_none()
                 

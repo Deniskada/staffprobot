@@ -330,26 +330,21 @@ app.include_router(internal_api_router, tags=["Internal API"])
 # API для интеграции с ботом
 @app.post("/api/send-pin")
 async def send_pin_api(request: Request):
-    """API для отправки PIN-кода через бота"""
+    """API для отправки PIN-кода (TG или MAX)."""
     try:
-        # Получаем данные из тела запроса
         form_data = await request.form()
-        print(f"Form data: {form_data}")
-        telegram_id = int(form_data.get("telegram_id", 0))
-        print(f"Telegram ID: {telegram_id}")
-        
-        if not telegram_id:
-            raise HTTPException(status_code=400, detail="Telegram ID не указан")
-        
-        # Генерация и отправка PIN-кода
-        pin_code = await auth_service.generate_and_send_pin(telegram_id)
-        return {"status": "success", "message": "PIN-код отправлен в Telegram"}
-        
-    except ValueError as e:
-        print(f"ValueError: {e}")
-        raise HTTPException(status_code=400, detail="Неверный формат Telegram ID")
+        messenger = (form_data.get("messenger") or "telegram").strip().lower()
+        if messenger not in ("telegram", "max"):
+            messenger = "telegram"
+        external_id = (form_data.get("external_id") or form_data.get("telegram_id") or "").strip()
+        if not external_id:
+            raise HTTPException(status_code=400, detail="ID мессенджера не указан")
+        await auth_service.generate_and_send_pin(messenger, external_id)
+        msg = "PIN-код отправлен в Telegram" if messenger == "telegram" else "PIN-код отправлен в MAX"
+        return {"status": "success", "message": msg}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный формат ID")
     except Exception as e:
-        print(f"Exception: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 

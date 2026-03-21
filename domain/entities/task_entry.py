@@ -24,7 +24,7 @@ class TaskEntryV2(Base):
     # Результаты выполнения
     completed_at = Column(DateTime(timezone=True), nullable=True)
     completion_notes = Column(Text, nullable=True)  # Текстовый отчёт
-    completion_media = Column(JSON, nullable=True)  # [{"url": "...", "type": "photo"}]
+    completion_media = Column(JSON, nullable=True)  # [{url, type, delivery?: {telegram?, max?}}]
     completion_location = Column(Text, nullable=True)  # Координаты завершения в формате "lat,lon"
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

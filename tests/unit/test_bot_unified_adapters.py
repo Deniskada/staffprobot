@@ -2,7 +2,10 @@
 
 import pytest
 from unittest.mock import MagicMock
+
 from shared.bot_unified import NormalizedUpdate, TgAdapter, MaxAdapter
+
+pytestmark = pytest.mark.ci_smoke
 
 
 class TestTgAdapter:

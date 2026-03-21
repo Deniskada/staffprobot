@@ -26,7 +26,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     user = update.effective_user
     if not user:
         return
-    
+
+    from shared.bot_unified import TgAdapter, TgMessenger, unified_router
+
+    nu = TgAdapter.parse(update)
+    if nu:
+        try:
+            if await unified_router.handle(nu, TgMessenger(update, context)):
+                return
+        except Exception as e:
+            logger.error(f"help_command: unified_router error: {e}", exc_info=True)
+
     help_text = """
 ❓ <b>Справка по StaffProBot</b>
 
@@ -99,7 +109,17 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user = update.effective_user
     if not user:
         return
-    
+
+    from shared.bot_unified import TgAdapter, TgMessenger, unified_router
+
+    nu = TgAdapter.parse(update)
+    if nu:
+        try:
+            if await unified_router.handle(nu, TgMessenger(update, context)):
+                return
+        except Exception as e:
+            logger.error(f"status_command: unified_router error: {e}", exc_info=True)
+
     user_id = user.id
     
     try:

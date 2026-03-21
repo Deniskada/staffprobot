@@ -33,20 +33,30 @@
                 {% endif %}
                 
                 <form id="loginForm" method="POST" action="/auth/login">
+                    <input type="hidden" name="messenger" id="messenger" value="{{ messenger or 'telegram' }}">
+                    <div class="mb-3">
+                        <label class="form-label text-white fw-bold">Вход через</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="messenger_radio" id="messenger_telegram" value="telegram" {{ 'checked' if (messenger or 'telegram') == 'telegram' else '' }}>
+                            <label class="btn btn-outline-light" for="messenger_telegram"><i class="bi bi-telegram me-1"></i>Telegram</label>
+                            <input type="radio" class="btn-check" name="messenger_radio" id="messenger_max" value="max" {{ 'checked' if messenger == 'max' else '' }}>
+                            <label class="btn btn-outline-light" for="messenger_max"><i class="bi bi-chat-square-text me-1"></i>MAX</label>
+                        </div>
+                    </div>
                     <div class="mb-4">
-                        <label for="telegram_id" class="form-label text-white fw-bold">
-                            <i class="bi bi-person-badge me-2"></i>Telegram ID
+                        <label for="external_id" class="form-label text-white fw-bold">
+                            <i class="bi bi-person-badge me-2"></i><span id="id-label">Telegram ID</span>
                         </label>
-                        <input type="number" 
+                        <input type="text" 
                                class="form-control form-control-lg" 
-                               id="telegram_id" 
-                               name="telegram_id" 
-                               value="{{ telegram_id or '' }}"
-                               placeholder="Введите ваш Telegram ID"
+                               id="external_id" 
+                               name="external_id" 
+                               value="{{ external_id or '' }}"
+                               placeholder="Введите ваш ID"
                                style="border-radius: 15px; border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.9);"
                                required>
-                        <div class="form-text text-white-75 mt-2">
-                            <strong><i class="bi bi-telegram me-1"></i>Ваш Telegram ID можно узнать у бота @StaffProBot командой /start меню Мой Telegram ID</strong>
+                        <div class="form-text text-white-75 mt-2" id="id-hint">
+                            <strong><i class="bi bi-telegram me-1"></i>Ваш Telegram ID можно узнать у бота @StaffProBot — кнопка «Мой ID»</strong>
                         </div>
                     </div>
                     
@@ -155,21 +165,42 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('loginForm');
-    const telegramIdInput = document.getElementById('telegram_id');
+    const messengerInput = document.getElementById('messenger');
+    const externalIdInput = document.getElementById('external_id');
     const sendPinBtn = document.getElementById('sendPinBtn');
     const pinCodeInput = document.getElementById('pin_code');
     const submitBtn = loginForm.querySelector('button[type="submit"]');
+    const idLabel = document.getElementById('id-label');
+    const idHint = document.getElementById('id-hint');
 
     let isSubmitting = false;
-    let submitInitialContent = submitBtn.innerHTML;
+
+    document.querySelectorAll('input[name="messenger_radio"]').forEach(function(r) {
+        r.addEventListener('change', function() {
+            messengerInput.value = this.value;
+            if (this.value === 'telegram') {
+                idLabel.textContent = 'Telegram ID';
+                idHint.innerHTML = '<strong><i class="bi bi-telegram me-1"></i>Ваш Telegram ID можно узнать у бота @StaffProBot — кнопка «Мой ID»</strong>';
+                externalIdInput.placeholder = 'Введите ваш Telegram ID';
+            } else {
+                idLabel.textContent = 'MAX ID';
+                idHint.innerHTML = '<strong><i class="bi bi-chat-square-text me-1"></i>Ваш MAX ID можно узнать у бота StaffProBot в MAX — кнопка «Мой ID»</strong>';
+                externalIdInput.placeholder = 'Введите ваш MAX user_id';
+            }
+        });
+    });
+    if (document.getElementById('messenger_max').checked) {
+        idLabel.textContent = 'MAX ID';
+        idHint.innerHTML = '<strong><i class="bi bi-chat-square-text me-1"></i>Ваш MAX ID можно узнать у бота StaffProBot в MAX — кнопка «Мой ID»</strong>';
+        externalIdInput.placeholder = 'Введите ваш MAX user_id';
+    }
 
     const setSubmittingState = (state) => {
         isSubmitting = state;
         if (state) {
-            submitInitialContent = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Входим...';
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Входим...';
             submitBtn.disabled = true;
-            telegramIdInput.readOnly = true;
+            externalIdInput.readOnly = true;
             pinCodeInput.readOnly = true;
         }
     };
@@ -182,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setSubmittingState(true);
     });
 
-    telegramIdInput.addEventListener('input', function() {
+    externalIdInput.addEventListener('input', function() {
         sendPinBtn.disabled = !this.value;
     });
 
@@ -193,20 +224,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     sendPinBtn.addEventListener('click', function() {
-        if (!telegramIdInput.value) {
-            alert('Сначала введите Telegram ID');
+        if (!externalIdInput.value) {
+            alert('Сначала введите ID мессенджера');
             return;
         }
-
         this.innerHTML = '<i class="bi bi-hourglass-split"></i><span class="d-none d-md-inline ms-1"> Отправка...</span>';
         this.disabled = true;
 
         fetch('/api/send-pin', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: `telegram_id=${telegramIdInput.value}`
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `messenger=${encodeURIComponent(messengerInput.value)}&external_id=${encodeURIComponent(externalIdInput.value)}`
         })
             .then((response) => response.json())
             .then((data) => {

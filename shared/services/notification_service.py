@@ -1,7 +1,7 @@
 """Сервис уведомлений для StaffProBot."""
 
 import json
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, and_, or_, func, desc, text
 from sqlalchemy.orm import selectinload
@@ -111,7 +111,59 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Error creating notification for user {user_id}: {e}")
             return None
-    
+
+    async def create_notification_telegram_and_max_if_linked(
+        self,
+        user_id: int,
+        type: NotificationType,
+        title: str,
+        message: str,
+        data: Optional[Dict[str, Any]] = None,
+        priority: NotificationPriority = NotificationPriority.NORMAL,
+        scheduled_at: Optional[datetime] = None,
+    ) -> Tuple[Optional[Notification], Optional[Notification]]:
+        """
+        Создаёт записи в Telegram и/или MAX по настройкам пользователя для типа
+        (notification_preferences[type]: telegram, max; по умолчанию оба включены).
+        """
+        from shared.services.messenger_account_service import get_max_external_user_id_for_user
+
+        type_code = type.value if hasattr(type, "value") else str(type)
+        settings = await self.get_user_notification_settings(user_id)
+        raw_prefs = settings.get(type_code, {})
+        type_prefs = raw_prefs if isinstance(raw_prefs, dict) else {}
+        want_tg = type_prefs.get("telegram", True)
+        want_max = type_prefs.get("max", True)
+
+        tg: Optional[Notification] = None
+        if want_tg:
+            tg = await self.create_notification(
+                user_id=user_id,
+                type=type,
+                channel=NotificationChannel.TELEGRAM,
+                title=title,
+                message=message,
+                data=data,
+                priority=priority,
+                scheduled_at=scheduled_at,
+            )
+        max_n: Optional[Notification] = None
+        if want_max:
+            async with get_async_session() as session:
+                ext = await get_max_external_user_id_for_user(session, user_id)
+            if ext:
+                max_n = await self.create_notification(
+                    user_id=user_id,
+                    type=type,
+                    channel=NotificationChannel.MAX,
+                    title=title,
+                    message=message,
+                    data=data,
+                    priority=priority,
+                    scheduled_at=scheduled_at,
+                )
+        return tg, max_n
+
     @cached(ttl=timedelta(minutes=5), key_prefix="user_notifications")
     async def get_user_notifications(
         self,
@@ -661,7 +713,7 @@ class NotificationService:
             user_id: ID пользователя
             
         Returns:
-            Словарь {type_code: {"telegram": bool, "inapp": bool}}
+            Словарь {type_code: {"telegram": bool, "inapp": bool, "max": bool?}}
         """
         try:
             async with get_async_session() as session:
@@ -673,7 +725,7 @@ class NotificationService:
                 if not user:
                     return {}
                 
-                # notification_preferences - это JSON поле: {type_code: {"telegram": bool, "inapp": bool}}
+                # JSON: {type_code: {"telegram", "inapp", "max"}, report_group_messengers: {...}}
                 prefs = user.notification_preferences or {}
                 return prefs
         except Exception as e:
@@ -685,7 +737,8 @@ class NotificationService:
         user_id: int,
         notification_type: str,
         channel_telegram: bool,
-        channel_inapp: bool
+        channel_inapp: bool,
+        channel_max: bool = True,
     ) -> bool:
         """
         Установить настройки уведомлений для конкретного типа.
@@ -695,6 +748,7 @@ class NotificationService:
             notification_type: Код типа уведомления
             channel_telegram: Включить/выключить Telegram
             channel_inapp: Включить/выключить In-App
+            channel_max: Включить/выключить личный MAX (при привязке аккаунта)
             
         Returns:
             True если успешно, False при ошибке
@@ -712,7 +766,8 @@ class NotificationService:
                 prefs = user.notification_preferences or {}
                 prefs[notification_type] = {
                     "telegram": channel_telegram,
-                    "inapp": channel_inapp
+                    "inapp": channel_inapp,
+                    "max": channel_max,
                 }
                 user.notification_preferences = prefs
                 
@@ -724,7 +779,7 @@ class NotificationService:
                 
                 logger.info(
                     f"Обновлены настройки уведомлений user {user_id}, type={notification_type}, "
-                    f"telegram={channel_telegram}, inapp={channel_inapp}"
+                    f"telegram={channel_telegram}, inapp={channel_inapp}, max={channel_max}"
                 )
                 return True
         except Exception as e:

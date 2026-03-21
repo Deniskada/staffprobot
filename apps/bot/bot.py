@@ -154,16 +154,8 @@ class StaffProBot:
             MessageHandler(filters.PHOTO | filters.VIDEO, _handle_received_media)
         )
         
-        # Обработка открытия/закрытия объектов
-        from .handlers_div.object_state_handlers import (
-            _handle_open_object,
-            _handle_close_object,
-            _handle_select_object_to_open
-        )
-        self.application.add_handler(CallbackQueryHandler(_handle_open_object, pattern="^open_object$"))
-        self.application.add_handler(CallbackQueryHandler(_handle_close_object, pattern="^close_object$"))
-        self.application.add_handler(CallbackQueryHandler(_handle_select_object_to_open, pattern="^select_object_to_open:.*$"))
-        
+        # open_object / close_object / select_object_to_open — UnifiedBotRouter → button_callback
+
         # Обработка отмены смен (включаем явные хендлеры)
         from .handlers_div.schedule_handlers import (
             handle_cancel_shift,

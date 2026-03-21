@@ -108,10 +108,9 @@ async def _send_bot_alert(payload: Optional[dict], age_seconds: Optional[float])
             message=message,
             priority=NotificationPriority.URGENT,
         )
-        await notification_service.create_notification(
+        await notification_service.create_notification_telegram_and_max_if_linked(
             user_id=user_id,
             type=NotificationType.SYSTEM_MAINTENANCE,
-            channel=NotificationChannel.TELEGRAM,
             title=title,
             message=message,
             priority=NotificationPriority.URGENT,

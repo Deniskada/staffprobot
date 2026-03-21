@@ -26,8 +26,9 @@ class NormalizedUpdate:
     last_name: Optional[str] = None
     contact_phone: Optional[str] = None
 
-    photo_file_id: Optional[str] = None
+    photo_file_id: Optional[str] = None  # TG file_id
     photo_url: Optional[str] = None
+    photo_token: Optional[str] = None  # MAX attachment token
 
     location: Optional[dict[str, float]] = None
     raw: Optional[dict[str, Any]] = None

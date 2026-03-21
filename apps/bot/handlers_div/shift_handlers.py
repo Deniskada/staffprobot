@@ -9,6 +9,7 @@ from apps.bot.services.object_service import ObjectService
 from core.database.session import get_async_session
 from core.utils.timezone_helper import timezone_helper
 from domain.entities.object import Object
+from shared.services.report_group_broadcast import ObjectReportGroupChannels, resolve_object_report_group_channels
 from domain.entities.shift import Shift
 from domain.entities.time_slot import TimeSlot
 from domain.entities.timeslot_task_template import TimeslotTaskTemplate
@@ -2046,12 +2047,18 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
                         logger.info(f"[MY_TASKS] Object scalar retrieved: {obj is not None}")
                         
                         if obj:
-                            logger.info(f"[MY_TASKS] Object details: id={obj.id}, name={obj.name}, telegram_report_chat_id={obj.telegram_report_chat_id}")
+                            logger.info(
+                                f"[MY_TASKS] Object id={obj.id}, name={obj.name}, "
+                                f"legacy_telegram_report_chat_id_column={obj.telegram_report_chat_id}"
+                            )
                     except Exception as obj_err:
                         logger.error(f"[MY_TASKS] Error getting object: {obj_err}", exc_info=True)
                         obj = None
                     
-                    logger.info(f"[MY_TASKS] Object found: {obj is not None}, telegram_report_chat_id: {obj.telegram_report_chat_id if obj else None}")
+                    logger.info(
+                        f"[MY_TASKS] Object found: {obj is not None}, "
+                        f"legacy_telegram_column: {obj.telegram_report_chat_id if obj else None}"
+                    )
                     
                     if obj:
                         from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
@@ -2062,10 +2069,11 @@ async def _handle_my_task_media_upload(update: Update, context: ContextTypes.DEF
         logger.info(f"[MY_TASKS] Final telegram_chat_id check: {telegram_chat_id}")
         
         if not telegram_chat_id:
-            logger.warning(f"[MY_TASKS] No telegram_chat_id found, showing error to user")
+            logger.warning(f"[MY_TASKS] No effective TG report chat (targets+legacy), showing error to user")
             await query.edit_message_text(
-                text="❌ Telegram группа для отчетов не настроена.\n\n"
-                     "Обратитесь к администратору для настройки группы в объекте или подразделении.",
+                text="❌ Чат для отчётов в <b>Telegram</b> не настроен.\n\n"
+                     "Для отчётов только в MAX настройте группу MAX в объекте и используйте MAX-бота.\n"
+                     "Или обратитесь к администратору: группа Telegram в объекте / подразделении.",
                 parse_mode='HTML'
             )
             return
@@ -2477,70 +2485,115 @@ async def _finish_task_v2_media_upload(
     entry_id: int,
     session: AsyncSession,
     final_flow,
-    telegram_chat_id: str,
+    channels: ObjectReportGroupChannels,
     object_name: str,
     template,
     from_user,
     chat_id: int = None,
     completion_location: str | None = None
 ) -> None:
-    """Завершить загрузку медиа для задачи Tasks v2 и отправить все файлы в группу."""
-    from shared.services.media_orchestrator import MediaFlowConfig
-    from domain.entities.task_entry import TaskEntryV2
+    """Завершить Tasks v2: доставка в TG/MAX по resolve_object_report_group_channels (переключатели владельца)."""
     from datetime import datetime
-    
+    from typing import Any
+
+    from domain.entities.task_entry import TaskEntryV2
+    from shared.services.max_report_sender import send_media_to_max_group
+    from shared.services.telegram_report_sender import send_media_to_telegram_group
+
     try:
         if not final_flow or not final_flow.collected_photos:
             logger.warning(f"No photos collected for task entry {entry_id}")
             return
-        
-        # Получаем типы медиа из user_state
+
         user_state = await user_state_manager.get_state(user_id)
-        media_types_dict = user_state.data.get('task_v2_media_types', {}) if user_state else {}
-        
-        # Формируем списки file_ids и типов медиа
+        media_types_dict = (user_state.data or {}).get("task_v2_media_types", {}) if user_state else {}
+
         file_ids = final_flow.collected_photos
-        media_types = [media_types_dict.get(file_id, 'photo') for file_id in file_ids]
-        
+        media_types = [media_types_dict.get(file_id, "photo") for file_id in file_ids]
+        media_items: list[dict[str, Any]] = [
+            {"file_id": fid, "type": media_types[i]} for i, fid in enumerate(file_ids)
+        ]
+
         logger.info(
-            f"Finishing task v2 media upload: entry_id={entry_id}, file_ids={len(file_ids)}, "
-            f"media_types_dict={len(media_types_dict)}, media_types={media_types}"
+            "Finishing task v2 media upload",
+            entry_id=entry_id,
+            files=len(file_ids),
+            tg_ready=channels.tg_ready,
+            max_ready=channels.max_ready,
         )
-        
-        # Формируем подпись
+
         user_name = f"{from_user.first_name} {from_user.last_name or ''}".strip()
         caption = f"📋 Отчет (Tasks v2): {template.title}\n👤 {user_name}\n🏢 {object_name}"
-        
-        # Отправляем все файлы в группу (для отчётов)
-        try:
-            media_urls = await _send_multiple_media_to_group(
-                bot, telegram_chat_id, file_ids, caption, media_types
-            )
-            if not media_urls:
-                logger.error("Failed to send media to group: no URLs returned")
-                raise Exception("Не удалось отправить медиа в группу")
-            logger.info("Media sent to group: %s URLs created", len(media_urls))
-        except Exception as e:
-            logger.exception("Error sending media to group: %s", e)
-            raise
 
-        # completion_media: из uploaded_media (хранилище), иначе из URL группы
+        urls: list[str] = []
+        if channels.tg_ready:
+            try:
+                urls = await send_media_to_telegram_group(
+                    str(channels.telegram_chat_id),
+                    media_items,
+                    caption,
+                    bot=bot,
+                )
+            except Exception as e:
+                logger.exception("task v2 TG group send failed: %s", e)
+                urls = []
+        telegram_ok = bool(urls) if channels.tg_ready else True
+
+        max_ok = True
+        max_links: list[Optional[str]] = []
+        if channels.max_ready:
+            um = final_flow.uploaded_media
+            if um and len(um) != len(media_items):
+                um = None
+            max_ok, max_links = await send_media_to_max_group(
+                str(channels.max_report_chat_id),
+                media_items,
+                caption,
+                uploaded_media=um,
+            )
+
+        delivered = (channels.tg_ready and telegram_ok) or (channels.max_ready and max_ok)
+        if not delivered:
+            raise RuntimeError("Не удалось доставить отчёт ни в один включённый канал")
+
         if final_flow.uploaded_media:
-            completion_media = [
-                {"url": m.url, "type": m.type, "key": m.key}
+            completion_media: list[dict[str, Any]] = [
+                {
+                    "url": m.url,
+                    "type": m.type,
+                    "key": m.key,
+                }
                 for m in final_flow.uploaded_media
             ]
+            for i, item in enumerate(completion_media):
+                deliv: dict[str, Any] = {}
+                if channels.tg_ready and telegram_ok and i < len(urls) and urls[i]:
+                    deliv["telegram"] = urls[i]
+                if channels.max_ready and max_ok and i < len(max_links) and max_links[i]:
+                    deliv["max"] = max_links[i]
+                if deliv:
+                    item["delivery"] = deliv
         else:
-            completion_media = [
-                {"url": url, "type": media_types[i], "file_id": file_ids[i]}
-                for i, url in enumerate(media_urls)
-            ]
-        
-        # Сохраняем результат в TaskEntryV2
-        entry_query = select(TaskEntryV2).where(TaskEntryV2.id == entry_id)
-        entry_result = await session.execute(entry_query)
+            completion_media = []
+            for i, fid in enumerate(file_ids):
+                u = urls[i] if i < len(urls) else ""
+                item: dict[str, Any] = {
+                    "url": u,
+                    "type": media_types[i],
+                    "file_id": fid,
+                }
+                deliv = {}
+                if channels.tg_ready and telegram_ok and i < len(urls) and urls[i]:
+                    deliv["telegram"] = urls[i]
+                if channels.max_ready and max_ok and i < len(max_links) and max_links[i]:
+                    deliv["max"] = max_links[i]
+                if deliv:
+                    item["delivery"] = deliv
+                completion_media.append(item)
+
+        entry_result = await session.execute(select(TaskEntryV2).where(TaskEntryV2.id == entry_id))
         entry = entry_result.scalar_one_or_none()
-        
+
         if entry:
             entry.is_completed = True
             entry.completed_at = datetime.utcnow()
@@ -2548,47 +2601,68 @@ async def _finish_task_v2_media_upload(
             if completion_location:
                 entry.completion_location = completion_location
             await session.commit()
-            
             logger.info(
-                f"TaskEntryV2 {entry_id} completed with {len(completion_media)} media files",
+                "TaskEntryV2 completed with media",
                 entry_id=entry_id,
-                media_count=len(completion_media)
+                media_count=len(completion_media),
             )
-        
-        # Очищаем состояние
+
         await user_state_manager.update_state(
             user_id,
             step=UserStep.TASK_COMPLETION,
-            pending_task_v2_entry_id=None
+            pending_task_v2_entry_id=None,
         )
-        
-        # Очищаем типы медиа из data
-        if user_state and 'task_v2_media_types' in user_state.data:
-            user_state.data.pop('task_v2_media_types')
-            await user_state_manager.update_state(user_id, data=user_state.data)
-        
-        # Отправляем подтверждение пользователю
+
+        if user_state:
+            ud = dict(user_state.data or {})
+            if "task_v2_media_types" in ud:
+                ud.pop("task_v2_media_types")
+                await user_state_manager.update_state(user_id, data=ud)
+
+        ok_parts: list[str] = []
+        if channels.tg_ready and telegram_ok:
+            ok_parts.append("Telegram")
+        if channels.max_ready and max_ok:
+            ok_parts.append("MAX")
+        ch_str = " и ".join(ok_parts) if ok_parts else "—"
+
+        warn_parts: list[str] = []
+        if channels.tg_ready and not telegram_ok:
+            warn_parts.append("Telegram")
+        if channels.max_ready and not max_ok:
+            warn_parts.append("MAX")
+        warn_line = ""
+        if warn_parts:
+            warn_line = f"\n\n⚠️ Не доставлено: {'; '.join(warn_parts)}."
+
         if chat_id:
             await bot.send_message(
                 chat_id=chat_id,
                 text=(
                     f"✅ <b>Отчет принят!</b>\n\n"
                     f"📋 Задача: <i>{template.title}</i>\n"
-                    f"✅ Отмечена как выполненная\n"
-                    f"📤 Отправлено {len(completion_media)} файл(ов) в группу отчетов\n\n"
-                    f"💡 Используйте '📋 Мои задачи' для продолжения."
+                    f"✅ Выполнена, {len(completion_media)} файл(ов) → {ch_str}"
+                    f"{warn_line}\n\n"
+                    f"💡 Используйте «📋 Мои задачи» для продолжения."
                 ),
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks"),
-                    InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
-                ]])
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton("📋 Мои задачи", callback_data="my_tasks"),
+                            InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu"),
+                        ]
+                    ]
+                ),
             )
-        
+
     except Exception as e:
         logger.exception(f"Error finishing task v2 media upload: {e}")
         if chat_id:
-            await bot.send_message(chat_id=chat_id, text="❌ Ошибка при отправке отчета. Попробуйте позже.")
+            await bot.send_message(
+                chat_id=chat_id,
+                text="❌ Ошибка при отправке отчета. Попробуйте позже.",
+            )
         raise
 
 
@@ -2662,8 +2736,16 @@ async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYP
             owner_id = obj.owner_id
             storage_mode = await get_storage_mode(session, owner_id, "tasks")
             object_name = obj.name
-            from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
-            telegram_chat_id = await get_telegram_report_chat_id_for_object(session, obj)
+            channels = await resolve_object_report_group_channels(session, obj)
+            if not channels.any_ready:
+                await orchestrator.close()
+                await query.edit_message_text(
+                    "❌ Нет канала для отчёта: в объекте задайте чат Telegram и/или MAX "
+                    "и включите соответствующий переключатель в ЛК → "
+                    "<b>Настройки уведомлений</b> → «Группы отчётов объектов».",
+                    parse_mode="HTML",
+                )
+                return
 
             final_flow = await orchestrator.finish(
                 user_id, bot=context.bot, media_types=media_types, storage_mode=storage_mode
@@ -2672,12 +2754,6 @@ async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYP
 
             if not final_flow or not final_flow.collected_photos:
                 await query.edit_message_text("❌ Нет загруженных файлов")
-                return
-
-            if not telegram_chat_id:
-                await query.edit_message_text(
-                    "❌ Telegram группа для отчетов не настроена.\nОбратитесь к администратору."
-                )
                 return
 
             # Проверяем, требуется ли геопозиция
@@ -2714,7 +2790,7 @@ async def _handle_task_v2_done(update: Update, context: ContextTypes.DEFAULT_TYP
                 entry_id,
                 session,
                 final_flow,
-                telegram_chat_id,
+                channels,
                 object_name,
                 template,
                 query.from_user,
@@ -2814,19 +2890,19 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
             )
             object_result = await session.execute(object_query)
             obj = object_result.scalar_one_or_none()
-            
-            telegram_chat_id = None
+
             object_name = "Объект"
-            
+            channels = None
             if obj:
                 object_name = obj.name
-                from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
-                telegram_chat_id = await get_telegram_report_chat_id_for_object(session, obj)
-            
-            if not telegram_chat_id:
+                channels = await resolve_object_report_group_channels(session, obj)
+
+            if not channels or not channels.any_ready:
                 await update.message.reply_text(
-                    "❌ Telegram группа для отчетов не настроена.\n"
-                    "Обратитесь к администратору."
+                    "❌ Нет канала для отчёта: в объекте задайте чат Telegram и/или MAX "
+                    "и включите соответствующий переключатель в ЛК → "
+                    "<b>Настройки уведомлений</b> → «Группы отчётов объектов».",
+                    parse_mode="HTML",
                 )
                 return
             
@@ -2881,7 +2957,7 @@ async def _handle_received_task_v2_media(update: Update, context: ContextTypes.D
                 entry_id,
                 session,
                 final_flow,
-                telegram_chat_id,
+                channels,
                 object_name,
                 template,
                 update.message.from_user,

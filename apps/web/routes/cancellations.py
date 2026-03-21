@@ -32,18 +32,20 @@ async def owner_cancel_shift(
 ):
     """Отмена запланированной смены владельцем."""
     try:
-        # Получаем пользователя
-        user_id = current_user.get("id")
-        user_query = select(User).where(User.telegram_id == user_id)
-        user_result = await db.execute(user_query)
+        internal_user_id = await get_user_id_from_current_user(current_user, db)
+        if not internal_user_id:
+            return JSONResponse(
+                {"success": False, "message": "Пользователь не найден"},
+                status_code=404
+            )
+        user_result = await db.execute(select(User).where(User.id == internal_user_id))
         user = user_result.scalar_one_or_none()
-        
         if not user:
             return JSONResponse(
                 {"success": False, "message": "Пользователь не найден"},
                 status_code=404
             )
-        
+
         # Проверяем, что смена существует и принадлежит владельцу
         shift_query = select(ShiftSchedule).where(ShiftSchedule.id == schedule_id)
         shift_result = await db.execute(shift_query)
@@ -214,15 +216,10 @@ async def owner_cancellations_list(
 ):
     """Страница модерации отмен смен (только с уважительными причинами)."""
     try:
-        # Получаем пользователя
-        user_id = current_user.get("id")
-        user_query = select(User).where(User.telegram_id == user_id)
-        user_result = await db.execute(user_query)
-        user = user_result.scalar_one_or_none()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
-        
+        owner_user_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
         # Получаем все отмены сотрудниками (требующие модерации)
         from sqlalchemy.orm import selectinload
         
@@ -238,7 +235,7 @@ async def owner_cancellations_list(
             .join(ShiftSchedule, ShiftCancellation.shift_schedule_id == ShiftSchedule.id)
             .join(Object, ShiftCancellation.object_id == Object.id)
             .where(
-                Object.owner_id == user.id
+                Object.owner_id == owner_user_id
                 # Показываем все отмены, не только сотрудниками (для отображения медиа)
             )
             .order_by(ShiftCancellation.created_at.desc())
@@ -337,7 +334,9 @@ async def owner_cancellations_list(
             "current_user": current_user,
             "cancellations": cancellations_with_media
         })
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error loading cancellations list: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки списка отмен")
@@ -353,18 +352,20 @@ async def owner_verify_cancellation(
 ):
     """Верификация документа для уважительной причины отмены."""
     try:
-        # Получаем пользователя
-        user_id = current_user.get("id")
-        user_query = select(User).where(User.telegram_id == user_id)
-        user_result = await db.execute(user_query)
+        internal_user_id = await get_user_id_from_current_user(current_user, db)
+        if not internal_user_id:
+            return JSONResponse(
+                {"success": False, "message": "Пользователь не найден"},
+                status_code=404
+            )
+        user_result = await db.execute(select(User).where(User.id == internal_user_id))
         user = user_result.scalar_one_or_none()
-        
         if not user:
             return JSONResponse(
                 {"success": False, "message": "Пользователь не найден"},
                 status_code=404
             )
-        
+
         # Проверяем владение объектом отмены (с eager loading)
         from sqlalchemy.orm import selectinload
         cancellation_query = (
@@ -432,19 +433,13 @@ async def owner_cancellations_analytics(
 ):
     """Страница аналитики отмен смен."""
     from apps.analytics.analytics_service import AnalyticsService
-    from apps.web.services.object_service import ObjectService
     from datetime import date, timedelta
     
     try:
-        # Получаем пользователя
-        user_id = current_user.get("id")
-        user_query = select(User).where(User.telegram_id == user_id)
-        user_result = await db.execute(user_query)
-        user = user_result.scalar_one_or_none()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
-        
+        owner_user_id = await get_user_id_from_current_user(current_user, db)
+        if not owner_user_id:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+
         # Обработка дат
         if date_from:
             start_date = date.fromisoformat(date_from)
@@ -456,14 +451,17 @@ async def owner_cancellations_analytics(
         else:
             end_date = date.today()
         
-        # Получаем объекты владельца для фильтра
-        object_service = ObjectService(db)
-        objects = await object_service.get_objects_by_owner(user.telegram_id)
-        
+        objects_result = await db.execute(
+            select(Object)
+            .where(Object.owner_id == owner_user_id, Object.is_active == True)
+            .order_by(Object.created_at.desc())
+        )
+        objects = objects_result.scalars().all()
+
         # Получаем статистику
         analytics_service = AnalyticsService()
         stats = analytics_service.get_cancellation_statistics(
-            owner_id=user.id,
+            owner_id=owner_user_id,
             start_date=start_date,
             end_date=end_date,
             object_id=object_id,
@@ -482,7 +480,7 @@ async def owner_cancellations_analytics(
                 selectinload(ShiftCancellation.cancelled_by)
             )
             .join(Object, ShiftCancellation.object_id == Object.id)
-            .where(Object.owner_id == user.id)
+            .where(Object.owner_id == owner_user_id)
         )
         
         # Применяем фильтры
@@ -507,7 +505,7 @@ async def owner_cancellations_analytics(
                 selectinload(ContractTermination.contract)
             )
             .where(
-                ContractTermination.owner_id == user.id,
+                ContractTermination.owner_id == owner_user_id,
                 ContractTermination.terminated_at >= datetime.combine(start_date, datetime.min.time()),
                 ContractTermination.terminated_at <= datetime.combine(end_date, datetime.max.time())
             )
@@ -537,7 +535,9 @@ async def owner_cancellations_analytics(
                 'employee_id': employee_id
             }
         })
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error loading cancellations analytics: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки аналитики")

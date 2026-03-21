@@ -31,16 +31,17 @@ class AuthMiddleware:
                 return None
             
             logger.debug(f"Token payload: {payload}")
+            user_id = payload.get("sub")
             telegram_id = payload.get("telegram_id")
-            if not telegram_id:
-                logger.warning("No telegram_id in token payload")
+            if user_id:
+                user = await self.user_manager.get_user_by_internal_id(int(user_id))
+            elif telegram_id:
+                user = await self.user_manager.get_user_by_telegram_id(int(telegram_id))
+            else:
+                logger.warning("No user_id or telegram_id in token payload")
                 return None
-            
-            # Получаем пользователя из базы данных
-            logger.debug(f"Getting user by telegram_id: {telegram_id}")
-            user = await self.user_manager.get_user_by_telegram_id(int(telegram_id))
             if not user:
-                logger.warning(f"User not found for telegram_id: {telegram_id}")
+                logger.warning(f"User not found for user_id={user_id} telegram_id={telegram_id}")
                 return None
             
             logger.debug(f"User found: {user}")

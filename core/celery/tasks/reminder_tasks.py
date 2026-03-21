@@ -264,40 +264,45 @@ async def _check_shifts_did_not_start_async() -> Dict[str, Any]:
                     # Создаем уведомления напрямую через существующую сессию
                     if telegram_enabled:
                         rendered_tg = NotificationTemplateManager.render(
-                            NotificationType.SHIFT_DID_NOT_START, 
-                            NotificationChannel.TELEGRAM, 
-                            template_vars
+                            NotificationType.SHIFT_DID_NOT_START,
+                            NotificationChannel.TELEGRAM,
+                            template_vars,
                         )
-                        notification_tg = await notification_service.create_notification(
-                            user_id=owner.id,
-                            type=NotificationType.SHIFT_DID_NOT_START,
-                            channel=NotificationChannel.TELEGRAM,
-                            title=rendered_tg["title"],
-                            message=rendered_tg["message"],
-                            data=template_vars,
-                            priority=NotificationPriority.HIGH
+                        notification_tg, notification_max = (
+                            await notification_service.create_notification_telegram_and_max_if_linked(
+                                user_id=owner.id,
+                                type=NotificationType.SHIFT_DID_NOT_START,
+                                title=rendered_tg["title"],
+                                message=rendered_tg["message"],
+                                data=template_vars,
+                                priority=NotificationPriority.HIGH,
+                            )
                         )
-                        
-                        # Отправляем Telegram уведомление через Celery
-                        if notification_tg and hasattr(notification_tg, 'id') and notification_tg.id:
-                            try:
-                                from core.celery.tasks.notification_tasks import send_notification_now
-                                send_notification_now.apply_async(
-                                    args=[notification_tg.id],
-                                    queue="notifications"
-                                )
-                                logger.debug(
-                                    "Enqueued shift_did_not_start Telegram notification for sending",
-                                    notification_id=notification_tg.id,
-                                    user_id=owner.id,
-                                    schedule_id=schedule.id,
-                                )
-                            except Exception as send_exc:
-                                logger.warning(
-                                    "Failed to enqueue shift_did_not_start Telegram notification",
-                                    notification_id=notification_tg.id if notification_tg else None,
-                                    error=str(send_exc),
-                                )
+
+                        from core.celery.tasks.notification_tasks import send_notification_now
+
+                        for notif, ch_label in (
+                            (notification_tg, "telegram"),
+                            (notification_max, "max"),
+                        ):
+                            if notif and getattr(notif, "id", None):
+                                try:
+                                    send_notification_now.apply_async(
+                                        args=[notif.id],
+                                        queue="notifications",
+                                    )
+                                    logger.debug(
+                                        f"Enqueued shift_did_not_start {ch_label} notification",
+                                        notification_id=notif.id,
+                                        user_id=owner.id,
+                                        schedule_id=schedule.id,
+                                    )
+                                except Exception as send_exc:
+                                    logger.warning(
+                                        f"Failed to enqueue shift_did_not_start {ch_label}",
+                                        notification_id=notif.id,
+                                        error=str(send_exc),
+                                    )
                     
                     if inapp_enabled:
                         rendered_inapp = NotificationTemplateManager.render(
@@ -792,10 +797,11 @@ async def _create_object_notification(
     # Приоритет
     priority_enum = NotificationPriority.HIGH if "late" in type_code or "early" in type_code or "no_shifts" in type_code else NotificationPriority.NORMAL
     
-    # Создать TG уведомление
+    notification_tg = None
+    notification_max = None
+    # Создать TG уведомление (+ MAX при привязке)
     if telegram_enabled:
         rendered_tg = NotificationTemplateManager.render(notif_type, NotificationChannel.TELEGRAM, template_vars)
-        # Используем ORM, как в notification_service.py
         notification_tg = Notification(
             user_id=current_owner.id,
             type=notif_type.value,  # Значение enum (object_no_shifts_today) - унифицированный формат: все .value
@@ -808,8 +814,26 @@ async def _create_object_notification(
             scheduled_at=scheduled_at
         )
         session.add(notification_tg)
-        # Обновляем, чтобы получить ID уведомления
         await session.flush()
+
+        from shared.services.messenger_account_service import get_max_external_user_id_for_user
+        if await get_max_external_user_id_for_user(session, current_owner.id):
+            rendered_max = NotificationTemplateManager.render(
+                notif_type, NotificationChannel.MAX, template_vars
+            )
+            notification_max = Notification(
+                user_id=current_owner.id,
+                type=notif_type.value,
+                channel=NotificationChannel.MAX.value,
+                status=NotificationStatus.PENDING.value,
+                priority=priority_enum.value,
+                title=rendered_max["title"],
+                message=rendered_max["message"],
+                data={**template_vars, "object_id": obj_id},
+                scheduled_at=scheduled_at
+            )
+            session.add(notification_max)
+            await session.flush()
     
     # Создать In-App уведомление
     if inapp_enabled:
@@ -830,33 +854,38 @@ async def _create_object_notification(
     
     await session.commit()
     
-    # Отправляем Telegram уведомление через Celery после коммита
-    if telegram_enabled and notification_tg and notification_tg.id:
-        try:
-            from core.celery.tasks.notification_tasks import send_notification_now
-            send_notification_now.apply_async(
-                args=[notification_tg.id],
-                queue="notifications"
-            )
-            logger.debug(
-                "Enqueued object notification for sending",
-                notification_id=notification_tg.id,
-                user_id=current_owner.id,
-                notification_type=notif_type.value,
-                channel=NotificationChannel.TELEGRAM.value,
-            )
-        except Exception as send_exc:
-            # Не критично, если не удалось поставить в очередь - уведомление уже в БД
-            logger.warning(
-                "Failed to enqueue object notification for sending",
-                notification_id=notification_tg.id if notification_tg else None,
-                error=str(send_exc),
-            )
-    
+    # Отправляем TG/MAX через Celery после коммита
+    if telegram_enabled:
+        from core.celery.tasks.notification_tasks import send_notification_now
+        for notif, ch in (
+            (notification_tg, NotificationChannel.TELEGRAM.value),
+            (notification_max, NotificationChannel.MAX.value),
+        ):
+            if notif and notif.id:
+                try:
+                    send_notification_now.apply_async(
+                        args=[notif.id],
+                        queue="notifications"
+                    )
+                    logger.debug(
+                        "Enqueued object notification for sending",
+                        notification_id=notif.id,
+                        user_id=current_owner.id,
+                        notification_type=notif_type.value,
+                        channel=ch,
+                    )
+                except Exception as send_exc:
+                    logger.warning(
+                        "Failed to enqueue object notification for sending",
+                        notification_id=notif.id,
+                        error=str(send_exc),
+                    )
+
     logger.info(
         f"Created {notif_type.value} notification for owner {current_owner.id}",
         object_id=obj_id,
         telegram=telegram_enabled,
+        max=bool(notification_max),
         inapp=inapp_enabled
     )
 

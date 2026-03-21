@@ -32,58 +32,77 @@ async def login_page(request: Request):
         "request": request,
         "title": "Вход в систему",
         "success": success_msg,
-        "telegram_id": telegram_id_qs,
-        "pin_code": ""
+        "messenger": "telegram",
+        "external_id": telegram_id_qs or "",
+        "pin_code": "",
     })
 
 
 @router.post("/login")
 async def login(
     request: Request,
-    telegram_id: int = Form(...),
-    pin_code: str = Form(...)
+    messenger: str = Form("telegram"),
+    external_id: str = Form(...),
+    pin_code: str = Form(...),
 ):
-    """Обработка входа по Telegram ID и PIN-коду"""
+    """Обработка входа по мессенджеру (TG/MAX) и PIN-коду."""
+    messenger = (messenger or "telegram").strip().lower()
+    if messenger not in ("telegram", "max"):
+        messenger = "telegram"
+    external_id = (external_id or "").strip()
+    if not external_id:
+        return templates.TemplateResponse("auth/login.html", {
+            "request": request,
+            "title": "Вход в систему",
+            "error": "Укажите ID мессенджера",
+            "messenger": messenger,
+            "external_id": external_id,
+            "pin_code": pin_code,
+        })
     try:
-        # Проверка PIN-кода (обход для тест-пользователей)
-        async with get_async_session() as session:
-            res = await session.execute(select(User).where(User.telegram_id == telegram_id))
-            db_user = res.scalar_one_or_none()
-        if db_user and getattr(db_user, 'is_test_user', False):
-            # Принимаем любой 6-значный PIN
+        is_test_user = False
+        if messenger == "telegram":
+            try:
+                async with get_async_session() as session:
+                    res = await session.execute(
+                        select(User).where(User.telegram_id == int(external_id))
+                    )
+                    db_user = res.scalar_one_or_none()
+                    is_test_user = bool(db_user and getattr(db_user, "is_test_user", False))
+            except ValueError:
+                pass
+        if is_test_user:
             if not (isinstance(pin_code, str) and len(pin_code) == 6 and pin_code.isdigit()):
                 return templates.TemplateResponse("auth/login.html", {
                     "request": request,
                     "title": "Вход в систему",
                     "error": "Для тестового пользователя введите 6-значный PIN",
-                    "telegram_id": telegram_id,
-                    "pin_code": pin_code
+                    "messenger": messenger,
+                    "external_id": external_id,
+                    "pin_code": pin_code,
                 })
         else:
-            if not await auth_service.verify_pin(telegram_id, pin_code):
+            if not await auth_service.verify_pin(messenger, external_id, pin_code):
                 return templates.TemplateResponse("auth/login.html", {
                     "request": request,
                     "title": "Вход в систему",
                     "error": "Неверный PIN-код или время истекло",
-                    "telegram_id": telegram_id,
-                    "pin_code": pin_code
+                    "messenger": messenger,
+                    "external_id": external_id,
+                    "pin_code": pin_code,
                 })
-        
-        # Получение пользователя
-        logger.info(f"Getting user by telegram_id: {telegram_id}")
-        user = await user_manager.get_user_by_telegram_id(telegram_id)
-        logger.info(f"User found: {user is not None}")
+
+        user = await user_manager.get_user_by_messenger(messenger, external_id)
         if not user:
-            logger.warning(f"User not found for telegram_id: {telegram_id}")
             return templates.TemplateResponse("auth/login.html", {
                 "request": request,
                 "title": "Вход в систему",
                 "error": "Пользователь не найден",
-                "telegram_id": telegram_id,
-                "pin_code": pin_code
+                "messenger": messenger,
+                "external_id": external_id,
+                "pin_code": pin_code,
             })
-        
-        # Назначение тарифа и инициализация фич при первом входе (идемпотентно)
+
         try:
             from sqlalchemy import select as sql_select, and_ as sql_and
             from domain.entities.user import User as UserModel
@@ -93,11 +112,11 @@ async def login(
             from datetime import datetime, timezone, timedelta
 
             async with get_async_session() as session:
-                # Внутренний user_id
-                db_user_res = await session.execute(
-                    sql_select(UserModel).where(UserModel.telegram_id == telegram_id)
-                )
-                db_user_obj = db_user_res.scalar_one_or_none()
+                db_user_obj = (
+                    await session.execute(
+                        sql_select(UserModel).where(UserModel.id == user["id"])
+                    )
+                ).scalar_one_or_none()
                 if db_user_obj:
                     # Проверяем активную подписку
                     sub_res = await session.execute(
@@ -148,20 +167,17 @@ async def login(
                                 profile.enabled_features = features_from_plan
                             await session.commit()
         except Exception as init_err:
-            logger.error(f"First-login init (tariff/features) failed for {telegram_id}: {init_err}")
+            logger.error(f"First-login init (tariff/features) failed for {messenger}:{external_id}: {init_err}")
 
-        # Создание JWT токена с ролью из базы данных
         token = await auth_service.create_token({
             "id": user["id"],
-            "telegram_id": user["telegram_id"],
+            "telegram_id": user.get("telegram_id"),
             "username": user["username"],
             "first_name": user["first_name"],
             "last_name": user["last_name"],
-            "role": user.get("role", "employee")  # Роль из базы данных
+            "role": user.get("role", "employee"),
         })
-        
-        # Удаляем PIN-код после успешного входа (одноразовый)
-        await auth_service.delete_pin(telegram_id)
+        await auth_service.delete_pin(messenger, external_id)
         
         # Перенаправление на дашборд с токеном
         response = RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
@@ -228,26 +244,29 @@ async def logout():
 
 @router.post("/send-pin")
 async def send_pin(request: Request):
-    """Отправка PIN-кода через бота"""
+    """Отправка PIN-кода через бота (TG или MAX)."""
     try:
-        # Получаем данные из тела запроса
         form_data = await request.form()
-        telegram_id = int(form_data.get("telegram_id", 0))
-        
-        if not telegram_id:
-            raise HTTPException(status_code=400, detail="Telegram ID не указан")
-        
-        # Если это тестовый пользователь (веб) — не отправляем PIN, имитируем успех
-        async with get_async_session() as session:
-            res = await session.execute(select(User).where(User.telegram_id == telegram_id))
-            db_user = res.scalar_one_or_none()
-        if db_user and getattr(db_user, 'is_test_user', False):
-            return {"status": "success", "message": "PIN-код (тест) считается отправленным"}
-        
-        # Генерация и отправка PIN-кода (обычный режим)
-        pin_code = await auth_service.generate_and_send_pin(telegram_id)
-        
-        return {"status": "success", "message": "PIN-код отправлен в Telegram"}
+        messenger = (form_data.get("messenger") or "telegram").strip().lower()
+        if messenger not in ("telegram", "max"):
+            messenger = "telegram"
+        external_id = (form_data.get("external_id") or form_data.get("telegram_id") or "").strip()
+        if not external_id:
+            raise HTTPException(status_code=400, detail="ID мессенджера не указан")
+        if messenger == "telegram":
+            try:
+                async with get_async_session() as session:
+                    res = await session.execute(
+                        select(User).where(User.telegram_id == int(external_id))
+                    )
+                    db_user = res.scalar_one_or_none()
+            except ValueError:
+                db_user = None
+            if db_user and getattr(db_user, "is_test_user", False):
+                return {"status": "success", "message": "PIN-код (тест) считается отправленным"}
+        pin_code = await auth_service.generate_and_send_pin(messenger, external_id)
+        msg = "PIN-код отправлен в Telegram" if messenger == "telegram" else "PIN-код отправлен в MAX"
+        return {"status": "success", "message": msg}
         
     except ValueError:
         raise HTTPException(status_code=400, detail="Неверный формат Telegram ID")
@@ -344,7 +363,7 @@ async def register(
                     await session.commit()
             # Отправляем PIN и редиректим на логин
             try:
-                await auth_service.generate_and_send_pin(telegram_id)
+                await auth_service.generate_and_send_pin("telegram", str(telegram_id))
             except Exception:
                 pass
             return RedirectResponse(url=f"/auth/login?success=Пользователь%20обновлен.%20Проверьте%20Telegram%20для%20PIN&telegram_id={telegram_id}", status_code=status.HTTP_302_FOUND)
@@ -480,7 +499,7 @@ async def register(
         
         # Отправка PIN-кода для подтверждения
         try:
-            pin_code = await auth_service.generate_and_send_pin(telegram_id)
+            await auth_service.generate_and_send_pin("telegram", str(telegram_id))
             logger.info(f"PIN code sent to user {telegram_id} for registration")
         except Exception as e:
             logger.error(f"Failed to send PIN code: {e}")

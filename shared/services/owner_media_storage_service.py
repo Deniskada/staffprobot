@@ -28,6 +28,7 @@ async def get_storage_mode(
 ) -> str:
     """
     Режим хранения для контекста: telegram | storage | both.
+    Значение ``telegram`` в БД = без S3, опора на мессенджеры (Telegram и/или MAX по сценарию).
     Если опция выключена или настройки нет — «telegram».
     """
     ok = await is_secure_media_enabled(session, owner_id)
@@ -113,7 +114,7 @@ def get_context_labels() -> List[Dict[str, str]]:
 def get_storage_mode_labels() -> List[Dict[str, str]]:
     """Метки режимов для UI."""
     return [
-        {"value": "telegram", "label": "Только Telegram"},
+        {"value": "telegram", "label": "Только Telegram/MAX (без S3)"},
         {"value": "storage", "label": "Только хранилище (S3)"},
-        {"value": "both", "label": "Оба (TG + хранилище)"},
+        {"value": "both", "label": "Мессенджеры + S3 (TG/MAX + объектное хранилище)"},
     ]

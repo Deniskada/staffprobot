@@ -101,6 +101,7 @@ class NotificationChannel(enum.Enum):
     SMS = "sms"                   # SMS
     PUSH = "push"                 # Web Push
     TELEGRAM = "telegram"         # Telegram
+    MAX = "max"                   # MAX (мессенджер)
     IN_APP = "in_app"             # В приложении
     WEBHOOK = "webhook"           # Webhook
     SLACK = "slack"               # Slack

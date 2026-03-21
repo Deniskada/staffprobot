@@ -22,17 +22,22 @@ user_manager = UserManager()
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession):
     """Возвращает внутренний ID пользователя по current_user.
-    В JWT payload текущий user.id — это telegram_id, нужно маппить на User.id.
+    current_user от middleware — dict из get_user_by_telegram_id: id=internal_id, telegram_id=...
     """
     if isinstance(current_user, dict):
-        telegram_id = current_user.get("id")
+        # get_user_by_telegram_id возвращает id=user.id (внутренний), telegram_id — для поиска
+        internal_id = current_user.get("id")
+        if internal_id is not None:
+            return internal_id
+        # Fallback: ищем по telegram_id (если передан только JWT payload)
+        telegram_id = current_user.get("telegram_id")
         if telegram_id is None:
             return None
         user_query = select(User).where(User.telegram_id == telegram_id)
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
         return user_obj.id if user_obj else None
-    return current_user.id
+    return getattr(current_user, "id", None)
 
 
 @router.get("/", response_class=HTMLResponse)

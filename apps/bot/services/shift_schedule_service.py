@@ -17,26 +17,33 @@ class ShiftScheduleService:
     def __init__(self):
         logger.info("ShiftScheduleService initialized")
     
-    async def get_user_planned_shifts_for_date(self, user_telegram_id: int, target_date: date) -> List[Dict[str, Any]]:
+    async def get_user_planned_shifts_for_date(
+        self,
+        user_telegram_id: Optional[int] = None,
+        target_date: Optional[date] = None,
+        internal_user_id: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Получает запланированные смены пользователя на указанную дату.
-        
-        Args:
-            user_telegram_id: Telegram ID пользователя
-            target_date: Дата для поиска смен
-            
-        Returns:
-            Список запланированных смен
+        user_telegram_id: legacy. internal_user_id: для MAX (приоритет).
         """
+        if target_date is None:
+            return []
         try:
             async with get_async_session() as session:
-                # Находим пользователя по telegram_id
-                user_query = select(User).where(User.telegram_id == user_telegram_id)
+                if internal_user_id is not None:
+                    user_query = select(User).where(User.id == internal_user_id)
+                elif user_telegram_id is not None:
+                    user_query = select(User).where(User.telegram_id == user_telegram_id)
+                else:
+                    return []
                 user_result = await session.execute(user_query)
                 user = user_result.scalar_one_or_none()
                 
                 if not user:
-                    logger.warning(f"User with telegram_id {user_telegram_id} not found")
+                    logger.warning(
+                        f"User not found (telegram_id={user_telegram_id}, internal_user_id={internal_user_id})"
+                    )
                     return []
                 
                 # Получаем запланированные смены пользователя на указанную дату

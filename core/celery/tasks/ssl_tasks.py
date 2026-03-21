@@ -329,25 +329,24 @@ async def _send_ssl_notification(notification_type: str, message: str, data: Dic
             notif_type = NotificationType.SYSTEM_MAINTENANCE
             
             # Отправляем уведомления всем суперадминам
+            title = f"SSL Alert: {notification_type.upper()}"
             for user_id in superadmin_ids:
                 await notification_service.create_notification(
                     user_id=user_id,
                     type=notif_type,
                     channel=NotificationChannel.IN_APP,
-                    title=f"SSL Alert: {notification_type.upper()}",
+                    title=title,
                     message=message,
                     data=data,
                     priority=priority
                 )
-                # Также отправляем в Telegram
-                await notification_service.create_notification(
+                await notification_service.create_notification_telegram_and_max_if_linked(
                     user_id=user_id,
                     type=notif_type,
-                    channel=NotificationChannel.TELEGRAM,
-                    title=f"SSL Alert: {notification_type.upper()}",
+                    title=title,
                     message=message,
                     data=data,
-                    priority=priority
+                    priority=priority,
                 )
             
             logger.info(f"SSL notification sent to {len(superadmin_ids)} superadmins: {notification_type}")

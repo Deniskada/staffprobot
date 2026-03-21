@@ -3,6 +3,31 @@
 {% block title %}Детали смены{% endblock %}
 
 {% block content %}
+{% macro task_completion_media_block(media_refs) -%}
+  {% if media_refs %}
+    <div class="small mt-2 ps-2 border-start border-secondary">
+      {% for m in media_refs %}
+        {% if m is mapping %}
+        <div class="mb-1">
+          <span class="text-muted">Вложение {{ loop.index }}{% if m.get('type') %} ({{ m.type }}){% endif %}</span>
+          {% if m.get('url') %}
+            <a href="{{ m.url }}" target="_blank" rel="noopener noreferrer" class="ms-1">хранилище</a>
+          {% endif %}
+          {% set d = m.get('delivery') %}
+          {% if d is mapping %}
+            {% if d.get('telegram') %}
+              <a href="{{ d.telegram }}" target="_blank" rel="noopener noreferrer" class="badge bg-info text-decoration-none ms-1">Telegram</a>
+            {% endif %}
+            {% if d.get('max') %}
+              <a href="{{ d.max }}" target="_blank" rel="noopener noreferrer" class="badge bg-dark text-decoration-none ms-1">MAX</a>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+{%- endmacro %}
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
@@ -249,12 +274,14 @@
                         </div>
                         <div class="card-body">
                             <!-- Группировка задач по источнику -->
-                            {% set tasks_by_source = {'object': [], 'timeslot': [], 'manual': []} %}
+                            {% set tasks_by_source = {'object': [], 'timeslot': [], 'task_v2': [], 'manual': []} %}
                             {% for task in shift_tasks %}
                                 {% if task.source == 'object' %}
                                     {% set _ = tasks_by_source['object'].append(task) %}
                                 {% elif task.source == 'timeslot' %}
                                     {% set _ = tasks_by_source['timeslot'].append(task) %}
+                                {% elif task.source == 'task_v2' %}
+                                    {% set _ = tasks_by_source['task_v2'].append(task) %}
                                 {% else %}
                                     {% set _ = tasks_by_source['manual'].append(task) %}
                                 {% endif %}
@@ -295,6 +322,7 @@
                                             {% endif %}
                                             {% if task.get('media_refs') and task.media_refs %}
                                             <span class="badge bg-success ms-2">📎 {{ task.media_refs|length }} файл(ов)</span>
+                                            {{ task_completion_media_block(task.media_refs) }}
                                             {% endif %}
                                         </div>
                                     </div>
@@ -350,6 +378,7 @@
                                             {% endif %}
                                             {% if task.get('media_refs') and task.media_refs %}
                                             <span class="badge bg-success ms-2">📎 {{ task.media_refs|length }} файл(ов)</span>
+                                            {{ task_completion_media_block(task.media_refs) }}
                                             {% endif %}
                                         </div>
                                     </div>
@@ -364,6 +393,83 @@
                                             <span class="badge bg-warning">{{ task.deduction_amount }} ₽</span>
                                             {% endif %}
                                         {% endif %}
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+
+                            {% if tasks_by_source['task_v2'] %}
+                            <h6 class="text-success mb-2">
+                                <i class="fas fa-clipboard-check"></i> Задачи (Tasks v2)
+                                <span class="badge bg-success">{{ tasks_by_source['task_v2']|length }}</span>
+                            </h6>
+                            <ul class="list-group mb-3">
+                                {% for task in tasks_by_source['task_v2'] %}
+                                <li class="list-group-item d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <span class="{% if task.get('is_completed') %}text-decoration-line-through text-muted{% endif %}">
+                                            {{ task.task_text }}
+                                        </span>
+                                        {% if task.get('is_completed') and task.get('completed_at') %}
+                                        <br>
+                                        <small class="text-success">
+                                            <i class="fas fa-check-circle"></i>
+                                            Выполнено: {{ task.completed_at.strftime('%d.%m.%Y %H:%M') }}
+                                        </small>
+                                        {% endif %}
+                                        {% if task.get('requires_media') %}
+                                        <span class="badge bg-secondary ms-2">📸 Требует фото</span>
+                                        {% endif %}
+                                        {% if task.get('media_refs') and task.media_refs %}
+                                        <span class="badge bg-success ms-2">📎 {{ task.media_refs|length }} файл(ов)</span>
+                                        {{ task_completion_media_block(task.media_refs) }}
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-nowrap ms-2">
+                                        {% if task.is_mandatory %}
+                                        <span class="badge bg-danger me-1">Обязательная</span>
+                                        {% endif %}
+                                        {% if task.deduction_amount %}
+                                            {% if task.deduction_amount > 0 %}
+                                            <span class="badge bg-success">+{{ task.deduction_amount }} ₽</span>
+                                            {% else %}
+                                            <span class="badge bg-warning">{{ task.deduction_amount }} ₽</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+
+                            {% if tasks_by_source['manual'] %}
+                            <h6 class="text-secondary mb-2">
+                                <i class="fas fa-edit"></i> Доп. задачи
+                                <span class="badge bg-secondary">{{ tasks_by_source['manual']|length }}</span>
+                            </h6>
+                            <ul class="list-group mb-3">
+                                {% for task in tasks_by_source['manual'] %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center flex-grow-1">
+                                        {% if shift_type == 'shift' and task.id %}
+                                        <form method="post" action="/owner/shifts/{{ shift.id }}/tasks/{{ task.id }}/toggle" class="me-3">
+                                            <input type="checkbox" class="form-check-input" {% if task.is_completed %}checked{% endif %} onchange="this.form.submit()" style="cursor: pointer;">
+                                        </form>
+                                        {% endif %}
+                                        <div class="flex-grow-1">
+                                            <span class="{% if task.get('is_completed') %}text-decoration-line-through text-muted{% endif %}">{{ task.task_text }}</span>
+                                            {% if task.get('is_completed') and task.get('completed_at') %}
+                                            <br><small class="text-success"><i class="fas fa-check-circle"></i> Выполнено: {{ task.completed_at.strftime('%d.%m.%Y %H:%M') }}</small>
+                                            {% endif %}
+                                            {% if task.get('media_refs') and task.media_refs %}
+                                            <span class="badge bg-success ms-2">📎 {{ task.media_refs|length }} файл(ов)</span>
+                                            {{ task_completion_media_block(task.media_refs) }}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        {% if task.is_mandatory %}<span class="badge bg-danger me-1">Обязательная</span>{% endif %}
                                     </div>
                                 </li>
                                 {% endfor %}

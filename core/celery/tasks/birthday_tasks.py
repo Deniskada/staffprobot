@@ -177,26 +177,27 @@ async def _send_birthday_greetings_async():
                             except Exception as e:
                                 errors.append(f"manager {manager.id}: {e}")
 
-                # 4. Отправить в TG-группы объектов (notification_targets + legacy)
+                # 4. Группы отчётов объектов: TG + MAX (notification_targets + legacy)
                 if object_ids:
-                    from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+                    from shared.services.report_group_broadcast import send_object_report_group_text
+
                     objs_q = await session.execute(
                         select(Object).where(Object.id.in_(list(object_ids)))
                     )
                     objects = objs_q.scalars().all()
+                    sent_to_tg: set[str] = set()
+                    sent_to_max: set[str] = set()
                     for obj in objects:
-                        chat_id = await get_telegram_report_chat_id_for_object(session, obj)
-                        if chat_id and chat_id not in sent_to:
-                            try:
-                                await bot.send_message(
-                                    chat_id=chat_id,
-                                    text=message,
-                                    parse_mode="Markdown",
-                                )
-                                sent_to.add(chat_id)
-                                sent_count += 1
-                            except Exception as e:
-                                errors.append(f"object {obj.id} group: {e}")
+                        res = await send_object_report_group_text(session, obj, message)
+                        tg, mx = res["telegram"], res["max"]
+                        if tg["ok"] and tg["chat_id"] and tg["chat_id"] not in sent_to_tg:
+                            sent_to_tg.add(tg["chat_id"])
+                            sent_to.add(tg["chat_id"])
+                            sent_count += 1
+                        if mx["ok"] and mx["chat_id"] and mx["chat_id"] not in sent_to_max:
+                            sent_to_max.add(mx["chat_id"])
+                            sent_to.add(mx["chat_id"])
+                            sent_count += 1
 
                 logger.info(
                     f"send_birthday_greetings: поздравлен {employee.first_name} "
@@ -230,12 +231,13 @@ async def _send_holiday_greetings_async():
     import pytz
 
     from core.database.session import get_celery_session
-    from core.config.settings import settings
     from domain.entities.user import User
     from domain.entities.object import Object
-    from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
+    from shared.services.report_group_broadcast import (
+        owner_wants_holiday_report_group_broadcast,
+        send_object_report_group_text,
+    )
     from shared.services.yandex_gpt_service import generate_holiday_greeting
-    from telegram import Bot
 
     moscow_tz = pytz.timezone("Europe/Moscow")
     today = datetime.now(moscow_tz).date()
@@ -261,7 +263,6 @@ async def _send_holiday_greetings_async():
 
     message = f"{holiday_emoji} *{holiday_name}!*\n\n{greeting}"
 
-    bot = Bot(token=settings.telegram_bot_token)
     sent_count = 0
     errors = []
 
@@ -275,10 +276,8 @@ async def _send_holiday_greetings_async():
         owners = owners_q.scalars().all()
 
         for owner in owners:
-            # Проверяем настройку уведомления
             prefs = owner.notification_preferences or {}
-            holiday_pref = prefs.get("employee_holiday_greeting", {})
-            if holiday_pref.get("telegram", True) is False:
+            if not owner_wants_holiday_report_group_broadcast(prefs):
                 continue
 
             # Получаем активные объекты владельца
@@ -292,24 +291,28 @@ async def _send_holiday_greetings_async():
             )
             objects = objects_q.scalars().all()
 
-            sent_to: set = set()
+            sent_to_tg: set[str] = set()
+            sent_to_max: set[str] = set()
 
             for obj in objects:
-                chat_id = await get_telegram_report_chat_id_for_object(session, obj)
-                if not chat_id or chat_id in sent_to:
-                    continue
-                try:
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=message,
-                        parse_mode="Markdown",
-                    )
-                    sent_to.add(chat_id)
+                res = await send_object_report_group_text(session, obj, message)
+                tg, mx = res["telegram"], res["max"]
+                if tg["ok"] and tg["chat_id"] and tg["chat_id"] not in sent_to_tg:
+                    sent_to_tg.add(tg["chat_id"])
                     sent_count += 1
-                    logger.info(f"Праздник: отправлено в группу {chat_id} (объект {obj.id})")
-                except Exception as e:
-                    errors.append(f"object {obj.id} group {chat_id}: {e}")
-                    logger.warning(f"Ошибка отправки в группу {chat_id}: {e}")
+                    logger.info(
+                        "Праздник: TG группа",
+                        chat_id=tg["chat_id"],
+                        object_id=obj.id,
+                    )
+                if mx["ok"] and mx["chat_id"] and mx["chat_id"] not in sent_to_max:
+                    sent_to_max.add(mx["chat_id"])
+                    sent_count += 1
+                    logger.info(
+                        "Праздник: MAX группа",
+                        chat_id=mx["chat_id"],
+                        object_id=obj.id,
+                    )
 
     logger.info(
         f"send_holiday_greetings: {holiday_name} — отправлено {sent_count} групп, ошибок {len(errors)}"

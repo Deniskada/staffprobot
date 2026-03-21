@@ -918,45 +918,51 @@ class IncidentService:
         prefs = user.notification_preferences or {}
         type_code = notif_type.value
         type_prefs = prefs.get(type_code, {})
-        telegram_enabled = type_prefs.get("telegram", True) if type_code in prefs else True
-        inapp_enabled = type_prefs.get("inapp", True) if type_code in prefs else True
-        
-        if not telegram_enabled and not inapp_enabled:
+        if not isinstance(type_prefs, dict):
+            type_prefs = {}
+        telegram_enabled = type_prefs.get("telegram", True)
+        inapp_enabled = type_prefs.get("inapp", True)
+        max_enabled = type_prefs.get("max", True)
+
+        if not telegram_enabled and not inapp_enabled and not max_enabled:
             logger.debug(f"Incident notifications disabled for user {user_id}, type {type_code}")
             return
-        
-        # Отправляем Telegram уведомление
-        if telegram_enabled:
+
+        if telegram_enabled or max_enabled:
             rendered_tg = NotificationTemplateManager.render(notif_type, NotificationChannel.TELEGRAM, template_vars)
-            notification_tg = await notification_service.create_notification(
-                user_id=user_id,
-                type=notif_type,
-                channel=NotificationChannel.TELEGRAM,
-                title=rendered_tg["title"],
-                message=rendered_tg["message"],
-                data=data,
-                priority=priority,
-                scheduled_at=None
+            notification_tg, notification_max = (
+                await notification_service.create_notification_telegram_and_max_if_linked(
+                    user_id=user_id,
+                    type=notif_type,
+                    title=rendered_tg["title"],
+                    message=rendered_tg["message"],
+                    data=data,
+                    priority=priority,
+                    scheduled_at=None,
+                )
             )
-            
-            if notification_tg and hasattr(notification_tg, 'id') and notification_tg.id:
-                try:
-                    send_notification_now.apply_async(
-                        args=[notification_tg.id],
-                        queue="notifications"
-                    )
-                    logger.debug(
-                        "Enqueued incident Telegram notification for sending",
-                        notification_id=notification_tg.id,
-                        user_id=user_id,
-                        notification_type=notif_type.value,
-                    )
-                except Exception as send_exc:
-                    logger.warning(
-                        "Failed to enqueue incident Telegram notification",
-                        notification_id=notification_tg.id if notification_tg else None,
-                        error=str(send_exc),
-                    )
+            for notif, label in (
+                (notification_tg, "telegram"),
+                (notification_max, "max"),
+            ):
+                if notif and getattr(notif, "id", None):
+                    try:
+                        send_notification_now.apply_async(
+                            args=[notif.id],
+                            queue="notifications",
+                        )
+                        logger.debug(
+                            f"Enqueued incident {label} notification",
+                            notification_id=notif.id,
+                            user_id=user_id,
+                            notification_type=notif_type.value,
+                        )
+                    except Exception as send_exc:
+                        logger.warning(
+                            f"Failed to enqueue incident {label} notification",
+                            notification_id=getattr(notif, "id", None),
+                            error=str(send_exc),
+                        )
         
         # Отправляем In-App уведомление
         if inapp_enabled:

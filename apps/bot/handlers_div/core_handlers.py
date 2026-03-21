@@ -69,7 +69,7 @@ from .timeslot_handlers import (
     _handle_delete_slot_week
 )
 from .utility_handlers import (
-    _handle_help_callback, _handle_status_callback, _handle_get_telegram_id
+    _handle_help_callback, _handle_status_callback,
 )
 
 
@@ -163,6 +163,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             # Импортируем только классы, которых нет глобально
             from apps.bot.handlers_div.shift_handlers import _finish_task_v2_media_upload
             from shared.services.media_orchestrator import MediaFlowConfig
+            from shared.services.report_group_broadcast import resolve_object_report_group_channels
             from domain.entities.task_entry import TaskEntryV2
             from sqlalchemy.orm import selectinload
             from sqlalchemy import and_
@@ -230,18 +231,18 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 object_result = await session.execute(object_query)
                 obj = object_result.scalar_one_or_none()
                 
-                telegram_chat_id = None
                 object_name = "Объект"
-                
+                channels = None
                 if obj:
                     object_name = obj.name
-                    from shared.services.notification_target_service import get_telegram_report_chat_id_for_object
-                    telegram_chat_id = await get_telegram_report_chat_id_for_object(session, obj)
-                
-                if not telegram_chat_id:
+                    channels = await resolve_object_report_group_channels(session, obj)
+
+                if not channels or not channels.any_ready:
                     await update.message.reply_text(
-                        "❌ Telegram группа для отчетов не настроена.\n"
-                        "Обратитесь к администратору."
+                        "❌ Нет канала для отчёта: в объекте задайте чат Telegram и/или MAX "
+                        "и включите соответствующий переключатель в ЛК → "
+                        "<b>Настройки уведомлений</b> → «Группы отчётов объектов».",
+                        parse_mode="HTML",
                     )
                     await user_state_manager.clear_state(user_id)
                     return
@@ -270,7 +271,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     pending_task_v2_entry_id,
                     session,
                     final_flow,
-                    telegram_chat_id,
+                    channels,
                     object_name,
                     template,
                     update.message.from_user,
@@ -736,7 +737,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Обработчик нажатий на inline-кнопки."""
     query = update.callback_query
     await query.answer()  # Убираем "часики" у кнопки
-    
+
+    from shared.bot_unified import TgAdapter, TgMessenger, unified_router
+
+    nu = TgAdapter.parse(update)
+    if nu and nu.is_callback():
+        try:
+            if await unified_router.handle(nu, TgMessenger(update, context)):
+                return
+        except Exception as e:
+            logger.error(f"button_callback: unified_router error: {e}", exc_info=True)
+
     user = query.from_user
     chat_id = query.message.chat_id
     
@@ -968,9 +979,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif query.data == "status":
         await _handle_status_callback(update, context)
         return
-    elif query.data == "get_telegram_id":
-        await _handle_get_telegram_id(update, context)
-        return
     # Управление тайм-слотами
     elif query.data.startswith("manage_timeslots:"):
         object_id = int(query.data.split(":", 1)[1])
@@ -1160,7 +1168,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         ],
         [
             InlineKeyboardButton("📈 Статус", callback_data="status"),
-            InlineKeyboardButton("🆔 Мой Telegram ID", callback_data="get_telegram_id")
+            InlineKeyboardButton("🆔 Мой ID", callback_data="get_telegram_id")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)

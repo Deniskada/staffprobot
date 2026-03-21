@@ -107,40 +107,32 @@
                 <div class="card-body">
                     <form method="post" action="/owner/employees/create">
                         <div class="row">
-                            {% if employee_id %}
-                            <div class="col-md-12">
-                                <input type="hidden" name="employee_id" value="{{ employee_id }}">
-                                <div class="alert alert-light border">
-                                    <strong>Сотрудник:</strong> {{ preselected_employee.display_name if preselected_employee else 'Сотрудник #' ~ employee_id }}
-                                </div>
-                            </div>
-                            {% else %}
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="employee_select" class="form-label">Сотрудник</label>
-                                    <select class="form-select" id="employee_select" name="employee_id">
-                                        <option value="">— Выберите или введите Telegram ID ниже —</option>
-                                        {% for emp in available_employees or [] %}
-                                        <option value="{{ emp.id }}">{{ emp.display_name or (emp.first_name ~ ' ' ~ (emp.last_name or '')) }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="employee_telegram_id" class="form-label">Telegram ID (если не в списке)</label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="employee_telegram_id" 
-                                           name="employee_telegram_id" 
+                                    <label for="employee_telegram_id" class="form-label">Telegram ID</label>
+                                    <input type="text" inputmode="numeric"
+                                           class="form-control"
+                                           id="employee_telegram_id"
+                                           name="employee_telegram_id"
                                            {% if employee_telegram_id %}value="{{ employee_telegram_id }}"{% endif %}
-                                           placeholder="Введите Telegram ID">
-                                    <div class="form-text">
-                                        Выберите сотрудника выше или введите Telegram ID
-                                    </div>
+                                           placeholder="Необязательно, если указан MAX ID"
+                                           autocomplete="off">
                                 </div>
                             </div>
-                            {% endif %}
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="employee_max_id" class="form-label">MAX ID</label>
+                                    <input type="text"
+                                           class="form-control"
+                                           id="employee_max_id"
+                                           name="employee_max_id"
+                                           placeholder="Необязательно, если указан Telegram ID"
+                                           autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <p class="form-text text-muted mb-0">Нужно заполнить хотя бы одно поле: Telegram ID или MAX ID.</p>
+                            </div>
                         </div>
 
                         <hr class="my-4">
@@ -149,15 +141,14 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽) <span class="text-danger">*</span></label>
+                                    <label for="hourly_rate" class="form-label">Почасовая ставка (₽)</label>
                                     <input type="number" 
                                            class="form-control" 
                                            id="hourly_rate" 
                                            name="hourly_rate" 
                                            min="0"
                                            step="0.01"
-                                           required
-                                           placeholder="500 (или выберите объект с установленной ставкой)">
+                                           placeholder="Необязательно — можно взять из объекта">
                                     <div class="form-check mt-2">
                                         <input type="checkbox" 
                                                class="form-check-input" 

@@ -57,13 +57,22 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov pytest-asyncio
     
-    - name: Run tests
+    - name: Run CI smoke tests
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/staffprobot_test
         REDIS_URL: redis://localhost:6379
         ENVIRONMENT: test
       run: |
-        pytest tests/ --cov=apps --cov=core --cov=shared --cov-report=xml --cov-report=term || true
+        pytest tests/unit -m ci_smoke -q --tb=short
+
+    - name: Full test suite (informational)
+      continue-on-error: true
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/staffprobot_test
+        REDIS_URL: redis://localhost:6379
+        ENVIRONMENT: test
+      run: |
+        pytest tests/ --cov=apps --cov=core --cov=shared --cov-report=xml --cov-report=term -q || true
     
     - name: Upload coverage
       uses: codecov/codecov-action@v3

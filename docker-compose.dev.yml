@@ -221,6 +221,8 @@ services:
       - TELEGRAM_BOT_TOKEN_PROD=${TELEGRAM_BOT_TOKEN_PROD:-}
       - TELEGRAM_BOT_TOKEN_OVERRIDE=  # Явно сбрасываем override на дэве
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_DEV}
+      - MAX_BOT_TOKEN=${MAX_BOT_TOKEN}
+      - MAX_WEBHOOK_BASE_URL=${MAX_WEBHOOK_BASE_URL:-https://maxdev.staffprobot.ru}
       - YANDEX_MAPS_API_KEY=${YANDEX_MAPS_API_KEY}
       - MEDIA_STORAGE_PROVIDER=${MEDIA_STORAGE_PROVIDER:-telegram}
       - MINIO_ENDPOINT=http://minio:9000

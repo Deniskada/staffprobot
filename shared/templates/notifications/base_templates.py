@@ -486,7 +486,7 @@ class NotificationTemplateManager:
                 }
             
             # Определяем формат в зависимости от канала
-            if channel == NotificationChannel.TELEGRAM:
+            if channel in (NotificationChannel.TELEGRAM, NotificationChannel.MAX):
                 message_template = template_data.get("telegram", template_data.get("plain", ""))
             elif channel in [NotificationChannel.EMAIL, NotificationChannel.IN_APP]:
                 message_template = template_data.get("html", template_data.get("plain", ""))

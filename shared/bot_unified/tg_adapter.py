@@ -106,7 +106,7 @@ class TgMessenger:
         photo: str,
         caption: Optional[str] = None,
         keyboard: Optional[list[list[dict[str, Any]]]] = None,
-    ) -> None:
+    ) -> Optional[str]:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         reply_markup = None
@@ -129,6 +129,7 @@ class TgMessenger:
             caption=caption,
             reply_markup=reply_markup,
         )
+        return None
 
     async def answer_callback(self, callback_id: str, text: str = "") -> None:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup

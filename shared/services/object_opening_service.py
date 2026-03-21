@@ -226,10 +226,13 @@ class ObjectOpeningService:
             prefs = obj.owner.notification_preferences or {}
             type_code = NotificationType.OBJECT_OPENED.value
             type_prefs = prefs.get(type_code, {})
-            telegram_enabled = type_prefs.get("telegram", True) if type_code in prefs else True
-            inapp_enabled = type_prefs.get("inapp", True) if type_code in prefs else True
-            
-            if not telegram_enabled and not inapp_enabled:
+            if not isinstance(type_prefs, dict):
+                type_prefs = {}
+            telegram_enabled = type_prefs.get("telegram", True)
+            inapp_enabled = type_prefs.get("inapp", True)
+            max_enabled = type_prefs.get("max", True)
+
+            if not telegram_enabled and not inapp_enabled and not max_enabled:
                 logger.debug(f"Object opening notifications disabled for owner {obj.owner.id}")
                 return
             
@@ -269,39 +272,42 @@ class ObjectOpeningService:
             # Создаем уведомления
             notification_service = NotificationService()
             
-            if telegram_enabled:
+            if telegram_enabled or max_enabled:
                 rendered_tg = NotificationTemplateManager.render(notif_type, NotificationChannel.TELEGRAM, template_vars)
-                notification_tg = await notification_service.create_notification(
-                    user_id=obj.owner.id,
-                    type=notif_type,
-                    channel=NotificationChannel.TELEGRAM,
-                    title=rendered_tg["title"],
-                    message=rendered_tg["message"],
-                    data={**template_vars, "object_id": obj.id},
-                    priority=priority,
-                    scheduled_at=None
+                notification_tg, notification_max = (
+                    await notification_service.create_notification_telegram_and_max_if_linked(
+                        user_id=obj.owner.id,
+                        type=notif_type,
+                        title=rendered_tg["title"],
+                        message=rendered_tg["message"],
+                        data={**template_vars, "object_id": obj.id},
+                        priority=priority,
+                        scheduled_at=None,
+                    )
                 )
-                
-                # Отправляем Telegram уведомление через Celery
-                if notification_tg and hasattr(notification_tg, 'id') and notification_tg.id:
-                    try:
-                        from core.celery.tasks.notification_tasks import send_notification_now
-                        send_notification_now.apply_async(
-                            args=[notification_tg.id],
-                            queue="notifications"
-                        )
-                        logger.debug(
-                            "Enqueued object opening Telegram notification for sending",
-                            notification_id=notification_tg.id,
-                            user_id=obj.owner.id,
-                            notification_type=notif_type.value,
-                        )
-                    except Exception as send_exc:
-                        logger.warning(
-                            "Failed to enqueue object opening Telegram notification",
-                            notification_id=notification_tg.id if notification_tg else None,
-                            error=str(send_exc),
-                        )
+                from core.celery.tasks.notification_tasks import send_notification_now
+                for notif, label in (
+                    (notification_tg, "telegram"),
+                    (notification_max, "max"),
+                ):
+                    if notif and getattr(notif, "id", None):
+                        try:
+                            send_notification_now.apply_async(
+                                args=[notif.id],
+                                queue="notifications",
+                            )
+                            logger.debug(
+                                f"Enqueued object opening {label} notification",
+                                notification_id=notif.id,
+                                user_id=obj.owner.id,
+                                notification_type=notif_type.value,
+                            )
+                        except Exception as send_exc:
+                            logger.warning(
+                                f"Failed to enqueue object opening {label} notification",
+                                notification_id=notif.id,
+                                error=str(send_exc),
+                            )
             
             if inapp_enabled:
                 rendered_inapp = NotificationTemplateManager.render(notif_type, NotificationChannel.IN_APP, template_vars)
@@ -345,10 +351,13 @@ class ObjectOpeningService:
             prefs = obj.owner.notification_preferences or {}
             type_code = NotificationType.OBJECT_CLOSED.value
             type_prefs = prefs.get(type_code, {})
-            telegram_enabled = type_prefs.get("telegram", True) if type_code in prefs else True
-            inapp_enabled = type_prefs.get("inapp", True) if type_code in prefs else True
-            
-            if not telegram_enabled and not inapp_enabled:
+            if not isinstance(type_prefs, dict):
+                type_prefs = {}
+            telegram_enabled = type_prefs.get("telegram", True)
+            inapp_enabled = type_prefs.get("inapp", True)
+            max_enabled = type_prefs.get("max", True)
+
+            if not telegram_enabled and not inapp_enabled and not max_enabled:
                 logger.debug(f"Object closing notifications disabled for owner {obj.owner.id}")
                 return
             
@@ -388,39 +397,42 @@ class ObjectOpeningService:
             # Создаем уведомления
             notification_service = NotificationService()
             
-            if telegram_enabled:
+            if telegram_enabled or max_enabled:
                 rendered_tg = NotificationTemplateManager.render(notif_type, NotificationChannel.TELEGRAM, template_vars)
-                notification_tg = await notification_service.create_notification(
-                    user_id=obj.owner.id,
-                    type=notif_type,
-                    channel=NotificationChannel.TELEGRAM,
-                    title=rendered_tg["title"],
-                    message=rendered_tg["message"],
-                    data={**template_vars, "object_id": obj.id},
-                    priority=priority,
-                    scheduled_at=None
+                notification_tg, notification_max = (
+                    await notification_service.create_notification_telegram_and_max_if_linked(
+                        user_id=obj.owner.id,
+                        type=notif_type,
+                        title=rendered_tg["title"],
+                        message=rendered_tg["message"],
+                        data={**template_vars, "object_id": obj.id},
+                        priority=priority,
+                        scheduled_at=None,
+                    )
                 )
-                
-                # Отправляем Telegram уведомление через Celery
-                if notification_tg and hasattr(notification_tg, 'id') and notification_tg.id:
-                    try:
-                        from core.celery.tasks.notification_tasks import send_notification_now
-                        send_notification_now.apply_async(
-                            args=[notification_tg.id],
-                            queue="notifications"
-                        )
-                        logger.debug(
-                            "Enqueued object closing Telegram notification for sending",
-                            notification_id=notification_tg.id,
-                            user_id=obj.owner.id,
-                            notification_type=notif_type.value,
-                        )
-                    except Exception as send_exc:
-                        logger.warning(
-                            "Failed to enqueue object closing Telegram notification",
-                            notification_id=notification_tg.id if notification_tg else None,
-                            error=str(send_exc),
-                        )
+                from core.celery.tasks.notification_tasks import send_notification_now
+                for notif, label in (
+                    (notification_tg, "telegram"),
+                    (notification_max, "max"),
+                ):
+                    if notif and getattr(notif, "id", None):
+                        try:
+                            send_notification_now.apply_async(
+                                args=[notif.id],
+                                queue="notifications",
+                            )
+                            logger.debug(
+                                f"Enqueued object closing {label} notification",
+                                notification_id=notif.id,
+                                user_id=obj.owner.id,
+                                notification_type=notif_type.value,
+                            )
+                        except Exception as send_exc:
+                            logger.warning(
+                                f"Failed to enqueue object closing {label} notification",
+                                notification_id=notif.id,
+                                error=str(send_exc),
+                            )
             
             if inapp_enabled:
                 rendered_inapp = NotificationTemplateManager.render(notif_type, NotificationChannel.IN_APP, template_vars)

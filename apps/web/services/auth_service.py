@@ -28,7 +28,7 @@ class AuthService:
         
         payload = {
             "sub": str(user_data["id"]),
-            "telegram_id": user_data["telegram_id"],
+            "telegram_id": user_data.get("telegram_id"),
             "username": user_data.get("username"),
             "first_name": user_data["first_name"],
             "last_name": user_data.get("last_name"),
@@ -57,56 +57,44 @@ class AuthService:
         except jwt.InvalidTokenError:
             return None
     
-    async def generate_and_send_pin(self, telegram_id: int) -> str:
-        """Генерация и отправка PIN-кода через бота"""
-        # Генерация 6-значного PIN-кода
+    async def generate_and_send_pin(
+        self, messenger: str, external_id: str
+    ) -> str:
+        """Генерация и отправка PIN-кода через бота. messenger: telegram|max."""
         pin_code = f"{secrets.randbelow(1000000):06d}"
-        
-        # Сохранение PIN-кода в кэше (действителен 5 минут)
-        await self.store_pin(telegram_id, pin_code, ttl=300)
-        
-        # Отправка PIN-кода через бота
-        success = await self.bot_integration.send_pin_code(telegram_id, pin_code)
-        
+        await self.store_pin(messenger, external_id, pin_code, ttl=300)
+        success = await self.bot_integration.send_pin_code(messenger, external_id, pin_code)
         if not success:
-            # Если не удалось отправить через бота, сообщаем пользователю явную причину
-            logger.warning(f"Failed to send PIN code to user {telegram_id}, code: {pin_code}")
-            raise Exception("Не удалось отправить PIN. Откройте бота @ShiftsPlan_bot и нажмите Start, затем повторите отправку PIN.")
-        
+            logger.warning(f"Failed to send PIN to {messenger}:{external_id}, code: {pin_code}")
+            bot_hint = "Telegram" if messenger == "telegram" else "MAX"
+            raise Exception(f"Не удалось отправить PIN. Откройте бота StaffProBot в {bot_hint} и нажмите Start.")
         return pin_code
-    
-    async def store_pin(self, telegram_id: int, pin_code: str, ttl: int = 300) -> None:
-        """Сохранение PIN-кода в кэше"""
-        key = f"pin:{telegram_id}"
+
+    async def store_pin(
+        self, messenger: str, external_id: str, pin_code: str, ttl: int = 300
+    ) -> None:
+        """Сохранение PIN-кода в кэше. key = pin:{messenger}:{external_id}."""
+        key = f"pin:{messenger}:{external_id}"
         from datetime import timedelta
         await self.cache.set(key, pin_code, ttl=timedelta(seconds=ttl))
-    
-    async def verify_pin(self, telegram_id: int, pin_code: str) -> bool:
-        """Проверка PIN-кода"""
-        key = f"pin:{telegram_id}"
+
+    async def verify_pin(self, messenger: str, external_id: str, pin_code: str) -> bool:
+        """Проверка PIN-кода."""
+        key = f"pin:{messenger}:{external_id}"
         stored_pin = await self.cache.get(key)
-        
-        logger.info(f"Verifying PIN for user {telegram_id}: stored={stored_pin}, provided={pin_code}")
-        
+        logger.info(f"Verifying PIN for {messenger}:{external_id}: stored={bool(stored_pin)}, provided={bool(pin_code)}")
         if not stored_pin:
-            logger.warning(f"No PIN found in cache for user {telegram_id}")
             return False
-        
-        # Проверяем PIN-код
         if stored_pin == pin_code:
-            # НЕ удаляем PIN здесь - он будет удален после успешного входа
-            # Это позволяет использовать PIN несколько раз до успешного входа
-            logger.info(f"PIN verified successfully for user {telegram_id}")
+            logger.info(f"PIN verified for {messenger}:{external_id}")
             return True
-        
-        logger.warning(f"PIN mismatch for user {telegram_id}: stored={stored_pin}, provided={pin_code}")
         return False
-    
-    async def delete_pin(self, telegram_id: int) -> None:
-        """Удаление PIN-кода из кэша (после успешного входа)"""
-        key = f"pin:{telegram_id}"
+
+    async def delete_pin(self, messenger: str, external_id: str) -> None:
+        """Удаление PIN-кода из кэша (после успешного входа)."""
+        key = f"pin:{messenger}:{external_id}"
         await self.cache.delete(key)
-        logger.info(f"PIN deleted for user {telegram_id} after successful login")
+        logger.info(f"PIN deleted for {messenger}:{external_id} after login")
     
     async def refresh_token(self, token: str) -> Optional[str]:
         """Обновление JWT токена"""

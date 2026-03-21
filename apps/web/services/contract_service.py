@@ -210,28 +210,33 @@ class ContractService:
             use_contract_rate = data.get("use_contract_rate", False)
             use_contract_payment_system = data.get("use_contract_payment_system", False)
             hourly_rate = data.get("hourly_rate")
+            if hourly_rate is not None and hourly_rate != "":
+                try:
+                    hourly_rate = float(hourly_rate)
+                except (TypeError, ValueError):
+                    hourly_rate = None
+            else:
+                hourly_rate = None
 
             if use_contract_rate and not hourly_rate:
                 raise ValueError("При использовании ставки договора необходимо указать почасовую ставку")
             if use_contract_payment_system and not data.get("payment_system_id"):
                 raise ValueError("При использовании системы оплаты договора необходимо указать систему оплаты")
 
-            if not hourly_rate:
-                if data.get("allowed_objects"):
-                    from domain.entities.object import Object
-                    object_query = select(Object).where(Object.id == data["allowed_objects"][0])
-                    object_result = await session.execute(object_query)
-                    object_entity = object_result.scalar_one_or_none()
-                    
-                    if object_entity and object_entity.hourly_rate:
-                        hourly_rate = float(object_entity.hourly_rate)
-                        logger.info(f"Автоматически установлена ставка {hourly_rate} руб/час из объекта {object_entity.id}")
-                    else:
-                        raise ValueError("Часовая ставка обязательна. Укажите ставку в договоре или выберите объект с установленной ставкой.")
-                else:
-                    raise ValueError("Часовая ставка обязательна. Укажите ставку в договоре или выберите объект с установленной ставкой.")
-            
-            if hourly_rate <= 0:
+            if not hourly_rate and data.get("allowed_objects"):
+                from domain.entities.object import Object
+
+                object_query = select(Object).where(Object.id == data["allowed_objects"][0])
+                object_result = await session.execute(object_query)
+                object_entity = object_result.scalar_one_or_none()
+
+                if object_entity and object_entity.hourly_rate:
+                    hourly_rate = float(object_entity.hourly_rate)
+                    logger.info(
+                        f"Автоматически установлена ставка {hourly_rate} руб/час из объекта {object_entity.id}"
+                    )
+
+            if hourly_rate is not None and hourly_rate <= 0:
                 raise ValueError("Ставка должна быть больше 0")
             
             # Генерируем номер договора
@@ -400,19 +405,16 @@ class ContractService:
             # Уведомляем сотрудника о необходимости подписать договор
             try:
                 from shared.services.notification_service import NotificationService
-                from domain.entities.notification import (
-                    NotificationType, NotificationChannel
-                )
+                from domain.entities.notification import NotificationType
                 from core.utils.url_helper import URLHelper
                 
                 web_url = await URLHelper.get_web_url()
                 accept_url = f"{web_url}/employee/offers/{contract.id}"
                 
                 ns = NotificationService()
-                await ns.create_notification(
+                await ns.create_notification_telegram_and_max_if_linked(
                     user_id=employee.id,
                     type=NotificationType.OFFER_SENT,
-                    channel=NotificationChannel.TELEGRAM,
                     title="Договор направлен на подписание",
                     message=f"Вам направлен договор «{contract.title}».\nПодпишите в личном кабинете: {accept_url}",
                     data={
@@ -2034,19 +2036,16 @@ class ContractService:
             if template_changed and contract.status == "pending_acceptance":
                 try:
                     from shared.services.notification_service import NotificationService
-                    from domain.entities.notification import (
-                        NotificationType, NotificationChannel
-                    )
+                    from domain.entities.notification import NotificationType
                     from core.utils.url_helper import URLHelper
                     
                     web_url = await URLHelper.get_web_url()
                     accept_url = f"{web_url}/employee/offers/{contract.id}"
                     
                     ns = NotificationService()
-                    await ns.create_notification(
+                    await ns.create_notification_telegram_and_max_if_linked(
                         user_id=contract.employee_id,
                         type=NotificationType.OFFER_SENT,
-                        channel=NotificationChannel.TELEGRAM,
                         title="Договор изменён — требуется подписание",
                         message=f"Шаблон договора «{contract.title}» был изменён.\nПодпишите обновлённый договор: {accept_url}",
                         data={

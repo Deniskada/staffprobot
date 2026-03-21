@@ -24,59 +24,41 @@ class ShiftService:
         logger.info("ShiftService initialized with geolocation support")
     
     async def open_shift(
-        self, 
-        user_id: int, 
-        object_id: int, 
-        coordinates: str, 
+        self,
+        user_id: int,
+        object_id: int,
+        coordinates: str,
         shift_type: str = "spontaneous",
         timeslot_id: Optional[int] = None,
-        schedule_id: Optional[int] = None
+        schedule_id: Optional[int] = None,
+        internal_user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Открытие смены с проверкой геолокации.
-        
-        Args:
-            user_id: ID пользователя
-            object_id: ID объекта
-            coordinates: Координаты пользователя в формате 'lat,lon'
-            
-        Returns:
-            Словарь с результатом операции
+        user_id: telegram_id (legacy). internal_user_id: для MAX (приоритет над user_id).
         """
         try:
             logger.info(
-                f"Opening shift requested: user_id={user_id}, object_id={object_id}, coordinates={coordinates}"
+                f"Opening shift requested: user_id={user_id}, internal_user_id={internal_user_id}, "
+                f"object_id={object_id}, coordinates={coordinates}"
             )
-            
+
             async with get_async_session() as session:
-                # Проверяем существование пользователя
-                # ОТКЛЮЧЕНО для тестирования с JSON файлом
-                # user = await self._get_user(session, user_id)
-                # if not user:
-                #     return {
-                #         'success': False,
-                #         'error': 'Пользователь не найден'
-                #     }
-                
-                # Проверяем существование объекта
                 obj = await self._get_object(session, object_id)
                 if not obj:
-                    return {
-                        'success': False,
-                        'error': 'Объект не найден'
-                    }
-                
-                # Загружаем TimeSlot заранее (если есть), чтобы избежать greenlet ошибок
+                    return {"success": False, "error": "Объект не найден"}
+
                 timeslot_obj = None
                 if timeslot_id:
                     from domain.entities.time_slot import TimeSlot
                     timeslot_query = select(TimeSlot).where(TimeSlot.id == timeslot_id)
                     timeslot_result = await session.execute(timeslot_query)
                     timeslot_obj = timeslot_result.scalar_one_or_none()
-                
-                # Находим пользователя по telegram_id для получения его id в БД
-                from domain.entities.user import User
-                user_query = select(User).where(User.telegram_id == user_id)
+
+                if internal_user_id is not None:
+                    user_query = select(User).where(User.id == internal_user_id)
+                else:
+                    user_query = select(User).where(User.telegram_id == user_id)
                 user_result = await session.execute(user_query)
                 db_user = user_result.scalar_one_or_none()
                 
@@ -419,31 +401,27 @@ class ShiftService:
             }
     
     async def close_shift(
-        self, 
-        user_id: int, 
-        shift_id: int, 
-        coordinates: str
+        self,
+        user_id: int,
+        shift_id: int,
+        coordinates: str,
+        internal_user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Закрытие смены с проверкой геолокации.
-        
-        Args:
-            user_id: ID пользователя
-            shift_id: ID смены
-            coordinates: Координаты пользователя в формате 'lat,lon'
-            
-        Returns:
-            Словарь с результатом операции
+        user_id: telegram_id (legacy). internal_user_id: для MAX (приоритет).
         """
         try:
             logger.info(
-                f"Closing shift requested: user_id={user_id}, shift_id={shift_id}, coordinates={coordinates}"
+                f"Closing shift requested: user_id={user_id}, internal_user_id={internal_user_id}, "
+                f"shift_id={shift_id}, coordinates={coordinates}"
             )
-            
+
             async with get_async_session() as session:
-                # Находим пользователя по telegram_id для получения его id в БД
-                from domain.entities.user import User
-                user_query = select(User).where(User.telegram_id == user_id)
+                if internal_user_id is not None:
+                    user_query = select(User).where(User.id == internal_user_id)
+                else:
+                    user_query = select(User).where(User.telegram_id == user_id)
                 user_result = await session.execute(user_query)
                 db_user = user_result.scalar_one_or_none()
                 
@@ -557,25 +535,21 @@ class ShiftService:
             }
     
     async def get_user_shifts(
-        self, 
-        user_id: int, 
-        status: Optional[str] = None
+        self,
+        user_id: int,
+        status: Optional[str] = None,
+        internal_user_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Получение смен пользователя.
-        
-        Args:
-            user_id: ID пользователя
-            status: Фильтр по статусу (опционально)
-            
-        Returns:
-            Список смен
+        user_id: telegram_id (legacy). internal_user_id: для MAX (приоритет).
         """
         try:
             async with get_async_session() as session:
-                # Находим пользователя по telegram_id для получения его id в БД
-                from domain.entities.user import User
-                user_query = select(User).where(User.telegram_id == user_id)
+                if internal_user_id is not None:
+                    user_query = select(User).where(User.id == internal_user_id)
+                else:
+                    user_query = select(User).where(User.telegram_id == user_id)
                 user_result = await session.execute(user_query)
                 db_user = user_result.scalar_one_or_none()
                 

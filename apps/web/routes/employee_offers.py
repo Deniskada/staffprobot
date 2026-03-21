@@ -262,16 +262,15 @@ async def offer_accept(
     # Отправляем уведомление владельцу
     try:
         from shared.services.notification_service import NotificationService
-        from domain.entities.notification import NotificationType, NotificationChannel
+        from domain.entities.notification import NotificationType
 
         ns = NotificationService()
         contract_data = await offer_service.get_contract_for_acceptance(db, contract_id, user_id)
         if contract_data and contract_data.get("owner_id"):
             emp_name = employee_details.get("employee_fio", "Сотрудник")
-            await ns.create_notification(
+            await ns.create_notification_telegram_and_max_if_linked(
                 user_id=contract_data["owner_id"],
                 type=NotificationType.OFFER_ACCEPTED,
-                channel=NotificationChannel.TELEGRAM,
                 title="Оферта принята",
                 message=f"Сотрудник {emp_name} принял оферту «{contract_data.get('title', '')}».",
                 data={
@@ -364,20 +363,28 @@ async def offer_reject(
     # Уведомление собственнику
     try:
         from shared.services.notification_service import NotificationService
-        from domain.entities.notification import NotificationType
-        from core.database.session import get_async_session
+        from domain.entities.notification import NotificationType, NotificationChannel
+        from shared.templates.notifications.base_templates import NotificationTemplateManager
 
-        async with get_async_session() as notify_session:
-            ns = NotificationService(notify_session)
-            await ns.create_notification(
-                user_id=result["owner_id"],
-                notification_type=NotificationType.OFFER_REJECTED,
-                data={
-                    "contract_id": contract_id,
-                    "employee_name": result.get("employee_name", ""),
-                    "reason": reason.strip(),
-                },
-            )
+        tpl_vars = {
+            "contract_id": contract_id,
+            "employee_name": result.get("employee_name", "") or "Сотрудник",
+            "offer_title": result.get("contract_title", "") or "оферта",
+            "reason": reason.strip(),
+        }
+        rendered = NotificationTemplateManager.render(
+            NotificationType.OFFER_REJECTED,
+            NotificationChannel.TELEGRAM,
+            tpl_vars,
+        )
+        ns = NotificationService()
+        await ns.create_notification_telegram_and_max_if_linked(
+            user_id=result["owner_id"],
+            type=NotificationType.OFFER_REJECTED,
+            title=rendered["title"],
+            message=rendered["message"],
+            data=tpl_vars,
+        )
     except Exception as e:
         logger.error(f"Failed to send offer rejection notification: {e}")
 

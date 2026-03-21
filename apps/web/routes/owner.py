@@ -638,6 +638,8 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
         types_in_category = []
         for type_meta in types_grouped[category_code]:
             user_pref = user_settings.get(type_meta.type_code, {})
+            if not isinstance(user_pref, dict):
+                user_pref = {}
             types_in_category.append({
                 "type_code": type_meta.type_code,
                 "title": type_meta.title,
@@ -645,6 +647,7 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
                 "priority": type_meta.default_priority,
                 "priority_label": priority_labels.get(type_meta.default_priority, type_meta.default_priority),
                 "telegram_enabled": user_pref.get("telegram", True),
+                "max_enabled": user_pref.get("max", True),
                 "inapp_enabled": user_pref.get("inapp", True),
             })
         
@@ -656,11 +659,18 @@ async def owner_notifications(request: Request, session: AsyncSession = Depends(
             })
     
     owner_context = await get_owner_context(user_id, session)
-    
+    rgm = user_settings.get("report_group_messengers") if user_settings else None
+    if not isinstance(rgm, dict):
+        rgm = {}
+    report_group_telegram = rgm.get("telegram", True)
+    report_group_max = rgm.get("max", True)
+
     return templates.TemplateResponse("owner/notifications.html", {
         "request": request,
         "current_user": current_user,
         "categories": categories_data,
+        "report_group_telegram": report_group_telegram,
+        "report_group_max": report_group_max,
         **owner_context
     })
 
@@ -700,23 +710,37 @@ async def owner_notifications_save(
         type_code = type_meta.type_code
         telegram_key = f"telegram_{type_code}"
         inapp_key = f"inapp_{type_code}"
-        
+        max_key = f"max_{type_code}"
+
         telegram_enabled = telegram_key in form_data
         inapp_enabled = inapp_key in form_data
-        
+        max_enabled = max_key in form_data
+
         await notification_service.set_user_notification_preference(
             user_id=user_id,
             notification_type=type_code,
             channel_telegram=telegram_enabled,
-            channel_inapp=inapp_enabled
+            channel_inapp=inapp_enabled,
+            channel_max=max_enabled,
         )
-    
-    logger.info(
-        "Настройки уведомлений обновлены",
-        user_id=user_id,
-        telegram_id=telegram_id
-    )
-    
+
+    from shared.services.report_group_broadcast import REPORT_GROUP_MESSENGERS_KEY
+    from sqlalchemy.orm.attributes import flag_modified
+
+    user_r = await session.execute(select(User).where(User.id == user_id))
+    user_row = user_r.scalar_one_or_none()
+    if user_row:
+        merged = dict(user_row.notification_preferences or {})
+        merged[REPORT_GROUP_MESSENGERS_KEY] = {
+            "telegram": "rgm_telegram" in form_data,
+            "max": "rgm_max" in form_data,
+        }
+        user_row.notification_preferences = merged
+        flag_modified(user_row, "notification_preferences")
+        await session.commit()
+
+    logger.info("Настройки уведомлений обновлены", user_id=user_id)
+
     return RedirectResponse(url="/owner/notifications", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -6465,7 +6489,6 @@ async def owner_employees_create_form(
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=401, detail="Пользователь не найден")
-        available_employees = await contract_service.get_available_employees(user_id)
         objects = await contract_service.get_available_objects_for_contract(user_id)
         internal_user_id = user_id
 
@@ -6523,7 +6546,6 @@ async def owner_employees_create_form(
                 "request": request,
                 "title": "Создание договора",
                 "current_user": current_user,
-                "available_employees": available_employees,
                 "objects": objects,
                 "templates": templates_list,
                 "templates_json": templates_json,
@@ -6532,7 +6554,6 @@ async def owner_employees_create_form(
                 "current_date": current_date,
                 "employee_telegram_id": employee_telegram_id,
                 "employee_id": employee_id,
-                "preselected_employee": next((e for e in (available_employees or []) if e.get("id") == employee_id), None) if employee_id else None,
                 "payment_schedules": payment_schedules
             }
         )
@@ -6631,11 +6652,22 @@ async def owner_employee_edit_form(
         
         if not employee_user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
-        
+
+        from domain.entities.messenger_account import MessengerAccount
+
+        ma_max = await db.execute(
+            select(MessengerAccount.external_user_id).where(
+                MessengerAccount.user_id == employee_id,
+                MessengerAccount.provider == "max",
+            )
+        )
+        employee_max_external = (ma_max.scalar_one_or_none() or "") or ""
+
         return templates.TemplateResponse("owner/employees/edit.html", {
             "request": request,
             "current_user": current_user,
             "employee": employee_user,  # Объект User из БД
+            "employee_max_external": employee_max_external,
             "available_interfaces": available_interfaces
         })
         
@@ -6665,24 +6697,95 @@ async def owner_employee_edit(
             form_data = await request.form()
             
             # Получаем сотрудника (employee_id - это внутренний user_id)
-            from sqlalchemy import select
-            from domain.entities.user import User
-            
             employee_query = select(User).where(User.id == employee_id)
             result = await db.execute(employee_query)
             employee = result.scalar_one_or_none()
             
             if not employee:
                 raise HTTPException(status_code=404, detail="Сотрудник не найден")
-            
-            # Обновляем данные
+
+            from domain.entities.messenger_account import MessengerAccount
+
+            tg_str = (form_data.get("telegram_id") or "").strip()
+            max_str = (form_data.get("max_external_id") or "").strip()
+            if not tg_str and not max_str:
+                raise HTTPException(status_code=400, detail="Заполните Telegram ID или MAX ID")
+
+            try:
+                new_tg = int(tg_str)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="Некорректный Telegram ID")
+
+            clash = await db.execute(
+                select(User.id).where(User.telegram_id == new_tg, User.id != employee_id)
+            )
+            if clash.scalar_one_or_none() is not None:
+                raise HTTPException(
+                    status_code=400, detail="Этот Telegram ID уже занят другим пользователем"
+                )
+
+            employee.telegram_id = new_tg
+
+            ma_tg_r = await db.execute(
+                select(MessengerAccount).where(
+                    MessengerAccount.user_id == employee_id,
+                    MessengerAccount.provider == "telegram",
+                )
+            )
+            ma_tg = ma_tg_r.scalar_one_or_none()
+            if ma_tg:
+                ma_tg.external_user_id = str(new_tg)
+            else:
+                db.add(
+                    MessengerAccount(
+                        user_id=employee_id,
+                        provider="telegram",
+                        external_user_id=str(new_tg),
+                        chat_id=None,
+                        username=None,
+                    )
+                )
+
+            ma_max_r = await db.execute(
+                select(MessengerAccount).where(
+                    MessengerAccount.user_id == employee_id,
+                    MessengerAccount.provider == "max",
+                )
+            )
+            ma_max = ma_max_r.scalar_one_or_none()
+            if max_str:
+                taken = await db.execute(
+                    select(MessengerAccount.user_id).where(
+                        MessengerAccount.provider == "max",
+                        MessengerAccount.external_user_id == max_str,
+                        MessengerAccount.user_id != employee_id,
+                    )
+                )
+                if taken.scalar_one_or_none() is not None:
+                    raise HTTPException(
+                        status_code=400, detail="Этот MAX ID уже привязан к другому пользователю"
+                    )
+                if ma_max:
+                    ma_max.external_user_id = max_str
+                else:
+                    db.add(
+                        MessengerAccount(
+                            user_id=employee_id,
+                            provider="max",
+                            external_user_id=max_str,
+                            chat_id=None,
+                            username=None,
+                        )
+                    )
+            elif ma_max:
+                db.delete(ma_max)
+
             employee.first_name = form_data.get("first_name", "").strip()
             employee.last_name = form_data.get("last_name", "").strip()
             employee.username = form_data.get("username", "").strip()
             employee.phone = form_data.get("phone", "").strip()
             employee.email = form_data.get("email", "").strip() or None
-            
-            # Обработка даты рождения
+
             birth_date_str = form_data.get("birth_date", "").strip()
             if birth_date_str:
                 try:
@@ -6691,7 +6794,7 @@ async def owner_employee_edit(
                     pass
             else:
                 employee.birth_date = None
-            
+
             await db.commit()
             await db.refresh(employee)
             
@@ -6710,7 +6813,7 @@ async def owner_employee_edit(
 async def owner_employees_create_contract(
     request: Request,
     employee_telegram_id: Optional[str] = Form(None),
-    employee_id: Optional[str] = Form(None),
+    employee_max_id: Optional[str] = Form(None),
     title: str = Form(""),
     content: str = Form(""),
     hourly_rate: Optional[float] = Form(None),
@@ -6736,7 +6839,10 @@ async def owner_employees_create_contract(
 ):
     """Создание договора с сотрудником."""
     try:
+        import secrets
+
         from apps.web.services.contract_service import ContractService
+        from domain.entities.messenger_account import MessengerAccount
 
         def _parse_int(v):
             if v is None or (isinstance(v, str) and not v.strip()):
@@ -6745,37 +6851,80 @@ async def owner_employees_create_contract(
                 return int(v)
             except (ValueError, TypeError):
                 return None
-        emp_id = _parse_int(employee_id)
+
+        async def _alloc_synthetic_telegram() -> int:
+            for _ in range(40):
+                tid = -(secrets.randbelow(9_000_000_000_000_000) + 1)
+                ex = await db.execute(select(User.id).where(User.telegram_id == tid))
+                if ex.scalar_one_or_none() is None:
+                    return tid
+            raise HTTPException(status_code=500, detail="Не удалось выделить временный Telegram ID")
+
         emp_tg = _parse_int(employee_telegram_id)
-        if not emp_id and not emp_tg:
-            raise HTTPException(status_code=400, detail="Укажите сотрудника: выберите из списка или введите Telegram ID")
+        emp_max = (employee_max_id or "").strip()
+        if not emp_tg and not emp_max:
+            raise HTTPException(
+                status_code=400, detail="Укажите Telegram ID или MAX ID (хотя бы одно поле)"
+            )
 
         contract_service = ContractService()
         user_id = await get_user_id_from_current_user(current_user, db)
         if not user_id:
             raise HTTPException(status_code=400, detail="Пользователь не найден")
 
-        if emp_id:
-            contract_data = {"employee_id": emp_id}
-        else:
-            from sqlalchemy import select
-            from domain.entities.user import User, UserRole
-            employee_query = select(User).where(User.telegram_id == emp_tg)
-            result = await db.execute(employee_query)
-            employee_user = result.scalar_one_or_none()
-            if not employee_user:
-                employee_user = User(
-                    telegram_id=emp_tg,
-                    username=None,
-                    first_name=f"Сотрудник {emp_tg}",
-                    role=UserRole.EMPLOYEE.value,
-                    roles=[UserRole.EMPLOYEE.value],
-                    is_active=True
+        employee_user = None
+        if emp_tg is not None:
+            q = await db.execute(select(User).where(User.telegram_id == emp_tg))
+            employee_user = q.scalar_one_or_none()
+        if employee_user is None and emp_max:
+            uid_row = await db.execute(
+                select(MessengerAccount.user_id).where(
+                    MessengerAccount.provider == "max",
+                    MessengerAccount.external_user_id == emp_max,
                 )
-                db.add(employee_user)
-                await db.commit()
-                await db.refresh(employee_user)
-            contract_data = {"employee_telegram_id": emp_tg}
+            )
+            uid = uid_row.scalar_one_or_none()
+            if uid is not None:
+                q2 = await db.execute(select(User).where(User.id == uid))
+                employee_user = q2.scalar_one_or_none()
+
+        if not employee_user:
+            tid = emp_tg if emp_tg is not None else await _alloc_synthetic_telegram()
+            label = str(emp_tg if emp_tg is not None else emp_max)
+            employee_user = User(
+                telegram_id=tid,
+                username=None,
+                first_name=f"Сотрудник {label}",
+                role=UserRole.EMPLOYEE.value,
+                roles=[UserRole.EMPLOYEE.value],
+                is_active=True,
+            )
+            db.add(employee_user)
+            await db.flush()
+            if emp_max:
+                db.add(
+                    MessengerAccount(
+                        user_id=employee_user.id,
+                        provider="max",
+                        external_user_id=emp_max,
+                        chat_id=None,
+                        username=None,
+                    )
+                )
+            if emp_tg is not None:
+                db.add(
+                    MessengerAccount(
+                        user_id=employee_user.id,
+                        provider="telegram",
+                        external_user_id=str(emp_tg),
+                        chat_id=None,
+                        username=None,
+                    )
+                )
+            await db.commit()
+            await db.refresh(employee_user)
+
+        contract_data = {"employee_id": employee_user.id}
 
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None

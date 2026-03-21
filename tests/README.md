@@ -28,6 +28,7 @@ tests/
 │   └── test_helpers.py           # Утилиты и хелперы для тестов
 ├── unit/                          # Unit тесты (быстрые, изолированные)
 │   ├── test_admin_notification_service.py
+│   ├── test_notification_max_channel.py   # MAX канал уведомлений + шаблоны
 │   └── test_notification_template_service.py
 ├── integration/                   # Integration тесты (медленные, с зависимостями)
 │   ├── test_admin_notifications_routes.py

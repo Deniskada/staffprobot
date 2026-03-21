@@ -7,29 +7,125 @@ todos:
     status: completed
   - id: db-messenger-accounts
     content: Спроектировать и внедрить таблицу messenger_accounts (user_id + provider + external_user_id/chat_id) с UNIQUE(provider, external_user_id), миграциями и backfill из TG.
-    status: pending
+    status: completed
   - id: db-profile-verifications
     content: Создать таблицу profile_verifications (profile_id, provider, identity_key, verified_at) с UNIQUE(provider, identity_key); логика — после MAX.
-    status: pending
+    status: completed
   - id: db-notification-targets
     content: Спроектировать и внедрить notification_targets для org/object уровней с поддержкой Telegram и MAX (вместо одиночных полей TG chat_id).
-    status: pending
+    status: in_progress
   - id: unified-bot-router
     content: Вынести общую бот-логику в UnifiedBotRouter (NormalizedUpdate + Messenger интерфейс) и подключить TG путь через адаптерный слой без регрессий.
-    status: pending
+    status: in_progress
   - id: max-webhook-and-client
     content: Добавить MAX webhook endpoint, MaxAdapter (parse_update) и MaxClient (send_text/answer_callback/send_photo), подключить в общий Router.
-    status: pending
+    status: completed
   - id: web-linking-and-settings
     content: "Обновить веб-часть: привязка MAX к user_id, отображение статуса привязок, настройки каналов уведомлений owner/org/object, поля/UI для групп MAX."
-    status: pending
+    status: in_progress
   - id: notifications-max-channel
     content: Добавить канал уведомлений MAX в NotificationDispatcher и обеспечить deep-links/кнопки (или текстовые ссылки) аналогично Telegram.
-    status: pending
+    status: completed
   - id: tests-and-rollout
     content: Добавить smoke/unit тесты на парсинг апдейтов и выбор каналов уведомлений; подготовить план выкладки (feature flags, мониторинг, откат).
-    status: pending
+    status: in_progress
+  - id: tasks-v2-dual-delivery-links
+    content: "Tasks v2 completion_media: ссылки на доставку в TG и/или MAX (поле delivery), без жёсткой зависимости от telegram_report_chat_id при сценарии только MAX."
+    status: completed
+  - id: media-storage-copy-telegram-max
+    content: "Настройки хранения медиа: формулировки «Telegram/MAX (без S3)» и текст в UI без ощущения TG-only."
+    status: completed
 isProject: false
+---
+
+## Сводка прогресса (актуализация коду, 2026-03)
+
+**Сверка документов:** этот файл и `.cursor/plans/staffprobot-max-bot-implementation_9140fc53.plan.md` совпадают по **YAML todos** и тексту до конца **Фазы 1**; **детальные фазы 2–5** (бот, веб, уведомления, паритет) расписаны **только** в `.cursor/plans/...`.
+
+### Последнее обновление (2026-03-21)
+
+- **Документ:** таблица Phase 0 переразмечена (статус 🟩/🟨 + «остаток до прода»); блок **Матрица остаток до прода** и **Чеклист деплоя**.
+- **Инвентаризация legacy/TG:** `doc/plans/max-legacy-inventory.md` (пути к чатам отчётов, прямые `Bot.send_message`, команды `rg`); unit: `test_report_group_broadcast_prefs.py` в `ci_smoke`.
+- **Веб / Tasks v2:** карточка смены владельца — отдельный блок «Tasks v2», ссылки **хранилище** + **Telegram** / **MAX** из `completion_media[].delivery` (`owner/shifts/detail.html`). Ранее задачи `task_v2` попадали в «manual» и не отображались.
+- **MAX client:** при успешном `POST /messages` (текст и картинка) в DEBUG логируется превью тела ответа для сверки с `_max_api_public_link`.
+- **Runbook:** `doc/plans/max-rollout-runbook.md` — `MAX_FEATURES_ENABLED`, перезапуск `web` при обновлении только volume без rebuild.
+- **CI:** обязательный gate — `pytest -m ci_smoke` (адаптеры TG/MAX, `_max_api_public_link`, канал MAX в шаблонах); полный `tests/` — шаг с `continue-on-error` + coverage.
+- **Feature flag:** `MAX_FEATURES_ENABLED` (по умолчанию `true`) — вебхук 503, без исходящего MAX (`MaxClient`, группы отчётов, `MaxNotificationSender`).
+
+### notification_targets + Celery
+
+Групповые поздравления (ДР/праздники) в чаты объектов идут через `send_object_report_group_text` → `resolve_object_report_group_channels` → `get_telegram_report_chat_id_for_object` / `get_max_report_chat_id_for_object` (targets + legacy). Отдельных прямых обходов `telegram_report_chat_id` в Celery для этих сценариев нет.
+
+### Обновление (2026-03-20)
+
+- **Хранение медиа (owner):** лейблы/тексты — «Только Telegram/MAX», акцент на мессенджеры + опционально S3 (`owner_media_storage_service`, `media_storage_settings.html`).
+- **Tasks v2 / MAX:** при завершении с медиа в `completion_media` добавляется опционально **`delivery`**: `telegram` (URLs) и/или `max` — по факту успешной отправки; убрана блокировка «обязателен telegram chat» для режимов без S3, если отчёт уходит в MAX (`misc_handlers_unified`, `max_report_sender` → tuple ссылок, `MaxClient.send_photo*`).
+- **Парсинг ссылок MAX:** расширен `_max_api_public_link` (вложенные `message.body`, `body.message`, доп. ключи); unit `test_max_api_public_link.py`.
+- **Мелочи:** импорт `ShiftTask` в `shift_task_service`; правка импорта `TimeslotTaskTemplate` в `test_shift_tasks.py`. Полный `tests/unit` в CI по-прежнему с большим числом падений (отдельный бэклог).
+
+| Todo / тема | Статус | Что в репозитории | Осталось |
+|-------------|--------|-------------------|----------|
+| **inventory-telegram-coupling** (Фаза 0) | ✅ | Таблица в документе + backlog | — |
+| **db-messenger-accounts** | ✅ | Миграция `20260317_max_phase1`, `MessengerAccount`, backfill из `users.telegram_id`, `user_manager`, резолв в `user_resolver` | Довести единый резолв везде вместо прямого `telegram_id` там, где ещё осталось |
+| **db-profile-verifications** | ✅ схема | Таблица в той же миграции | Бизнес-логика KYC — по плану после MAX |
+| **db-notification-targets** | 🟨 | Таблица + backfill TG, `notification_target_service`, owner/bot/broadcast | Celery группы ✅ (`send_object_report_group_text`); опционально: убрать дубли с legacy-колонками объектов/орг |
+| **unified-bot-router** | 🟨 | + TG: `button_callback` → router (смены/объекты/tasks v2); `/help`, `/status` через router; убраны дубли `open_object`/`close_object`/`select_object_to_open` из `bot.py`; резолв TG через `messenger_accounts` | Планирование смен, отчёты, гео в TG — пока legacy; перенос по мере готовности unified |
+| **max-webhook-and-client** | ✅ | `apps/web/routes/max_webhook.py`, `MaxAdapter`, `MaxClient` (+ скачивание фото по token), `MaxMessenger` | Подтвердить форму ответа POST `/messages` на проде; при необходимости донастроить извлечение ссылки |
+| **web-linking-and-settings** | 🟨 | Привязка MAX (код + ЛК), `messenger_link_service`, объекты TG/MAX + `notification_targets`; `/owner/notifications`: группы отчётов + личные TG/MAX/ЛК по типам | UX договоров/карточек сотрудника (витрина TG+MAX), вычистить остатки TG-only в копирайте |
+| **notifications-max-channel** | ✅ | Зеркало TG→MAX без отдельного флага (по решению) | — |
+| **tasks-v2-dual-delivery-links** | ✅ | `completion_media[].delivery`, веб: `/owner/shifts/...` блок Tasks v2 + ссылки | — |
+| **media-storage-copy-telegram-max** | ✅ | Лейблы и подсказка в шаблоне настроек | — |
+| **tests-and-rollout** | 🟨 | `ci_smoke` в CI (`tests/unit`), runbook, `MAX_FEATURES_ENABLED` | Greenfield: расширять `ci_smoke`; починить сломанные integration (не gate); смоук руками по runbook |
+
+### Матрица «остаток до прода» (сводка по модулям)
+
+Условие «готово к проду»: функционал проверен на стенде, env заданы, откат понятен (`max-rollout-runbook.md`).
+
+| Модуль / риск | Готовность | Что сделать перед продом |
+|---------------|------------|---------------------------|
+| MAX webhook + client + флаг `MAX_FEATURES_ENABLED` | 🟩 | Прописать env на проде; зарегистрировать webhook; смок личного чата |
+| Персональные уведомления MAX (dispatcher, шаблоны, prefs `max` в ЛК) | 🟩 | Смок: событие → запись в MAX + авто-логин ссылка |
+| Группы отчётов (targets + `send_object_report_group_text` + toggles владельца) | 🟩 | Смок: объект с TG и/или MAX чатом, тестовое сообщение / ДР на стенде |
+| Celery групповые сценарии | 🟩 | Уже через единый broadcast; при новых задачах — не обходить сервис |
+| Web auth / JWT / `user_id` vs `telegram_id` | 🟨 | Прогон сценариев owner (смены, отмены, объекты) после каждого крупного merge |
+| Unified router vs legacy TG (`shift_handlers`: планирование, отчёты, гео) | 🟨 | Не блокер для «MAX на проде»; блокер для «полного паритета сценариев в TG через router» |
+| UI: договоры / сотрудники / единая витрина привязок TG+MAX | 🟨 | Ревью экранов; приоритет по продукту |
+| Legacy поля `telegram_report_chat_id` на объекте/орг | 🟨 | Работает через fallback; вычищать дубли с targets — по желанию |
+| CI: только `ci_smoke` gate | 🟨 | Достаточно для merge; полный `tests/unit` — бэклог |
+
+**Фазы 2–5 (только в `.cursor/plans/...`) — кратко по факту:**
+
+| Блок | Статус | Комментарий |
+|------|--------|-------------|
+| Фаза 2 — MAX-бот (смены, объекты, расписание, задачи) | 🟨 | `shared/bot_unified/*` (shift/object/schedule/misc handlers) |
+| Фаза 5 — медиа Tasks v2 в MAX | 🟨→🟩 частично | Отправка в TG+MAX, JSON с `delivery`; ссылка MAX зависит от ответа API |
+| Фаза 5 — геолокация в MAX | 🟨 | Unified-обработка координат в router |
+| Фаза 4 — персональные уведомления в MAX | 🟨 | Диспетчер/Celery + шаблоны; создание MAX-записей в сценариях — по мере нужды |
+
+---
+
+## Следующие шаги (приоритет)
+
+1. ~~**notification_targets end-to-end (Celery / группы)**~~ — ДР/праздники через `send_object_report_group_text`; точечный поиск других legacy-путей.
+2. ~~**Owner: переключатели каналов (группы)**~~ — `/owner/notifications`: блок «Группы отчётов», `report_group_messengers`. ~~**Личные: Telegram / MAX / ЛК по типам**~~ — тот же экран, prefs `max` + `create_notification_telegram_and_max_if_linked`.
+3. ~~**Веб: `completion_media.delivery`**~~ — карточка смены владельца, Tasks v2.
+4. **MAX API на проде** — DEBUG, превью `POST /messages`; при необходимости — `_max_api_public_link`.
+5. **Unified router: хвосты TG** — планирование, отчёты, гео (после стабилизации MAX на проде).
+6. ~~**CI smoke gate**~~ — `pytest tests/unit -m ci_smoke`.
+7. ~~**Rollout / флаг**~~ — `MAX_FEATURES_ENABLED`, `max-rollout-runbook.md`, `restart web` при volume-only обновлениях.
+
+### Чеклист деплоя MAX на прод (кратко)
+
+| # | Действие | Где смотреть |
+|---|----------|----------------|
+| 1 | `MAX_BOT_TOKEN`, `MAX_WEBHOOK_BASE_URL`, при необходимости `MAX_FEATURES_ENABLED=true` | `.env` / compose прод |
+| 2 | `docker compose … up -d` (или `restart web` если только шаблоны/volume) | runbook |
+| 3 | Зарегистрировать webhook | `scripts/setup_max_webhook.py` |
+| 4 | Смок: `/start` в MAX, привязка в ЛК | — |
+| 5 | Смок: группа отчёта (TG и/или MAX) + toggle владельца | `/owner/notifications` |
+| 6 | Смок: персональное уведомление + ссылка в ЛК | — |
+| 7 | Запасной откат: `MAX_FEATURES_ENABLED=false` + restart | runbook |
+
 ---
 
 ## Контекст и цель
@@ -95,25 +191,26 @@ flowchart TD
 
 > **Phase 0 завершена.** Таблица ниже — выход Phase 0 → **бэклог Phase 1**.
 
-### Таблица изменений по файлам/модулям (Phase 0 output → Phase 1 backlog)
+### Таблица изменений по файлам/модулям (Phase 0 → прогресс и остаток до прода)
 
-| Зона                           | Файл(ы)                                                                                                                                            | Что сейчас                                                                                  | Проблема для MAX                                                                     | Что меняем в Phase 1+                                                                            | Риск/заметки                        |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------- |
-| **Users (DB)**                 | `domain/entities/user.py`                                                                                                                          | `users.telegram_id` = `unique`, `nullable=False` (TG обязателен)                            | нельзя user без TG, нельзя 2 мессенджера на 1 user                                   | вынести привязки в `messenger_accounts`; `users.telegram_id` → legacy/optional                   | миграция данных + уникальность      |
-| **Web login**                  | `apps/web/routes/auth.py`                                                                                                                          | логин по `telegram_id + PIN`                                                                | MAX user не может войти/привязаться; логика везде думает TG                          | сделать linking по `user_id` + messenger; добавить MAX linking flow; убрать TG как "primary key" | затронет фронт/формы/токены         |
-| **Auto-login**                 | `apps/web/routes/auth.py`, `core/auth/auto_login.py`, `shared/services/notification_dispatcher.py`                                                 | auto-login токены валидируются в `telegram_id`; deep-link строится через `user.telegram_id` | MAX-уведомления не смогут давать авто-логин без TG                                   | перевести auto-login на `user_id` (one-time token → user_id)                                     | критично для всех уведомлений       |
-| **JWT payload**                | `apps/web/routes/auth.py`, middleware current_user                                                                                                 | в payload есть `id` и `telegram_id`; местами путают `id` и telegram_id                      | при добавлении MAX путаница усилится                                                 | закрепить: `id` = internal user_id; messenger IDs жить отдельно                                  | уже найдено место с багом           |
-| **Notifications dispatcher**   | `shared/services/notification_dispatcher.py`                                                                                                       | канал TELEGRAM шлёт на `user.telegram_id`                                                   | для MAX нужен другой target; нужен resolver target per channel                       | добавить MAX канал + resolver (user messenger_account / notification_targets)                    | менять минимум, без регрессий       |
-| **Telegram sender**            | `shared/services/senders/telegram_sender.py`                                                                                                       | `send_notification(... telegram_id)` и `chat_id=telegram_id`                                | не годится как универсальный sender                                                  | оставить как TG sender; добавить MAX sender                                                      | норм                                |
-| **Notification templates**     | `shared/templates/notifications/base_templates.py`                                                                                                 | ориентировано на Telegram deep-link                                                         | MAX должен тоже иметь link/button                                                    | расширить шаблоны на MAX (кнопка-ссылка или текст)                                               | зависит от возможностей MAX UI      |
-| **Object report group (DB)**   | `domain/entities/object.py`                                                                                                                        | `telegram_report_chat_id`, `inherit_telegram_chat`                                          | нужен max_report_chat_id или универсальные targets                                   | ввести `notification_targets` (scope=object) и мигрировать TG поле                               | влияет на bot media reports         |
-| **Org unit report group (DB)** | `domain/entities/org_structure.py`                                                                                                                 | `telegram_report_chat_id`                                                                   | нужен аналог для MAX                                                                 | перенос в `notification_targets` (scope=org_unit)                                                | наследование придётся переосмыслить |
-| **Owner object UI**            | `apps/web/templates/owner/objects/edit.html`                                                                                                       | форма для TG report chat id                                                                 | MAX target некуда ввести                                                             | добавить блоки TG/MAX или табличный UI targets                                                   | UX-решение                          |
-| **Owner object routes**        | `apps/web/routes/owner.py`                                                                                                                         | парсит `telegram_report_chat_id` и `inherit_telegram_chat`                                  | нет MAX; + есть место где `current_user['id']` ошибочно трактуется как telegram_id   | расширить на MAX targets; привести идентификаторы к `user_id`                                    | высокий риск                        |
-| **Bot media reports**          | `apps/bot/handlers_div/shift_handlers.py`, `tests/manual/MEDIA_REPORTS_FEATURE.md`                                                                 | в state хранится `telegram_chat_id`, отправка в TG группу                                   | для MAX нужен параллельный канал/таргет                                              | обобщить "report target per messenger"; сделать fallback                                         | зависит от MAX API медиа            |
-| **Bot integration (web)**      | `apps/web/services/bot_integration.py`                                                                                                             | вероятно TG-only (по совпадениям)                                                           | надо добавить MAX linking/health                                                     | расширить сервис до multi-messenger                                                              | уточнить при Phase 1                |
-| **Contracts/Employees UI**     | `apps/web/services/contract_service.py`, `apps/web/templates/owner/employees/create.html`, `apps/web/templates/owner/employees/edit_contract.html` | встречается `telegram_id` (по поиску)                                                       | данные сотрудника должны показывать TG+MAX привязки; операции не должны требовать TG | вынести привязки в отдельную модель и показать в UI                                              | требует внимательного ревью         |
-| **Celery tasks / scheduled**   | `core/celery/tasks/*` (напр. `birthday_tasks.py`)                                                                                                  | местами берёт `telegram_report_chat_id` и шлёт в TG                                         | MAX канал должен поддерживать те же сценарии                                         | перевод на notification_targets + dispatcher                                                     | риск: "тихие" места без уведомлений |
+Легенда: 🟩 сделано для выкладки MAX / 🟨 частично или нужен смок / ⬜ не взято или вне текущего скоупа.
+
+| Зона | Файл(ы) | Было (проблема MAX) | Статус | Остаток до прода |
+|------|---------|----------------------|--------|-------------------|
+| **Users (DB)** | `domain/entities/user.py`, миграции | TG как единственная привязка | 🟩 | Контролировать миграции на проде; legacy `telegram_id` сохраняется |
+| **Web login** | `apps/web/routes/auth.py` | вход только через призму TG | 🟨 | Смок: MAX linking + вход в ЛК на прод-стенде |
+| **Auto-login** | `core/auth/auto_login.py`, `notification_dispatcher.py` | привязка к `telegram_id` | 🟩 | Смок: уведомление в MAX → ссылка → ЛК |
+| **JWT / middleware** | `auth_middleware.py`, `role_middleware`, роуты | путаница `id` / `telegram_id` | 🟨 | Регрессия owner/manager после деплоев |
+| **Notifications** | `notification_dispatcher.py`, `senders/max_sender.py` | только TG | 🟩 | `MAX_FEATURES_ENABLED`; prefs `max` в `notification_preferences` |
+| **Templates** | `shared/templates/notifications/base_templates.py` | только TG | 🟩 | При новых типах — не забывать MAX-вариант + `$link_url` |
+| **Object / org чаты** | `object.py`, `org_structure.py`, `notification_target_service.py` | один TG chat id | 🟨 | Targets + fallback на legacy; смок обоих мессенджеров |
+| **Owner object UI/routes** | `owner.py`, `owner/objects/*.html` | нет MAX в формах | 🟨 | Проверить сохранение TG+MAX + `upsert_object_report_target` |
+| **Bot media / отчёты** | `shift_handlers.py`, `shared/bot_unified/*`, `report_group_broadcast.py` | TG-only группа | 🟨 | Резолв чата через `get_*_report_chat_id_for_object` ✅; TG гео/планирование — ещё legacy |
+| **Bot integration (web)** | `apps/web/services/bot_integration.py` | TG-only обвязка | 🟨 | Здоровье/статус MAX на проде по необходимости |
+| **Contracts / Employees** | `contract_service.py`, шаблоны employees | копирайт TG-only | 🟨 | Витрина привязок TG+MAX в карточках — по продукту |
+| **Celery** | `birthday_tasks.py`, др. | прямой `telegram_report_chat_id` | 🟩 для групп | ДР/праздники → `send_object_report_group_text`; личные рассылки в `offer_tasks` — отдельно от MAX |
+
+Детальный план правок Phase 1+ (колонки «что меняем») сохранён в истории: миграции `messenger_accounts` / `notification_targets`, MAX sender, resolver `user_id`.
 
 ---
 

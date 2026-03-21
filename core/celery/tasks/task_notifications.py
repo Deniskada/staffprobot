@@ -199,61 +199,63 @@ def check_overdue_tasks() -> dict:
                         task_title = template.title if template else "Задача"
                         
                         # Уведомление сотруднику
-                        n_employee = await notification_service.create_notification(
-                            user_id=employee.id,
-                            type=NotificationType.TASK_OVERDUE,
-                            channel=NotificationChannel.TELEGRAM,
-                            title="⚠️ Задача просрочена",
-                            message=(
-                                f"Задача «{task_title}» просрочена.\n\n"
-                                f"🕐 Дедлайн: {deadline_str}\n"
-                                f"📍 Объект: {obj.name}\n\n"
-                                f"Пожалуйста, выполните задачу как можно скорее."
-                            ),
-                            data={
-                                "entry_id": entry.id,
-                                "plan_id": entry.plan_id,
-                                "shift_id": shift.id,
-                                "object_id": obj.id
-                            },
-                            priority=NotificationPriority.HIGH,
-                            scheduled_at=None
-                        )
-                        
-                        if n_employee and getattr(n_employee, "id", None):
-                            send_notification_now.apply_async(args=[int(n_employee.id)], queue="notifications")
-                            notifications_sent += 1
-                        
-                        # Уведомление владельцу (если есть настройки уведомлений)
-                        if owner:
-                            # TODO: Проверить настройки уведомлений владельца на /owner/notifications
-                            # Пока отправляем всегда
-                            n_owner = await notification_service.create_notification(
-                                user_id=owner.id,
+                        n_employee, n_employee_max = (
+                            await notification_service.create_notification_telegram_and_max_if_linked(
+                                user_id=employee.id,
                                 type=NotificationType.TASK_OVERDUE,
-                                channel=NotificationChannel.TELEGRAM,
-                                title="⚠️ Просрочена задача сотрудника",
+                                title="⚠️ Задача просрочена",
                                 message=(
-                                    f"Сотрудник {employee.full_name or employee.telegram_id} не выполнил задачу вовремя.\n\n"
-                                    f"📋 Задача: «{task_title}»\n"
+                                    f"Задача «{task_title}» просрочена.\n\n"
                                     f"🕐 Дедлайн: {deadline_str}\n"
-                                    f"📍 Объект: {obj.name}\n"
-                                    f"👤 Сотрудник: {employee.full_name or f'ID {employee.telegram_id}'}"
+                                    f"📍 Объект: {obj.name}\n\n"
+                                    f"Пожалуйста, выполните задачу как можно скорее."
                                 ),
                                 data={
                                     "entry_id": entry.id,
                                     "plan_id": entry.plan_id,
                                     "shift_id": shift.id,
-                                    "employee_id": employee.id,
-                                    "object_id": obj.id
+                                    "object_id": obj.id,
                                 },
                                 priority=NotificationPriority.HIGH,
-                                scheduled_at=None
+                                scheduled_at=None,
                             )
-                            
-                            if n_owner and getattr(n_owner, "id", None):
-                                send_notification_now.apply_async(args=[int(n_owner.id)], queue="notifications")
+                        )
+                        for ne in (n_employee, n_employee_max):
+                            if ne and getattr(ne, "id", None):
+                                send_notification_now.apply_async(args=[int(ne.id)], queue="notifications")
                                 notifications_sent += 1
+                        
+                        # Уведомление владельцу (если есть настройки уведомлений)
+                        if owner:
+                            # TODO: Проверить настройки уведомлений владельца на /owner/notifications
+                            # Пока отправляем всегда
+                            n_owner, n_owner_max = (
+                                await notification_service.create_notification_telegram_and_max_if_linked(
+                                    user_id=owner.id,
+                                    type=NotificationType.TASK_OVERDUE,
+                                    title="⚠️ Просрочена задача сотрудника",
+                                    message=(
+                                        f"Сотрудник {employee.full_name or employee.telegram_id} не выполнил задачу вовремя.\n\n"
+                                        f"📋 Задача: «{task_title}»\n"
+                                        f"🕐 Дедлайн: {deadline_str}\n"
+                                        f"📍 Объект: {obj.name}\n"
+                                        f"👤 Сотрудник: {employee.full_name or f'ID {employee.telegram_id}'}"
+                                    ),
+                                    data={
+                                        "entry_id": entry.id,
+                                        "plan_id": entry.plan_id,
+                                        "shift_id": shift.id,
+                                        "employee_id": employee.id,
+                                        "object_id": obj.id,
+                                    },
+                                    priority=NotificationPriority.HIGH,
+                                    scheduled_at=None,
+                                )
+                            )
+                            for no in (n_owner, n_owner_max):
+                                if no and getattr(no, "id", None):
+                                    send_notification_now.apply_async(args=[int(no.id)], queue="notifications")
+                                    notifications_sent += 1
                         
                         logger.info(
                             "Overdue task notification created",

@@ -46,12 +46,13 @@ class StructuredLogger:
     
     def _log_with_context(self, level: int, message: str, **kwargs: Any) -> None:
         """Логирует сообщение с дополнительным контекстом"""
+        reserved = {"exc_info", "stack_info", "stacklevel", "extra"}
         extra = {}
         for key, value in kwargs.items():
-            if value is not None:
+            if key not in reserved and value is not None:
                 extra[key] = value
-        
-        self.logger.log(level, message, extra=extra)
+        exc_info = kwargs.get("exc_info")
+        self.logger.log(level, message, extra=extra, exc_info=exc_info)
     
     def debug(self, message: str, **kwargs: Any) -> None:
         """Логирует debug сообщение"""

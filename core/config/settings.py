@@ -133,6 +133,9 @@ class Settings(BaseSettings):
     # MAX Bot (platform-api.max.ru)
     max_bot_token: Optional[str] = Field(default=None, env="MAX_BOT_TOKEN")
     max_webhook_path: str = Field(default="/max/webhook", env="MAX_WEBHOOK_PATH")
+    max_webhook_base_url: Optional[str] = Field(default=None, env="MAX_WEBHOOK_BASE_URL")
+    # Kill-switch: вебхук и исходящие вызовы MaxClient / группы отчётов MAX / персональные MAX-уведомления
+    max_features_enabled: bool = Field(default=True, env="MAX_FEATURES_ENABLED")
 
     # GitHub (для интеграции с Issues API)
     github_token: Optional[str] = os.getenv("GITHUB_TOKEN")

@@ -526,11 +526,9 @@ async def owner_tasks_plan_create(
                         priority=NotificationPriority.NORMAL,
                         scheduled_at=None,
                     )
-                    # Telegram
-                    n = await notif_service.create_notification(
+                    n, n_max = await notif_service.create_notification_telegram_and_max_if_linked(
                         user_id=int(eid),
                         type=NotificationType.TASK_ASSIGNED,
-                        channel=NotificationChannel.TELEGRAM,
                         title="Новая задача",
                         message=(
                             "📋 Новая задача назначена. "
@@ -540,8 +538,9 @@ async def owner_tasks_plan_create(
                         priority=NotificationPriority.NORMAL,
                         scheduled_at=None,
                     )
-                    if n and getattr(n, "id", None):
-                        created_ids.append(int(n.id))
+                    for x in (n, n_max):
+                        if x and getattr(x, "id", None):
+                            created_ids.append(int(x.id))
 
                 for nid in created_ids:
                     send_notification_now.apply_async(args=[nid], queue="notifications")
@@ -746,11 +745,9 @@ async def owner_tasks_plan_edit(
                             priority=NotificationPriority.NORMAL,
                             scheduled_at=None,
                         )
-                        # Telegram
-                        n = await notif_service.create_notification(
+                        n, n_max = await notif_service.create_notification_telegram_and_max_if_linked(
                             user_id=int(eid),
                             type=NotificationType.TASK_ASSIGNED,
-                            channel=NotificationChannel.TELEGRAM,
                             title="Новая задача",
                             message=(
                                 "📋 Новая задача назначена. "
@@ -760,8 +757,9 @@ async def owner_tasks_plan_edit(
                             priority=NotificationPriority.NORMAL,
                             scheduled_at=None,
                         )
-                        if n and getattr(n, "id", None):
-                            created_ids.append(int(n.id))
+                        for x in (n, n_max):
+                            if x and getattr(x, "id", None):
+                                created_ids.append(int(x.id))
 
                     for nid in created_ids:
                         send_notification_now.apply_async(args=[nid], queue="notifications")
@@ -902,11 +900,9 @@ async def owner_tasks_entries_create(
                 priority=NotificationPriority.NORMAL,
                 scheduled_at=None,
             )
-            # Telegram
-            n = await notif_service.create_notification(
+            n, n_max = await notif_service.create_notification_telegram_and_max_if_linked(
                 user_id=int(employee_id),
                 type=NotificationType.FEATURE_ANNOUNCEMENT,
-                channel=NotificationChannel.TELEGRAM,
                 title="Новая задача",
                 message=(
                     "📋 Новая задача назначена. "
@@ -916,9 +912,14 @@ async def owner_tasks_entries_create(
                 priority=NotificationPriority.NORMAL,
                 scheduled_at=None,
             )
-            if n and getattr(n, "id", None):
-                send_notification_now.apply_async(args=[int(n.id)], queue='notifications')
-                logger.info("Enqueued send_notification_now for manual entry", entry_id=entry.id, notification_id=int(n.id))
+            for x in (n, n_max):
+                if x and getattr(x, "id", None):
+                    send_notification_now.apply_async(args=[int(x.id)], queue="notifications")
+                    logger.info(
+                        "Enqueued send_notification_now for manual entry",
+                        entry_id=entry.id,
+                        notification_id=int(x.id),
+                    )
     except Exception as _e:
         from core.logging.logger import logger as _logger
         _logger.error("Failed to create notifications for manual entry", entry_id=entry.id, error=str(_e))

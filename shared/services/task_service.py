@@ -271,7 +271,7 @@ class TaskService:
         Args:
             entry_id: ID записи задачи
             completion_notes: Текстовые комментарии
-            completion_media: Список медиафайлов [{"url": "...", "type": "photo"}]
+            completion_media: Список элементов {url, type, key?, delivery?: {telegram?, max?}}
             
         Returns:
             True если успешно

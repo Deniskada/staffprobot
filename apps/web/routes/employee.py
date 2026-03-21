@@ -2059,6 +2059,13 @@ async def employee_profile(
         kyc_result = await db.execute(kyc_query)
         kyc_status = kyc_result.scalar_one_or_none() or "unverified"
 
+        from domain.entities.messenger_account import MessengerAccount
+        ma_q = select(MessengerAccount.provider).where(MessengerAccount.user_id == user_id)
+        ma_r = await db.execute(ma_q)
+        providers = {row[0] for row in ma_r.all()}
+        has_telegram = "telegram" in providers
+        has_max = "max" in providers
+
         return templates.TemplateResponse(
             "employee/profile.html",
             {
@@ -2071,11 +2078,31 @@ async def employee_profile(
                 "work_categories": work_categories,
                 "available_interfaces": available_interfaces,
                 "kyc_status": kyc_status,
+                "has_telegram": has_telegram,
+                "has_max": has_max,
             },
         )
     except Exception as e:
         logger.error(f"Ошибка загрузки профиля: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки профиля: {e}")
+
+
+@router.post("/messengers/max/link-code")
+async def employee_messengers_max_link_code(
+    current_user: dict = Depends(require_employee_or_applicant),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Сгенерировать одноразовый код для привязки MAX. JSON: {code, expires_in}."""
+    if isinstance(current_user, RedirectResponse):
+        return current_user
+    user_id = await get_user_id_from_current_user(current_user, db)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Пользователь не найден")
+    from shared.services.messenger_link_service import generate_max_link_code
+    code, expires_in = await generate_max_link_code(user_id)
+    if not code:
+        raise HTTPException(status_code=503, detail="Сервис недоступен")
+    return {"code": code, "expires_in": expires_in}
 
 
 @router.get("/profiles", response_class=HTMLResponse)

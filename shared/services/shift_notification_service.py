@@ -630,6 +630,13 @@ class ShiftNotificationService:
             channels.append(NotificationChannel.IN_APP)
         if prefs.get("telegram", True):
             channels.append(NotificationChannel.TELEGRAM)
+        if prefs.get("max", True):
+            from core.database.session import get_async_session
+            from shared.services.messenger_account_service import get_max_external_user_id_for_user
+
+            async with get_async_session() as _s:
+                if await get_max_external_user_id_for_user(_s, user_id):
+                    channels.append(NotificationChannel.MAX)
         if prefs.get("email", False):
             channels.append(NotificationChannel.EMAIL)
         if prefs.get("sms", False):

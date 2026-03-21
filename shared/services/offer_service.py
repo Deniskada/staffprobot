@@ -310,6 +310,7 @@ class OfferService:
             "contract_id": contract.id,
             "owner_id": contract.owner_id,
             "employee_name": employee_name,
+            "contract_title": contract.title or "",
         }
 
     async def get_employee_details_for_contract(

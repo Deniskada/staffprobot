@@ -34,7 +34,9 @@ async def _dispatch_all_scheduled():
     )
     from domain.entities.user import User
     from shared.services.senders.telegram_sender import get_telegram_sender
-    from shared.templates.notifications.base_templates import NotificationTemplateManager
+    from shared.services.senders.max_sender import get_max_sender
+    from shared.services.messenger_account_service import get_max_external_user_id_for_user
+    from shared.services.notification_auto_login_vars import enrich_variables_with_action_link
     from sqlalchemy import select, text, and_, cast, String
 
     stats: Dict[str, int] = {"processed": 0, "sent": 0, "failed": 0}
@@ -67,6 +69,7 @@ async def _dispatch_all_scheduled():
         users_map = {u.id: u for u in user_rows.scalars().all()}
 
         tg_sender = get_telegram_sender()
+        max_sender = get_max_sender()
 
         for notif in notifications:
             try:
@@ -86,10 +89,28 @@ async def _dispatch_all_scheduled():
                         await _mark(session, notif.id, "failed", error="No telegram_id")
                         stats["failed"] += 1
                         continue
+                    vars_enriched = await enrich_variables_with_action_link(
+                        notif, user, dict(notif.data or {})
+                    )
                     success = await tg_sender.send_notification(
                         notification=notif,
                         telegram_id=user.telegram_id,
-                        variables=notif.data,
+                        variables=vars_enriched,
+                    )
+                elif channel == NotificationChannel.MAX:
+                    max_ext = await get_max_external_user_id_for_user(session, user.id)
+                    if not max_ext:
+                        logger.warning(f"User {user.id} has no MAX account")
+                        await _mark(session, notif.id, "failed", error="No max external_user_id")
+                        stats["failed"] += 1
+                        continue
+                    vars_enriched = await enrich_variables_with_action_link(
+                        notif, user, dict(notif.data or {})
+                    )
+                    success = await max_sender.send_notification(
+                        notification=notif,
+                        max_user_id=max_ext,
+                        variables=vars_enriched,
                     )
                 elif channel == NotificationChannel.IN_APP:
                     success = True
@@ -155,6 +176,9 @@ async def _dispatch_single(notification_id: int) -> bool:
     from domain.entities.notification import Notification, NotificationChannel, NotificationStatus
     from domain.entities.user import User
     from shared.services.senders.telegram_sender import get_telegram_sender
+    from shared.services.senders.max_sender import get_max_sender
+    from shared.services.messenger_account_service import get_max_external_user_id_for_user
+    from shared.services.notification_auto_login_vars import enrich_variables_with_action_link
     from sqlalchemy import select, cast, String
 
     async with get_celery_session() as session:
@@ -177,8 +201,27 @@ async def _dispatch_single(notification_id: int) -> bool:
                 await _mark(session, notification_id, "failed", error="No telegram_id")
                 return False
             tg_sender = get_telegram_sender()
+            vars_enriched = await enrich_variables_with_action_link(
+                notif, user, dict(notif.data or {})
+            )
             success = await tg_sender.send_notification(
-                notification=notif, telegram_id=user.telegram_id, variables=notif.data
+                notification=notif,
+                telegram_id=user.telegram_id,
+                variables=vars_enriched,
+            )
+        elif notif.channel_enum == NotificationChannel.MAX:
+            max_ext = await get_max_external_user_id_for_user(session, user.id)
+            if not max_ext:
+                await _mark(session, notification_id, "failed", error="No max external_user_id")
+                return False
+            max_sender = get_max_sender()
+            vars_enriched = await enrich_variables_with_action_link(
+                notif, user, dict(notif.data or {})
+            )
+            success = await max_sender.send_notification(
+                notification=notif,
+                max_user_id=max_ext,
+                variables=vars_enriched,
             )
         elif notif.channel_enum == NotificationChannel.IN_APP:
             success = True

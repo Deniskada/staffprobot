@@ -14,7 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.web.services.shift_task_service import ShiftTaskService
-from domain.entities.shift_task import ShiftTask, TimeslotTaskTemplate
+from domain.entities.shift_task import ShiftTask
+from domain.entities.timeslot_task_template import TimeslotTaskTemplate
 from domain.entities.object import Object
 from domain.entities.time_slot import TimeSlot
 

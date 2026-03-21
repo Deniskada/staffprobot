@@ -205,6 +205,17 @@ class S3MediaStorageClient(MediaStorageClient):
         except ClientError:
             return False
 
+    async def get_bytes(self, key: str) -> tuple[bytes, str]:
+        """Скачать объект из бакета (для внутренней отправки в MAX и т.д.)."""
+
+        def _get() -> tuple[bytes, str]:
+            resp = self._client.get_object(Bucket=self._bucket, Key=key)
+            body = resp["Body"].read()
+            ct = (resp.get("ContentType") or "application/octet-stream").strip()
+            return body, ct
+
+        return await _run_sync(_get)
+
     async def store_telegram_file(
         self,
         file_id: str,

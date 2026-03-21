@@ -116,30 +116,61 @@ class UserManager:
     
     async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[dict]:
         """Получение пользователя по Telegram ID."""
+        return await self.get_user_by_messenger("telegram", str(telegram_id))
+
+    async def get_user_by_messenger(
+        self, messenger: str, external_id: str
+    ) -> Optional[dict]:
+        """Получение пользователя по мессенджеру и external_user_id."""
         try:
             async with get_async_session() as session:
-                query = select(User).where(User.telegram_id == telegram_id)
-                result = await session.execute(query)
-                user = result.scalar_one_or_none()
-                
+                from sqlalchemy import and_
+
+                q = select(MessengerAccount.user_id).where(
+                    and_(
+                        MessengerAccount.provider == messenger,
+                        MessengerAccount.external_user_id == str(external_id),
+                    )
+                )
+                r = await session.execute(q)
+                user_id = r.scalar_one_or_none()
+                if not user_id:
+                    if messenger == "telegram":
+                        try:
+                            tid = int(external_id)
+                            user = (
+                                await session.execute(
+                                    select(User).where(User.telegram_id == tid)
+                                )
+                            ).scalar_one_or_none()
+                            if user:
+                                return self._user_to_dict(user)
+                        except ValueError:
+                            pass
+                    return None
+                user = (
+                    await session.execute(select(User).where(User.id == user_id))
+                ).scalar_one_or_none()
                 if not user:
                     return None
-                
-                return {
-                    "id": user.id,
-                    "telegram_id": user.telegram_id,
-                    "username": user.username,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "role": user.role,
-                    "roles": user.get_roles(),
-                    "is_active": user.is_active,
-                    "created_at": user.created_at,
-                    "updated_at": user.updated_at,
-                }
+                return self._user_to_dict(user)
         except Exception as e:
-            logger.error(f"Failed to get user by telegram_id {telegram_id}: {e}")
+            logger.error(f"get_user_by_messenger {messenger}:{external_id}: {e}")
             return None
+
+    def _user_to_dict(self, user) -> dict:
+        return {
+            "id": user.id,
+            "telegram_id": user.telegram_id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+            "roles": user.get_roles(),
+            "is_active": user.is_active,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+        }
     
     async def get_all_users(self) -> List[dict]:
         """Получение всех пользователей."""

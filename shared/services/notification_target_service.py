@@ -96,26 +96,61 @@ async def get_telegram_report_chat_id_for_object(
     ).limit(1)
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
-    if row and row[0]:
-        return str(row[0])
+    if row is not None and str(row).strip():
+        return str(row).strip()
 
-    # 2. inherit: notification_targets org_unit
+    # 2. inherit: org_unit — targets, затем legacy колонка подразделения
+    if obj.inherit_telegram_chat and obj.org_unit_id:
+        legacy_org = None
+        org = getattr(obj, "org_unit", None)
+        if org is not None:
+            legacy_org = getattr(org, "telegram_report_chat_id", None)
+        tid = await get_telegram_report_chat_id_for_org_unit(
+            session, obj.org_unit_id, legacy_org
+        )
+        if tid and str(tid).strip():
+            return str(tid).strip()
+
+    # 3. Fallback: legacy на объекте (и наследование через модель)
+    return obj.get_effective_report_chat_id()
+
+
+async def get_max_report_chat_id_for_object(
+    session: AsyncSession,
+    obj: Object,
+) -> Optional[str]:
+    """
+    MAX chat_id группы для медиа-отчётов (notification_targets).
+    Наследование — тот же флаг inherit_telegram_chat, что и для TG-чата отчётов.
+    """
+    stmt = select(NotificationTarget.target_chat_id).where(
+        and_(
+            NotificationTarget.scope_type == "object",
+            NotificationTarget.scope_id == obj.id,
+            NotificationTarget.messenger == "max",
+            NotificationTarget.is_enabled.is_(True),
+        )
+    ).limit(1)
+    result = await session.execute(stmt)
+    row = result.scalar_one_or_none()
+    if row is not None and str(row).strip():
+        return str(row).strip()
+
     if obj.inherit_telegram_chat and obj.org_unit_id:
         stmt = select(NotificationTarget.target_chat_id).where(
             and_(
                 NotificationTarget.scope_type == "org_unit",
                 NotificationTarget.scope_id == obj.org_unit_id,
-                NotificationTarget.messenger == "telegram",
+                NotificationTarget.messenger == "max",
                 NotificationTarget.is_enabled.is_(True),
             )
         ).limit(1)
         result = await session.execute(stmt)
         row = result.scalar_one_or_none()
-        if row and row[0]:
-            return str(row[0])
+        if row is not None and str(row).strip():
+            return str(row).strip()
 
-    # 3. Fallback: legacy
-    return obj.get_effective_report_chat_id()
+    return None
 
 
 async def get_telegram_report_chat_id_for_org_unit(
@@ -137,6 +172,6 @@ async def get_telegram_report_chat_id_for_org_unit(
     ).limit(1)
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
-    if row and row[0]:
-        return str(row[0])
+    if row is not None and str(row).strip():
+        return str(row).strip()
     return legacy_chat_id

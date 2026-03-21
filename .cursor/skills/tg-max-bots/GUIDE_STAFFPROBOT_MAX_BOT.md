@@ -110,7 +110,7 @@ apps/bot_unified/
 
 MAX API из референса (`cvetbuket.com/bot/MaxAdapter.php`):
 - базовый URL: `https://platform-api.max.ru`
-- токен: `access_token` передаётся в query string
+- токен: заголовок `Authorization: <token>` (с окт. 2025; access_token в URL отключён с 30.03.2026)
 - отправка текста: `POST /messages?chat_id=...`
 - callback ack: `POST /answers?callback_id=...` (тело не должно быть пустым)
 - фото: `POST /uploads?type=image` → upload → attach token в message
