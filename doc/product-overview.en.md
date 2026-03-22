@@ -2,7 +2,7 @@
 
 ## Product Summary
 
-StaffProBot is a platform for managing shifts, staff and payouts. Owners and managers maintain objects (locations) and schedules; employees work shifts; the system calculates pay, sends notifications and supports contracts and document templates. Access is via a Telegram bot or a web app (FastAPI); roles include owner, manager, employee, applicant and superadmin. The platform covers geolocation (PostGIS), calendar planning with time slots, contract templates and versions, payroll with adjustments and billing, reviews and ratings, and notifications with one-click login links to the web app.
+StaffProBot is a platform for managing shifts, staff and payouts. Owners and managers maintain objects (locations) and schedules; employees work shifts; the system calculates pay, sends notifications and supports contracts and document templates. Access is via bots in Telegram and MAX or a web app (FastAPI); roles include owner, manager, employee, applicant and superadmin. The platform covers geolocation (PostGIS), calendar planning with time slots, contract templates and versions, payroll with adjustments and billing, reviews and ratings, and notifications with one-click login links to the web app.
 
 ## Business Problem
 
@@ -19,9 +19,9 @@ StaffProBot provides one backend for the Telegram bot and the web app. Objects h
 - **Contracts and documents:** Templates, versions, constructor (in progress); contract conclusion and history; PDF generation (WeasyPrint).
 - **Payroll and billing:** PayrollEntry, adjustments, rate priority (contract → slot → object); payout schedules; billing, tariffs, limits; YooKassa integration.
 - **Reviews and ratings:** Reviews for employees and objects; moderation; appeals; reports.
-- **Notifications:** Telegram and web; types (shift, contract, offer, reminders, etc.); auto-login URL in every Telegram message (NotificationActionService.get_action_url).
-- **Telegram bot:** Planning, reports (including Excel), object selection by location, PIN for web, view shifts and offers.
-- **Multi-messenger readiness:** The bot logic is designed to be reused across messengers (Telegram now, MAX next) via adapters and a normalized update DTO.
+- **Notifications:** Telegram, MAX and web; types (shift, contract, offer, reminders, etc.); auto-login URL in every message (NotificationActionService.get_action_url); owners configure delivery channels.
+- **Bots (Telegram + MAX):** Unified business logic via `UnifiedBotRouter` — shifts, objects, scheduling, tasks, reports, geolocation; `TgAdapter`/`MaxAdapter` normalize incoming updates, `TgMessenger`/`MaxMessenger` handle outgoing; account linking via one-time codes in the dashboard.
+- **Multi-messenger architecture:** `NormalizedUpdate` DTO, `messenger_accounts` (one user — multiple messengers), `notification_targets` (TG+MAX group chats at object/org level), `MAX_FEATURES_ENABLED` feature flag with rollback.
 - **DevOps:** Docker Compose (dev/prod), health checks, GitHub Actions (test, lint, security, deploy to 155.212.217.38), deployments table.
 
 ## Architecture Overview
@@ -38,7 +38,8 @@ The system map (`doc/system-map.md`) describes the flow: **Roles** (owner, manag
 | **Celery** | Payroll jobs, reminders, scheduled tasks |
 | **YooKassa** | Payments, billing |
 | **Telegram Bot API** | Bot webhook, messages, PIN for web login |
-| **MinIO/S3** | Document and media storage (optional Telegram storage) |
+| **MAX platform-api.max.ru** | MAX bot webhook, messages, account linking |
+| **MinIO/S3** | Document and media storage (optional messenger storage) |
 | **WeasyPrint / ReportLab** | PDF contracts |
 
 ## Business Impact

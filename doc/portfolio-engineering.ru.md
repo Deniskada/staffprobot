@@ -1,3 +1,5 @@
 # StaffProBot — Портфолио: инженерные решения (RU)
 
+**MAX-бот: полный цикл внедрения (2026-03):** Добавлен второй мессенджер (MAX) без дублирования бизнес-логики. Архитектура: `NormalizedUpdate` DTO → адаптеры `TgAdapter`/`MaxAdapter` → `UnifiedBotRouter` → единые обработчики → выходные `TgMessenger`/`MaxMessenger`. ~3500 строк новых unified-обработчиков (смены, объекты, планирование, задачи, привязка мессенджеров). `MaxClient` с отправкой текста/фото/callback. Привязка аккаунтов через одноразовые коды. Уведомления по двум каналам (`NotificationDispatcher` + `MaxNotificationSender`). `notification_targets` для групповых чатов TG+MAX на уровне объекта и оргединицы. Прод-деплой: nginx, DNS/TLS, webhook, feature-флаг с откатом. CI: 28 smoke-тестов gate. 106 файлов, +7400 / −1500 строк.
+
 **Фаза 1 MAX (2026-03):** messenger_accounts при регистрации, notification_targets (чтение/запись), исправление user_id/telegram_id в owner.py, единый get_telegram_report_chat_id_for_object в боте и Celery.

@@ -16,9 +16,9 @@ Core (apps/web, apps/bot, shared/, domain/)
         │
         ├── Objects, TimeSlots, Shifts, Contracts, Templates
         ├── PayrollEntry, Adjustments, Billing, Tariffs
-        ├── Reviews, Ratings, Notifications (web + Telegram, auto-login links)
+        ├── Reviews, Ratings, Notifications (web + Telegram + MAX, auto-login links)
         ├── Offers, Applications, Documents (MinIO/S3)
-        └── NotificationDispatcher, NotificationActionService
+        └── NotificationDispatcher (TG+MAX), NotificationActionService
         │
         ▼
 PostgreSQL (PostGIS) + Redis + RabbitMQ
@@ -26,7 +26,8 @@ PostgreSQL (PostGIS) + Redis + RabbitMQ
         ├── Celery (celery_worker, celery_beat) — payroll, reminders, scheduled tasks
         ├── YooKassa — payments
         ├── WeasyPrint / ReportLab — PDF contracts
-        └── Telegram Bot API
+        ├── Telegram Bot API
+        └── MAX platform-api.max.ru
         │
         ▼
 Deploy: Docker Compose (prod), GitHub Actions → SSH pull, health check, deployments table

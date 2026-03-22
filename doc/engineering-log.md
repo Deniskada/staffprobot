@@ -5,6 +5,32 @@ Run: `python3 scripts/build_engineering_log.py doc/changelog-entries.md doc/engi
 
 ---
 
+## 2026 — MAX-бот: полный цикл внедрения (Фазы 2–5, деплой, стабилизация)
+
+Problem
+StaffProBot работал только через Telegram. Нужно добавить второй мессенджер (MAX / platform-api.max.ru) без дублирования бизнес-логики: единые обработчики смен, объектов, планирования, задач, уведомлений; привязка MAX-аккаунтов к внутренним пользователям; деплой webhook на прод с feature-флагом и откатом.
+
+Engineering
+- **Unified bot layer** (`shared/bot_unified/`): `NormalizedUpdate` DTO, `TgAdapter`/`MaxAdapter` парсинг, `UnifiedBotRouter` диспатч, `TgMessenger`/`MaxMessenger` выходные адаптеры; ~3500 строк новых обработчиков (shift, object, schedule, misc, my_id_linking, user_resolver)
+- **MAX client** (`MaxClient`): отправка текста/фото/callback answer, скачивание медиа по token, извлечение public link из ответа API
+- **Webhook** (`apps/web/routes/max_webhook.py`): приём апдейтов MAX, feature-флаг `MAX_FEATURES_ENABLED`
+- **Привязка мессенджеров**: одноразовые коды в ЛК → `/start CODE` в MAX/TG; профиль сотрудника — блок «Мессенджеры»; `messenger_link_service`
+- **notification_targets**: org_unit scope, upsert для TG и MAX; fallback на legacy `telegram_report_chat_id`; broadcast через `report_group_broadcast` (TG+MAX)
+- **Уведомления MAX**: `MaxNotificationSender`, канал `max` в `NotificationDispatcher`; персональные prefs MAX в ЛК
+- **Web UI**: карточки сотрудников TG+MAX, договоры без жёсткой привязки TG, owner/manager формы с MAX ID, вычистка TG-only копирайта (landing, тарифы, support hub, OTP, менеджер добавления)
+- **TG unified migration**: `main_menu`, `status`, `view_schedule`, `schedule_shift` через unified router; `get_report` — legacy `EarningsReportHandlers` (интерактивный); user state key по `telegram_id` для TG, `internal_id` для MAX
+- **Прод-деплой**: nginx `max.staffprobot.ru`, DNS/TLS, регистрация webhook, env MAX_BOT_TOKEN/WEBHOOK; `docker-compose.prod.yml` дополнен MAX-переменными
+- **CI**: `ci_smoke` gate (28 тестов) — адаптеры, public link, каналы уведомлений, state key; новые тесты `test_user_state_storage_key`, `test_bot_unified_adapters` (location), `test_notification_max_channel`
+- **Стабилизация**: исправление потери TG-сессии при отправке гео (state key по `telegram_id`), персонализация `main_menu` с `START_KEYBOARD` для обоих мессенджеров
+
+Business value
+Пользователи MAX получают полный набор функций бота (смены, объекты, задачи, планирование, уведомления) наравне с Telegram. Владельцы управляют чатами отчётов для обоих мессенджеров. Платформа готова к масштабированию на новые каналы без переписывания логики.
+
+Tech
+Python, FastAPI, python-telegram-bot, MAX platform-api.max.ru, SQLAlchemy, Redis, Docker Compose, Nginx, GitHub Actions, pytest.
+
+---
+
 ## 2026 — Skill tg-max-bots: единая логика Telegram + MAX
 
 Problem
