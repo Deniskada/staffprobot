@@ -242,7 +242,6 @@ def _telegram_employee_unified_callback(callback_data: str) -> bool:
         "status",
         "view_schedule",
         "schedule_shift",
-        "get_report",
         "my_tasks",
         "cancel_task_v2_media",
         "main_menu",
