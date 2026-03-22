@@ -233,12 +233,16 @@ async def _handle_help(update: NormalizedUpdate, messenger: Messenger) -> None:
 
 
 def _telegram_employee_unified_callback(callback_data: str) -> bool:
-    """Колбэки, для которых Telegram идёт через unified (смены/объекты/tasks v2)."""
+    """Колбэки, для которых Telegram идёт через unified."""
     if callback_data in (
         "open_shift",
         "close_shift",
         "open_object",
         "close_object",
+        "status",
+        "view_schedule",
+        "schedule_shift",
+        "get_report",
         "my_tasks",
         "cancel_task_v2_media",
     ):
@@ -358,19 +362,19 @@ async def _try_dispatch_employee_callbacks(
         except (ValueError, IndexError):
             return False
 
-    if callback_data == "status" and msgr == "max":
+    if callback_data == "status":
         from .misc_handlers_unified import handle_status
 
         return await handle_status(update, messenger, internal_id, telegram_id)
-    if callback_data == "view_schedule" and msgr == "max":
+    if callback_data == "view_schedule":
         from .misc_handlers_unified import handle_view_schedule
 
         return await handle_view_schedule(update, messenger, internal_id, telegram_id)
-    if callback_data == "schedule_shift" and msgr == "max":
+    if callback_data == "schedule_shift":
         from .misc_handlers_unified import handle_schedule_shift
 
         return await handle_schedule_shift(update, messenger, internal_id, telegram_id)
-    if callback_data == "get_report" and msgr == "max":
+    if callback_data == "get_report":
         from .misc_handlers_unified import handle_get_report
 
         return await handle_get_report(update, messenger, internal_id, telegram_id)

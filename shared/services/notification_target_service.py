@@ -153,6 +153,43 @@ async def get_max_report_chat_id_for_object(
     return None
 
 
+async def upsert_org_unit_report_target(
+    session: AsyncSession,
+    org_unit_id: int,
+    messenger: str,
+    target_chat_id: Optional[str],
+) -> None:
+    """Создать / обновить notification_targets для подразделения."""
+    stmt = select(NotificationTarget).where(
+        and_(
+            NotificationTarget.scope_type == "org_unit",
+            NotificationTarget.scope_id == org_unit_id,
+            NotificationTarget.messenger == messenger,
+        )
+    ).limit(1)
+    result = await session.execute(stmt)
+    existing = result.scalar_one_or_none()
+
+    if target_chat_id and str(target_chat_id).strip():
+        chat_id = str(target_chat_id).strip()
+        if existing:
+            existing.target_chat_id = chat_id
+            existing.is_enabled = True
+        else:
+            session.add(
+                NotificationTarget(
+                    scope_type="org_unit",
+                    scope_id=org_unit_id,
+                    messenger=messenger,
+                    target_type="group",
+                    target_chat_id=chat_id,
+                    is_enabled=True,
+                )
+            )
+    elif existing:
+        existing.is_enabled = False
+
+
 async def get_telegram_report_chat_id_for_org_unit(
     session: AsyncSession,
     org_unit_id: int,

@@ -94,6 +94,13 @@ class OrgStructureService:
             )
             
             self.db.add(new_unit)
+            await self.db.flush()
+
+            from shared.services.notification_target_service import upsert_org_unit_report_target
+            await upsert_org_unit_report_target(
+                self.db, new_unit.id, "telegram", telegram_report_chat_id,
+            )
+
             await self.db.commit()
             await self.db.refresh(new_unit)
             
@@ -277,6 +284,10 @@ class OrgStructureService:
                 unit.cancellation_invalid_reason_fine = data['cancellation_invalid_reason_fine']
             if 'telegram_report_chat_id' in data:
                 unit.telegram_report_chat_id = data['telegram_report_chat_id']
+                from shared.services.notification_target_service import upsert_org_unit_report_target
+                await upsert_org_unit_report_target(
+                    self.db, unit_id, "telegram", data['telegram_report_chat_id'],
+                )
             if 'is_active' in data:
                 unit.is_active = data['is_active']
             
