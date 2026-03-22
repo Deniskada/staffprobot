@@ -322,11 +322,18 @@ async def _try_dispatch_employee_callbacks(
     if callback_data == "close_object":
         return await handle_close_object(update, messenger, internal_id, telegram_id)
 
-    if callback_data == "main_menu" and msgr == "max":
+    if callback_data == "main_menu":
         from core.state import user_state_manager
+        from .user_resolver import user_state_storage_key
 
-        await user_state_manager.clear_state(internal_id)
-        await messenger.send_text(chat_id, "🏠 Главное меню", keyboard=START_KEYBOARD)
+        sk = user_state_storage_key(msgr, internal_id, telegram_id)
+        await user_state_manager.clear_state(sk)
+        name = update.first_name or "Пользователь"
+        await messenger.send_text(
+            chat_id,
+            f"👋 {name}, выберите действие:",
+            keyboard=START_KEYBOARD,
+        )
         return True
 
     if callback_data.startswith("open_shift_object:"):
