@@ -1528,8 +1528,31 @@ async def manager_employee_add(
             
             form_data = await request.form()
             
-            # Получаем данные формы
-            telegram_id = int(form_data.get("telegram_id"))
+            import secrets
+            from domain.entities.messenger_account import MessengerAccount
+
+            def _parse_int(v):
+                if v is None or (isinstance(v, str) and not v.strip()):
+                    return None
+                try:
+                    return int(v)
+                except (ValueError, TypeError):
+                    return None
+
+            async def _alloc_synthetic_telegram() -> int:
+                for _ in range(40):
+                    tid = -(secrets.randbelow(9_000_000_000_000_000) + 1)
+                    ex = await db.execute(select(User.id).where(User.telegram_id == tid))
+                    if ex.scalar_one_or_none() is None:
+                        return tid
+                raise HTTPException(status_code=500, detail="Не удалось выделить временный Telegram ID")
+
+            emp_tg = _parse_int(form_data.get("telegram_id"))
+            emp_max = (form_data.get("max_id") or "").strip()
+            if not emp_tg and not emp_max:
+                raise HTTPException(status_code=400, detail="Укажите Telegram ID или MAX ID (хотя бы одно поле)")
+
+            telegram_id = emp_tg if emp_tg is not None else await _alloc_synthetic_telegram()
             first_name = form_data.get("first_name", "").strip()
             last_name = form_data.get("last_name", "").strip()
             username = form_data.get("username", "").strip()
@@ -1563,13 +1586,23 @@ async def manager_employee_add(
             if not hourly_rate:
                 raise HTTPException(status_code=400, detail="Часовая ставка обязательна")
             
-            # Проверяем, существует ли уже пользователь с таким telegram_id
             from sqlalchemy import select
-            from domain.entities.user import User
-            
-            existing_user_query = select(User).where(User.telegram_id == telegram_id)
-            existing_user_result = await db.execute(existing_user_query)
-            existing_user = existing_user_result.scalar_one_or_none()
+
+            existing_user = None
+            if emp_tg is not None:
+                q = await db.execute(select(User).where(User.telegram_id == telegram_id))
+                existing_user = q.scalar_one_or_none()
+            if existing_user is None and emp_max:
+                uid_row = await db.execute(
+                    select(MessengerAccount.user_id).where(
+                        MessengerAccount.provider == "max",
+                        MessengerAccount.external_user_id == emp_max,
+                    )
+                )
+                uid = uid_row.scalar_one_or_none()
+                if uid:
+                    q2 = await db.execute(select(User).where(User.id == uid))
+                    existing_user = q2.scalar_one_or_none()
             
             if existing_user:
                 # Пользователь уже существует - обновляем его данные и создаем договор
@@ -1663,6 +1696,16 @@ async def manager_employee_add(
                 )
                 
                 db.add(user)
+                await db.flush()
+
+                if emp_max:
+                    db.add(MessengerAccount(
+                        user_id=user.id,
+                        provider="max",
+                        external_user_id=emp_max,
+                        chat_id=None,
+                    ))
+
                 await db.commit()
                 await db.refresh(user)
                 

@@ -106,6 +106,42 @@ class TestMaxAdapter:
         assert nu.messenger == "max"
         assert nu.external_user_id == "max_user_123"
 
+    def test_parse_location_attachment(self):
+        raw = {
+            "update_type": "message_created",
+            "message": {
+                "recipient": {"chat_id": 42},
+                "sender": {"user_id": "u1"},
+                "body": {
+                    "text": "",
+                    "attachments": [
+                        {
+                            "type": "location",
+                            "payload": {"latitude": 55.75, "longitude": 37.61},
+                        }
+                    ],
+                },
+            },
+        }
+        nu = MaxAdapter.parse(raw)
+        assert nu is not None
+        assert nu.location == {"latitude": 55.75, "longitude": 37.61}
+        assert nu.messenger == "max"
+
+    def test_parse_location_text_coordinates(self):
+        raw = {
+            "update_type": "message_created",
+            "message": {
+                "recipient": {"chat_id": 42},
+                "sender": {"user_id": "u1"},
+                "body": {"text": "55.75,37.61", "attachments": []},
+            },
+        }
+        nu = MaxAdapter.parse(raw)
+        assert nu is not None
+        assert nu.text == "55.75,37.61"
+        assert nu.location is None
+
     def test_parse_unknown_returns_none(self):
         assert MaxAdapter.parse({}) is None
         assert MaxAdapter.parse({"update_type": "unknown"}) is None

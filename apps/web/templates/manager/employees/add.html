@@ -24,19 +24,27 @@
             <div class="card-body">
                 <form method="post" action="/manager/employees/add">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="telegram_id" class="form-label">Telegram ID *</label>
-                                <input type="number" 
+                                <label for="telegram_id" class="form-label">Telegram ID</label>
+                                <input type="text" inputmode="numeric"
                                        class="form-control" 
                                        id="telegram_id" 
                                        name="telegram_id" 
-                                       required
-                                       placeholder="123456789">
-                                <div class="form-text">Уникальный идентификатор пользователя в Telegram</div>
+                                       placeholder="Необязательно, если указан MAX ID">
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="max_id" class="form-label">MAX ID</label>
+                                <input type="text"
+                                       class="form-control" 
+                                       id="max_id" 
+                                       name="max_id" 
+                                       placeholder="Необязательно, если указан Telegram ID">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="username" class="form-label">Username</label>
                                 <input type="text" 
@@ -45,6 +53,9 @@
                                        name="username" 
                                        placeholder="@username">
                             </div>
+                        </div>
+                        <div class="col-12">
+                            <p class="form-text text-muted mb-0">Нужно заполнить хотя бы одно поле: Telegram ID или MAX ID.</p>
                         </div>
                     </div>
                     
@@ -373,16 +384,23 @@ document.getElementById('role').addEventListener('change', function() {
 
 // Валидация формы
 document.querySelector('form').addEventListener('submit', function(e) {
-    const telegramId = document.getElementById('telegram_id').value;
-    const firstName = document.getElementById('first_name').value;
+    const telegramId = document.getElementById('telegram_id').value.trim();
+    const maxId = document.getElementById('max_id').value.trim();
+    const firstName = document.getElementById('first_name').value.trim();
     
-    if (!telegramId || !firstName) {
+    if (!firstName) {
         e.preventDefault();
-        alert('Пожалуйста, заполните все обязательные поля');
+        alert('Имя обязательно');
         return;
     }
     
-    if (telegramId.length < 5) {
+    if (!telegramId && !maxId) {
+        e.preventDefault();
+        alert('Укажите Telegram ID или MAX ID (хотя бы одно поле)');
+        return;
+    }
+    
+    if (telegramId && telegramId.length < 5) {
         e.preventDefault();
         alert('Telegram ID должен содержать минимум 5 цифр');
         return;

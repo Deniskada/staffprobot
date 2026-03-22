@@ -131,11 +131,11 @@
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="storage_price_telegram" class="form-label">Цена хранения в Telegram (₽/мес)</label>
+                                <label for="storage_price_telegram" class="form-label">Цена хранения в мессенджерах (₽/мес)</label>
                                 <input type="number" class="form-control" id="storage_price_telegram" name="storage_price_telegram" 
                                        value="{{ tariff_plan.storage_price_telegram if tariff_plan and tariff_plan.storage_price_telegram else '0' }}" 
                                        step="0.01" min="0">
-                                <small class="form-text text-muted">Стоимость хранения медиа в Telegram</small>
+                                <small class="form-text text-muted">Стоимость хранения медиа в Telegram / MAX</small>
                             </div>
                         </div>
                         <div class="col-md-4">
