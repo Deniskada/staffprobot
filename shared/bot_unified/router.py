@@ -245,6 +245,7 @@ def _telegram_employee_unified_callback(callback_data: str) -> bool:
         "get_report",
         "my_tasks",
         "cancel_task_v2_media",
+        "main_menu",
     ):
         return True
     prefixes = (
