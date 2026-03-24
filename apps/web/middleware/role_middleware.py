@@ -67,17 +67,19 @@ def require_any_role(roles: List[UserRole]):
                 logger.warning(f"User {user_id} does not have any of required roles: {[r.value for r in roles]}")
                 raise HTTPException(status_code=403, detail="Недостаточно прав доступа")
             
-            # Возвращаем словарь для совместимости с API
             if isinstance(current_user, dict):
+                if "roles" not in current_user:
+                    current_user["roles"] = await role_service.get_user_roles(user_id)
                 return current_user
             else:
                 return {
-                    "id": current_user.telegram_id,
+                    "id": current_user.id,
+                    "telegram_id": current_user.telegram_id,
                     "username": current_user.username,
                     "first_name": current_user.first_name,
                     "last_name": current_user.last_name,
                     "role": current_user.role,
-                    "roles": current_user.roles
+                    "roles": current_user.get_roles() if hasattr(current_user, "get_roles") else [],
                 }
     
     return role_checker

@@ -250,12 +250,6 @@ async def show_cancellation_form(
     actor_role = _determine_actor_role(roles)
 
     internal_user_id = await get_user_id_from_current_user(current_user, db)
-    logger.info(
-        f"shared_cancellations: roles={roles}, actor_role={actor_role}, "
-        f"internal_user_id={internal_user_id}, "
-        f"current_user keys={list(current_user.keys()) if isinstance(current_user, dict) else 'not dict'}, "
-        f"role={current_user.get('role')}, roles_raw={current_user.get('roles')}, id={current_user.get('id')}"
-    )
     schedules, owner_id = await _load_accessible_schedules(
         db,
         id_list,
