@@ -50,9 +50,13 @@ ROLE_DEFAULT_RETURN = {
 timezone_helper = WebTimezoneHelper()
 
 
-def _normalize_roles(raw_roles: Iterable) -> List[str]:
+def _extract_roles(current_user: dict) -> List[str]:
+    """Извлечь и нормализовать роли из current_user (JWT: 'role', DB: 'roles')."""
+    raw = current_user.get("roles", [])
+    if not raw and current_user.get("role"):
+        raw = [current_user["role"]]
     normalized: List[str] = []
-    for role in raw_roles or []:
+    for role in raw or []:
         if hasattr(role, "value"):
             normalized.append(role.value.lower())
         elif isinstance(role, str):
@@ -242,7 +246,7 @@ async def show_cancellation_form(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Некорректный идентификатор смены: {raw}")
 
-    roles = _normalize_roles(current_user.get("roles", []))
+    roles = _extract_roles(current_user)
     actor_role = _determine_actor_role(roles)
 
     internal_user_id = await get_user_id_from_current_user(current_user, db)
@@ -405,7 +409,7 @@ async def submit_cancellation_form(
     if not schedule_ids:
         raise HTTPException(status_code=400, detail="Не выбраны смены для отмены")
 
-    roles = _normalize_roles(current_user.get("roles", []))
+    roles = _extract_roles(current_user)
     actor_role = _determine_actor_role(roles)
 
     internal_user_id = await get_user_id_from_current_user(current_user, db)
@@ -601,7 +605,7 @@ async def list_cancellation_reasons(
     db: AsyncSession = Depends(get_db_session),
 ):
     """API: список причин отмен для владельца (используется ботом/вебом)."""
-    roles = _normalize_roles(current_user.get("roles", []))
+    roles = _extract_roles(current_user)
     actor_role = _determine_actor_role(roles)
     include_hidden = include_hidden or actor_role != "employee"
 
