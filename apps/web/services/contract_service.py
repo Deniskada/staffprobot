@@ -1227,13 +1227,24 @@ class ContractService:
                 } if contract.template else None
             }
     
-    async def get_contract_by_telegram_id(self, contract_id: int, owner_telegram_id: int) -> Optional[Dict[str, Any]]:
-        """Получение договора по ID с проверкой прав владельца по telegram_id."""
+    async def get_contract_by_telegram_id(
+        self, contract_id: int, owner_telegram_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Получение договора по ID с проверкой прав владельца.
+
+        Исторически метод принимал telegram_id, но после перехода на JWT с internal user_id
+        в этот аргумент может приходить users.id. Поддерживаем оба варианта.
+        """
         async with get_async_session() as session:
-            # Сначала находим владельца по telegram_id
-            owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+            # Сначала пробуем как внутренний users.id, затем fallback как telegram_id
+            owner_query = select(User).where(User.id == owner_telegram_id)
             owner_result = await session.execute(owner_query)
             owner = owner_result.scalar_one_or_none()
+            if not owner:
+                owner_query = select(User).where(User.telegram_id == owner_telegram_id)
+                owner_result = await session.execute(owner_query)
+                owner = owner_result.scalar_one_or_none()
             
             if not owner:
                 return None
