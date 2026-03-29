@@ -1,5 +1,19 @@
 <!DOCTYPE html>
-<html lang="{{ (current_user.language if current_user and current_user.language else 'ru') }}">
+{# current_user: dict (JWT/middleware) или ORM User (Depends(require_role)) #}
+{% if current_user is mapping %}
+    {% set owner_lang = current_user.get('language', 'ru') %}
+    {% set owner_theme = current_user.get('theme', 'light') %}
+    {% set ui_terms = current_user.get('ui_terms', {}) %}
+{% elif current_user %}
+    {% set owner_lang = 'ru' %}
+    {% set owner_theme = 'light' %}
+    {% set ui_terms = {} %}
+{% else %}
+    {% set owner_lang = 'ru' %}
+    {% set owner_theme = 'light' %}
+    {% set ui_terms = {} %}
+{% endif %}
+<html lang="{{ owner_lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,7 +39,7 @@
     
     {% block extra_css %}{% endblock %}
 </head>
-<body data-theme="{{ (current_user.theme if current_user and current_user.theme else 'light') }}">
+<body data-theme="{{ owner_theme }}">
     <!-- Топбар -->
     <header class="topbar">
         <button class="topbar-toggle" aria-label="Toggle sidebar">
@@ -149,12 +163,11 @@
                 <li class="sidebar-item">
                     <a href="/owner" class="sidebar-link">
                         <i class="bi bi-house-door"></i>
-                        <span class="sidebar-text">{{ t('menu.home', current_user.language if current_user else 'ru', 'Главная') }}</span>
+                        <span class="sidebar-text">{{ t('menu.home', owner_lang, 'Главная') }}</span>
                     </a>
-                    <div class="sidebar-tooltip">{{ t('menu.home', current_user.language if current_user else 'ru', 'Главная') }}</div>
+                    <div class="sidebar-tooltip">{{ t('menu.home', owner_lang, 'Главная') }}</div>
                 </li>
                 
-                {% set ui_terms = current_user.get('ui_terms', {}) if current_user else {} %}
                 {% set object_label = ui_terms.get('object_plural', 'Объекты') %}
                 <!-- Объекты (всегда видны) -->
                 {% if enabled_features | is_menu_visible('objects') %}
@@ -172,9 +185,9 @@
                 <li class="sidebar-item">
                     <a href="/owner/employees" class="sidebar-link">
                         <i class="bi bi-people"></i>
-                        <span class="sidebar-text">{{ t('menu.employees', current_user.language if current_user else 'ru', 'Сотрудники') }}</span>
+                        <span class="sidebar-text">{{ t('menu.employees', owner_lang, 'Сотрудники') }}</span>
                     </a>
-                    <div class="sidebar-tooltip">{{ t('menu.employees', current_user.language if current_user else 'ru', 'Сотрудники') }}</div>
+                    <div class="sidebar-tooltip">{{ t('menu.employees', owner_lang, 'Сотрудники') }}</div>
                 </li>
                 {% endif %}
                 

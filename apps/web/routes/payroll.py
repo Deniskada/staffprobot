@@ -16,7 +16,7 @@ from openpyxl.styles import Font, Alignment, PatternFill
 
 from apps.web.jinja import templates
 from apps.web.middleware.auth_middleware import get_current_user
-from apps.web.dependencies import require_role
+from apps.web.middleware.auth_middleware import require_owner_or_superadmin_web
 from apps.web.middleware.role_middleware import require_employee_or_applicant
 from core.database.session import get_db_session
 from core.logging.logger import logger
@@ -41,18 +41,20 @@ router = APIRouter()
 
 
 async def get_user_id_from_current_user(current_user, session: AsyncSession) -> Optional[int]:
-    """Получает внутренний ID пользователя из current_user."""
-    # current_user может быть dict (из JWT) или User объект (из dependencies)
+    """Получает внутренний ID пользователя из current_user (dict из JWT или ORM User)."""
     if isinstance(current_user, dict):
-        telegram_id = current_user.get("telegram_id") or current_user.get("id")
+        if current_user.get("id") is not None:
+            return int(current_user["id"])
+        telegram_id = current_user.get("telegram_id")
+        if telegram_id is None:
+            return None
         user_query = select(User).where(User.telegram_id == telegram_id)
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
         return user_obj.id if user_obj else None
-    elif isinstance(current_user, User):
+    if isinstance(current_user, User):
         return current_user.id
-    else:
-        return None
+    return None
 
 
 async def _get_payment_schedule_id_for_object(obj: Object, session: AsyncSession) -> Optional[int]:
@@ -381,7 +383,7 @@ async def _fetch_owner_payroll_report_data(
 @router.get("/payroll", response_class=HTMLResponse, name="owner_payroll_list")
 async def owner_payroll_list(
     request: Request,
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
     object_id: Optional[str] = Query(None),
     payment_date: Optional[str] = Query(None),
@@ -791,7 +793,7 @@ async def owner_payroll_list(
 @router.get("/payroll/report", response_class=HTMLResponse, name="owner_payroll_report")
 async def owner_payroll_report(
     request: Request,
-    _: None = Depends(require_role(["owner", "superadmin"])),
+    _: None = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
     period_start: str = None,
     period_end: str = None
@@ -857,7 +859,7 @@ async def owner_payroll_report(
 @router.get("/payroll/report/export", name="owner_payroll_report_export")
 async def owner_payroll_report_export(
     request: Request,
-    _: None = Depends(require_role(["owner", "superadmin"])),
+    _: None = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
     period_start: str = None,
     period_end: str = None
@@ -1015,7 +1017,7 @@ async def owner_payroll_report_export(
 async def owner_payroll_detail(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Детальная страница начисления."""
@@ -1166,7 +1168,7 @@ async def owner_payroll_detail(
 async def owner_payroll_add_deduction(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
     deduction_type: str = Form(...),
     amount: float = Form(...),
@@ -1254,7 +1256,7 @@ async def owner_payroll_add_deduction(
 async def owner_payroll_add_bonus(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
     bonus_type: str = Form(...),
     amount: float = Form(...),
@@ -1344,7 +1346,7 @@ async def complete_payment(
     request: Request,
     entry_id: int,
     payment_id: int,
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
     confirmation_code: Optional[str] = Form(None),
     return_url: Optional[str] = Form(None)
@@ -1404,7 +1406,7 @@ async def complete_payment(
 async def owner_payroll_create_payment(
     request: Request,
     entry_id: int,
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
     amount: float = Form(...),
     payment_date: str = Form(...),
@@ -1471,7 +1473,7 @@ async def owner_payroll_create_payment(
 async def owner_payroll_manual_recalculate(
     request: Request,
     target_date: str = Form(...),
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session)
 ):
     """Ручной запуск пересчёта выплат на указанную дату (идемпотентно)."""
@@ -1830,7 +1832,7 @@ async def owner_payroll_manual_recalculate(
 async def owner_payroll_statement(
     request: Request,
     employee_id: int,
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Страница расчётного листа сотрудника."""
@@ -1872,7 +1874,7 @@ async def owner_payroll_statement(
 async def owner_payroll_statement_export(
     request: Request,
     employee_id: int,
-    current_user: dict = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Экспорт расчётного листа в Excel."""

@@ -201,3 +201,28 @@ async def require_superadmin(request: Request) -> dict:
         )
     
     return user
+
+
+async def require_owner_or_superadmin_web(request: Request) -> dict:
+    """
+    Роуты владельца/superadmin: тот же user-dict, что и get_current_user
+    (JWT + OwnerProfile: theme, language, ui_terms, внутренний id).
+    Не путать с Depends(require_role) из dependencies — там возвращается ORM User.
+    """
+    user = await auth_middleware.get_current_user(request)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется авторизация",
+        )
+    user_role = user.get("role", "employee")
+    user_roles = user.get("roles") or []
+    if not isinstance(user_roles, (list, tuple)):
+        user_roles = [user_roles] if user_roles else []
+    allowed = {"owner", "superadmin"}
+    if user_role in allowed or any(r in allowed for r in user_roles):
+        return user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Недостаточно прав доступа",
+    )

@@ -26,17 +26,18 @@ user_manager = UserManager()
 
 
 async def get_user_id_from_current_user(current_user, session):
-    """Получает внутренний ID пользователя из current_user"""
+    """Получает внутренний ID пользователя из current_user (dict из JWT или ORM User)."""
     if isinstance(current_user, dict):
-        # current_user - это словарь из JWT payload
-        telegram_id = current_user.get("id")
+        if current_user.get("id") is not None:
+            return int(current_user["id"])
+        telegram_id = current_user.get("telegram_id")
+        if telegram_id is None:
+            return None
         user_query = select(User).where(User.telegram_id == telegram_id)
         user_result = await session.execute(user_query)
         user_obj = user_result.scalar_one_or_none()
         return user_obj.id if user_obj else None
-    else:
-        # current_user - это объект User
-        return current_user.id
+    return getattr(current_user, "id", None)
 
 
 @router.get("/", response_class=HTMLResponse)

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, desc, or_
 from sqlalchemy.orm import selectinload
 
-from apps.web.dependencies import get_current_user_dependency, require_role
+from apps.web.middleware.auth_middleware import require_owner_or_superadmin_web
 from core.database.session import get_db_session
 from apps.web.jinja import templates
 from core.logging.logger import logger
@@ -24,6 +24,25 @@ from shared.services.payroll_verification_service import PayrollVerificationServ
 
 router = APIRouter(tags=["owner-payroll-adjustments"])
 
+# Синхронно с шаблоном list.html (фильтр «тип корректировки»)
+_ADJUSTMENT_TYPE_CHOICES = [
+    ("shift_base", "Базовая оплата за смену"),
+    ("late_start", "Штраф за опоздание"),
+    ("task_bonus", "Премия за задачу"),
+    ("task_penalty", "Штраф за задачу"),
+    ("manual_bonus", "Ручная премия"),
+    ("manual_deduction", "Ручной штраф"),
+]
+
+_EMPTY_EMPLOYEE_GROUPS = {"active": [], "former": []}
+
+
+def _internal_user_id(current_user) -> int:
+    """Внутренний users.id из dict (JWT) или ORM User."""
+    if isinstance(current_user, dict):
+        return int(current_user["id"])
+    return int(current_user.id)
+
 
 @router.get("", response_class=HTMLResponse)
 async def payroll_adjustments_list(
@@ -36,8 +55,7 @@ async def payroll_adjustments_list(
     date_to: Optional[str] = Query(None, description="Дата окончания (YYYY-MM-DD)"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     per_page: int = Query(50, ge=1, le=200, description="Записей на странице"),
-    current_user = Depends(get_current_user_dependency()),
-    _: None = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Список корректировок начислений с фильтрами."""
@@ -96,16 +114,16 @@ async def payroll_adjustments_list(
         owner_object_ids = [row[0] for row in owner_objects_result.all()]
         
         if not employee_ids or not owner_object_ids:
-            # Нет сотрудников или объектов - возвращаем пустой список
+            # Нет сотрудников или объектов — пустой список (шаблон ждёт employee_groups.active/former)
             return templates.TemplateResponse(
                 "owner/payroll_adjustments/list.html",
                 {
                     "request": request,
                     "current_user": current_user,
                     "adjustments": [],
-                    "employees": [],
+                    "employee_groups": _EMPTY_EMPLOYEE_GROUPS,
                     "objects": [],
-                    "adjustment_types": [],
+                    "adjustment_types": _ADJUSTMENT_TYPE_CHOICES,
                     "filter_adjustment_type": adjustment_type,
                     "filter_employee_id": employee_id_int,
                     "filter_object_id": object_id_int,
@@ -115,8 +133,8 @@ async def payroll_adjustments_list(
                     "page": page,
                     "per_page": per_page,
                     "total_count": 0,
-                    "total_pages": 0
-                }
+                    "total_pages": 0,
+                },
             )
         
         # Базовый запрос: показывать корректировки, относящиеся к объектам владельца
@@ -181,15 +199,7 @@ async def payroll_adjustments_list(
         objects_result = await session.execute(objects_query)
         objects = objects_result.scalars().all()
         
-        # Типы корректировок
-        adjustment_types = [
-            ('shift_base', 'Базовая оплата за смену'),
-            ('late_start', 'Штраф за опоздание'),
-            ('task_bonus', 'Премия за задачу'),
-            ('task_penalty', 'Штраф за задачу'),
-            ('manual_bonus', 'Ручная премия'),
-            ('manual_deduction', 'Ручной штраф')
-        ]
+        adjustment_types = _ADJUSTMENT_TYPE_CHOICES
         
         # Расчет пагинации
         total_pages = (total_count + per_page - 1) // per_page
@@ -218,8 +228,10 @@ async def payroll_adjustments_list(
             }
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error loading payroll adjustments list: {e}")
+        logger.exception(f"Error loading payroll adjustments list: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки списка корректировок")
 
 
@@ -232,8 +244,7 @@ async def create_manual_adjustment(
     adjustment_date: Optional[str] = Form(None),
     object_id: Optional[int] = Form(None),
     shift_id: Optional[int] = Form(None),
-    current_user = Depends(get_current_user_dependency()),
-    _: None = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Создать ручную корректировку."""
@@ -262,7 +273,7 @@ async def create_manual_adjustment(
             amount=amount,
             adjustment_type=adjustment_type,
             description=description,
-            created_by=current_user.id,
+            created_by=_internal_user_id(current_user),
             object_id=object_id,
             shift_id=shift_id,
             adjustment_date=adjustment_date_obj
@@ -276,7 +287,7 @@ async def create_manual_adjustment(
             employee_id=employee_id,
             type=adjustment_type,
             amount=float(amount),
-            owner_id=current_user.id
+            owner_id=_internal_user_id(current_user)
         )
         
         return JSONResponse(content={
@@ -299,8 +310,7 @@ async def edit_adjustment(
     adjustment_id: int,
     amount: Optional[Decimal] = Form(None),
     description: Optional[str] = Form(None),
-    current_user = Depends(get_current_user_dependency()),
-    _: None = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Редактировать корректировку."""
@@ -339,7 +349,7 @@ async def edit_adjustment(
         adjustment = await adjustment_service.update_adjustment(
             adjustment_id=adjustment_id,
             updates=updates,
-            updated_by=current_user.id
+            updated_by=_internal_user_id(current_user)
         )
         
         # Пересчитать суммы в начислении, если корректировка применена
@@ -381,7 +391,7 @@ async def edit_adjustment(
         logger.info(
             f"Adjustment updated by owner",
             adjustment_id=adjustment_id,
-            updated_by=current_user.id,
+            updated_by=_internal_user_id(current_user),
             fields=list(updates.keys())
         )
         
@@ -407,8 +417,7 @@ async def edit_adjustment(
 @router.get("/{adjustment_id}/history", response_class=JSONResponse)
 async def get_adjustment_history(
     adjustment_id: int,
-    current_user = Depends(get_current_user_dependency()),
-    _: None = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Получить историю изменений корректировки."""
@@ -466,8 +475,7 @@ async def get_adjustment_history(
 @router.post("/{adjustment_id}/delete", response_class=JSONResponse)
 async def delete_adjustment(
     adjustment_id: int,
-    current_user = Depends(get_current_user_dependency()),
-    _: None = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     session: AsyncSession = Depends(get_db_session)
 ):
     """Удалить корректировку."""
@@ -541,7 +549,7 @@ async def delete_adjustment(
         logger.info(
             f"Adjustment deleted by owner",
             adjustment_id=adjustment_id,
-            deleted_by=current_user.id,
+            deleted_by=_internal_user_id(current_user),
             type=adjustment.adjustment_type,
             amount=float(adjustment.amount)
         )
@@ -564,8 +572,7 @@ async def delete_adjustment(
 async def verify_and_fix_adjustments(
     date_from: Optional[str] = Form(None),
     date_to: Optional[str] = Form(None),
-    current_user = Depends(get_current_user_dependency()),
-    _: None = Depends(require_role(["owner", "superadmin"])),
+    current_user: dict = Depends(require_owner_or_superadmin_web),
     session: AsyncSession = Depends(get_db_session)
 ):
     """
