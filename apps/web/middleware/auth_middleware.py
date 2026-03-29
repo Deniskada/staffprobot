@@ -151,35 +151,24 @@ async def require_auth(request: Request) -> dict:
     return user
 
 async def require_owner_or_superadmin(request: Request) -> dict:
-    """Требует роль владельца или суперадмина."""
+    """Требует роль владельца, управляющего или суперадмина. Всегда возвращает dict."""
     user = await auth_middleware.get_current_user(request)
     if not user:
-        if request.url.path.startswith("/api/"):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Требуется авторизация"
-            )
-        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
-    
-    # Проверяем основную роль пользователя (приоритет основной роли)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется авторизация",
+        )
     user_role = user.get("role", "employee")
-    user_roles = user.get("roles", [])
-    
-    # Суперадмин имеет доступ везде
-    if user_role == "superadmin":
+    user_roles = user.get("roles") or []
+    if not isinstance(user_roles, (list, tuple)):
+        user_roles = [user_roles] if user_roles else []
+    allowed = {"owner", "superadmin", "manager"}
+    if user_role in allowed or any(r in allowed for r in user_roles):
         return user
-    
-    # Проверяем права для владельцев, управляющих и суперадминов
-    if user_role not in ["owner", "superadmin", "manager"] and not any(role in ["owner", "superadmin", "manager"] for role in user_roles):
-        if request.url.path.startswith("/api/"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Недостаточно прав доступа"
-            )
-        # Перенаправляем на страницу входа вместо дашборда
-        return RedirectResponse(url="/auth/login", status_code=status.HTTP_302_FOUND)
-    
-    return user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Недостаточно прав доступа",
+    )
 
 async def require_superadmin(request: Request) -> dict:
     """Требует роль суперадмина."""
