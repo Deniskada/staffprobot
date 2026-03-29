@@ -150,14 +150,24 @@ async def require_auth(request: Request) -> dict:
         )
     return user
 
+def _raise_auth_error(request: Request, *, forbidden: bool = False) -> None:
+    """401/403 для API, 307-редирект на /auth/login для браузерных запросов."""
+    if request.url.path.startswith("/api/"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN if forbidden else status.HTTP_401_UNAUTHORIZED,
+            detail="Недостаточно прав доступа" if forbidden else "Требуется авторизация",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        headers={"Location": "/auth/login"},
+    )
+
+
 async def require_owner_or_superadmin(request: Request) -> dict:
     """Требует роль владельца, управляющего или суперадмина. Всегда возвращает dict."""
     user = await auth_middleware.get_current_user(request)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Требуется авторизация",
-        )
+        _raise_auth_error(request)
     user_role = user.get("role", "employee")
     user_roles = user.get("roles") or []
     if not isinstance(user_roles, (list, tuple)):
@@ -165,10 +175,7 @@ async def require_owner_or_superadmin(request: Request) -> dict:
     allowed = {"owner", "superadmin", "manager"}
     if user_role in allowed or any(r in allowed for r in user_roles):
         return user
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Недостаточно прав доступа",
-    )
+    _raise_auth_error(request, forbidden=True)
 
 async def require_superadmin(request: Request) -> dict:
     """Требует роль суперадмина."""
@@ -200,10 +207,7 @@ async def require_owner_or_superadmin_web(request: Request) -> dict:
     """
     user = await auth_middleware.get_current_user(request)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Требуется авторизация",
-        )
+        _raise_auth_error(request)
     user_role = user.get("role", "employee")
     user_roles = user.get("roles") or []
     if not isinstance(user_roles, (list, tuple)):
@@ -211,7 +215,4 @@ async def require_owner_or_superadmin_web(request: Request) -> dict:
     allowed = {"owner", "superadmin"}
     if user_role in allowed or any(r in allowed for r in user_roles):
         return user
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Недостаточно прав доступа",
-    )
+    _raise_auth_error(request, forbidden=True)
