@@ -6,7 +6,7 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Path
 from pydantic import BaseModel
-from sqlalchemy import select, and_, cast, Date, func
+from sqlalchemy import select, and_, cast, Date
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
@@ -25,8 +25,25 @@ def _check_token(x_internal_token: str = Header(...)):
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
-async def _get_user_by_telegram(telegram_id: int, session: AsyncSession) -> User:
-    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
+async def _resolve_user_for_flower_bot(
+    session: AsyncSession,
+    telegram_id: Optional[int],
+    max_user_id: Optional[str],
+) -> User:
+    """TG / MAX через resolve_to_internal_user_id (users + messenger_accounts)."""
+    from shared.bot_unified.user_resolver import resolve_to_internal_user_id
+
+    if max_user_id is not None and str(max_user_id).strip() != "":
+        prov, ext = "max", str(max_user_id).strip()
+    elif telegram_id is not None:
+        prov, ext = "telegram", str(int(telegram_id))
+    else:
+        raise HTTPException(status_code=400, detail="telegram_id or max_user_id required")
+
+    internal = await resolve_to_internal_user_id(prov, ext, session)
+    if not internal:
+        raise HTTPException(status_code=404, detail="User not found")
+    result = await session.execute(select(User).where(User.id == internal))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -36,21 +53,24 @@ async def _get_user_by_telegram(telegram_id: int, session: AsyncSession) -> User
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
 class OpenShiftRequest(BaseModel):
-    telegram_id: int
+    telegram_id: Optional[int] = None
+    max_user_id: Optional[str] = None
     object_id: int
     latitude: float
     longitude: float
 
 
 class CloseShiftRequest(BaseModel):
-    telegram_id: int
+    telegram_id: Optional[int] = None
+    max_user_id: Optional[str] = None
     shift_id: int
     latitude: float
     longitude: float
 
 
 class CompleteTaskRequest(BaseModel):
-    telegram_id: int
+    telegram_id: Optional[int] = None
+    max_user_id: Optional[str] = None
     notes: str = ""
 
 
@@ -58,12 +78,13 @@ class CompleteTaskRequest(BaseModel):
 
 @router.get("/objects")
 async def get_objects(
-    telegram_id: int = Query(...),
+    telegram_id: Optional[int] = Query(None),
+    max_user_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db_session),
     _: None = Depends(_check_token),
 ):
     """Список объектов, к которым привязан сотрудник."""
-    user = await _get_user_by_telegram(telegram_id, db)
+    user = await _resolve_user_for_flower_bot(db, telegram_id, max_user_id)
 
     result = await db.execute(
         select(Contract).where(
@@ -91,12 +112,13 @@ async def get_objects(
 
 @router.get("/shifts/active")
 async def get_active_shift(
-    telegram_id: int = Query(...),
+    telegram_id: Optional[int] = Query(None),
+    max_user_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db_session),
     _: None = Depends(_check_token),
 ):
     """Активная смена сотрудника или null."""
-    user = await _get_user_by_telegram(telegram_id, db)
+    user = await _resolve_user_for_flower_bot(db, telegram_id, max_user_id)
 
     result = await db.execute(
         select(Shift).where(
@@ -120,16 +142,31 @@ async def get_active_shift(
 @router.post("/shifts/open")
 async def open_shift(
     body: OpenShiftRequest,
+    db: AsyncSession = Depends(get_db_session),
     _: None = Depends(_check_token),
 ):
     """Открыть смену."""
     from apps.bot.services.shift_service import ShiftService
+    from shared.bot_unified.user_resolver import resolve_to_internal_user_id
+
+    internal_uid = None
+    legacy_tid = body.telegram_id or 0
+    if body.max_user_id and str(body.max_user_id).strip():
+        internal_uid = await resolve_to_internal_user_id("max", str(body.max_user_id).strip(), db)
+        if not internal_uid:
+            raise HTTPException(status_code=404, detail="User not found")
+    elif body.telegram_id is not None:
+        await _resolve_user_for_flower_bot(db, body.telegram_id, None)
+    else:
+        raise HTTPException(status_code=400, detail="telegram_id or max_user_id required")
+
     svc = ShiftService()
     coordinates = f"{body.latitude},{body.longitude}"
     result = await svc.open_shift(
-        user_id=body.telegram_id,
+        user_id=legacy_tid,
         object_id=body.object_id,
         coordinates=coordinates,
+        internal_user_id=internal_uid,
     )
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Ошибка открытия смены"))
@@ -139,16 +176,31 @@ async def open_shift(
 @router.post("/shifts/close")
 async def close_shift(
     body: CloseShiftRequest,
+    db: AsyncSession = Depends(get_db_session),
     _: None = Depends(_check_token),
 ):
     """Закрыть смену."""
     from apps.bot.services.shift_service import ShiftService
+    from shared.bot_unified.user_resolver import resolve_to_internal_user_id
+
+    internal_uid = None
+    legacy_tid = body.telegram_id or 0
+    if body.max_user_id and str(body.max_user_id).strip():
+        internal_uid = await resolve_to_internal_user_id("max", str(body.max_user_id).strip(), db)
+        if not internal_uid:
+            raise HTTPException(status_code=404, detail="User not found")
+    elif body.telegram_id is not None:
+        await _resolve_user_for_flower_bot(db, body.telegram_id, None)
+    else:
+        raise HTTPException(status_code=400, detail="telegram_id or max_user_id required")
+
     svc = ShiftService()
     coordinates = f"{body.latitude},{body.longitude}"
     result = await svc.close_shift(
-        user_id=body.telegram_id,
+        user_id=legacy_tid,
         shift_id=body.shift_id,
         coordinates=coordinates,
+        internal_user_id=internal_uid,
     )
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Ошибка закрытия смены"))
@@ -157,18 +209,18 @@ async def close_shift(
 
 @router.get("/tasks")
 async def get_tasks(
-    telegram_id: int = Query(...),
+    telegram_id: Optional[int] = Query(None),
+    max_user_id: Optional[str] = Query(None),
     date: Optional[date_type] = Query(default=None, description="Дата задач (по умолчанию — сегодня)"),
     db: AsyncSession = Depends(get_db_session),
     _: None = Depends(_check_token),
 ):
     """Незавершённые задачи сотрудника на указанную дату (по умолчанию сегодня)."""
-    from shared.services.task_service import TaskService
     from domain.entities.task_entry import TaskEntryV2
     from domain.entities.task_plan import TaskPlanV2
     from sqlalchemy.orm import selectinload
 
-    user = await _get_user_by_telegram(telegram_id, db)
+    user = await _resolve_user_for_flower_bot(db, telegram_id, max_user_id)
     target_date = date or date_type.today()
 
     # Задачи на конкретную дату: либо по planned_date плана, либо созданные сегодня
@@ -216,8 +268,8 @@ async def complete_task(
 ):
     """Отметить задачу как выполненную."""
     from shared.services.task_service import TaskService
-    # Validate user exists
-    await _get_user_by_telegram(body.telegram_id, db)
+    # Validate user exists (совпадает с тем, кто закрывает в боте)
+    await _resolve_user_for_flower_bot(db, body.telegram_id, body.max_user_id)
     svc = TaskService(db)
     ok = await svc.mark_entry_completed(
         entry_id=entry_id,
