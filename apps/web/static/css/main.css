@@ -9,11 +9,28 @@
     --danger-color: #dc3545;
     --light-color: #f8f9fa;
     --dark-color: #212529;
+    --page-bg: #f8f9fa;
+    --text-color: #212529;
+    --card-bg: #ffffff;
 }
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    background-color: var(--page-bg);
+    color: var(--text-color);
+}
+
+body[data-theme="dark"] {
+    --page-bg: #111827;
+    --text-color: #e5e7eb;
+    --card-bg: #1f2937;
+}
+
+body[data-theme="dark"] .card,
+body[data-theme="dark"] .table,
+body[data-theme="dark"] .fc {
+    background-color: var(--card-bg);
+    color: var(--text-color);
 }
 
 /* Навигация */

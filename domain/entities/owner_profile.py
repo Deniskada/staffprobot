@@ -60,6 +60,15 @@ class OwnerProfile(Base):
     
     enabled_features = Column(JSON, nullable=False, default=list,
                              comment="Включенные дополнительные функции (массив ключей функций)")
+
+    theme = Column(String(20), nullable=False, default="light",
+                   comment="Тема интерфейса: light, dark, system")
+
+    language = Column(String(10), nullable=False, default="ru",
+                      comment="Язык интерфейса владельца")
+
+    industry = Column(String(50), nullable=False, default="grocery",
+                      comment="Отрасль применения для отраслевых терминов")
     
     # Настройки
     is_complete = Column(Boolean, default=False,

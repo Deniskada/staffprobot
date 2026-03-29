@@ -1,0 +1,66 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Отраслевые термины{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <h2 class="h4 mb-3">Отраслевые термины</h2>
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-md-2"><input id="industry" class="form-control" value="grocery" placeholder="industry"></div>
+          <div class="col-md-2"><input id="language" class="form-control" value="ru" placeholder="language"></div>
+          <div class="col-md-3"><input id="term_key" class="form-control" placeholder="term_key"></div>
+          <div class="col-md-3"><input id="term_value" class="form-control" placeholder="term_value"></div>
+          <div class="col-md-2"><button class="btn btn-primary w-100" onclick="saveTerm()">Сохранить</button></div>
+        </div>
+        <div class="mt-3">
+          <button class="btn btn-outline-secondary btn-sm" onclick="askAi()">Сгенерировать варианты (AI)</button>
+        </div>
+        <pre id="aiResult" class="mt-2 p-2 bg-light" style="white-space: pre-wrap;"></pre>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <table class="table table-sm">
+          <thead><tr><th>Industry</th><th>Lang</th><th>Key</th><th>Value</th><th>Source</th></tr></thead>
+          <tbody id="termsRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadTerms() {
+  const res = await fetch('/admin/api/industry-terms');
+  const data = await res.json();
+  const tbody = document.getElementById('termsRows');
+  tbody.innerHTML = (data.items || []).map(x => `<tr><td>${x.industry}</td><td>${x.language}</td><td><code>${x.term_key}</code></td><td>${x.term_value}</td><td>${x.source}</td></tr>`).join('');
+}
+async function saveTerm() {
+  await fetch('/admin/api/industry-terms', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
+    industry: document.getElementById('industry').value,
+    language: document.getElementById('language').value,
+    term_key: document.getElementById('term_key').value,
+    term_value: document.getElementById('term_value').value,
+    source: 'manual',
+    is_active: true
+  })});
+  await loadTerms();
+}
+async function askAi() {
+  const res = await fetch('/admin/api/industry-terms/ai-generate', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
+    industry: document.getElementById('industry').value,
+    language: document.getElementById('language').value,
+    keys: ['object_singular','object_plural']
+  })});
+  const data = await res.json();
+  document.getElementById('aiResult').textContent = data.result || 'AI недоступен';
+}
+document.addEventListener('DOMContentLoaded', loadTerms);
+</script>
+{% endblock %}

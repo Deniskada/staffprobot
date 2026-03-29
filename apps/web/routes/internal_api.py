@@ -6,7 +6,7 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Path
 from pydantic import BaseModel
-from sqlalchemy import select, and_, cast, Date
+from sqlalchemy import select, and_, or_, cast, Date
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
@@ -223,7 +223,21 @@ async def get_tasks(
     user = await _resolve_user_for_flower_bot(db, telegram_id, max_user_id)
     target_date = date or date_type.today()
 
-    # Задачи на конкретную дату: либо по planned_date плана, либо созданные сегодня
+    # Календарь: planned_date плана или созданы в эту дату без плана.
+    # Смена: как get_entries_for_shift — все незавершённые по shift_id активной смены (не режем по TZ «сегодня»).
+    active_shift_sq = select(Shift.id).where(
+        Shift.user_id == user.id,
+        Shift.status == "active",
+    )
+    by_calendar = and_(
+        (
+            cast(TaskPlanV2.planned_date, Date) == target_date
+        )
+        | (
+            (TaskEntryV2.plan_id == None)
+            & (cast(TaskEntryV2.created_at, Date) == target_date)
+        )
+    )
     query = (
         select(TaskEntryV2)
         .outerjoin(TaskPlanV2, TaskEntryV2.plan_id == TaskPlanV2.id)
@@ -231,15 +245,7 @@ async def get_tasks(
         .where(
             TaskEntryV2.employee_id == user.id,
             TaskEntryV2.is_completed == False,
-            and_(
-                # Входят задачи: запланированы на эту дату ИЛИ созданы сегодня (без плана)
-                (
-                    cast(TaskPlanV2.planned_date, Date) == target_date
-                ) | (
-                    (TaskEntryV2.plan_id == None) &
-                    (cast(TaskEntryV2.created_at, Date) == target_date)
-                )
-            )
+            or_(by_calendar, TaskEntryV2.shift_id.in_(active_shift_sq)),
         )
         .order_by(TaskEntryV2.created_at)
         .limit(100)

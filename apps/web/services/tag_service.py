@@ -558,6 +558,15 @@ class TagService:
         
         if 'enabled_features' in profile_data:
             profile.enabled_features = profile_data['enabled_features']
+
+        if 'theme' in profile_data:
+            profile.theme = profile_data['theme']
+
+        if 'language' in profile_data:
+            profile.language = profile_data['language']
+
+        if 'industry' in profile_data:
+            profile.industry = profile_data['industry']
         
         # Проверяем полноту заполнения
         required_tags = await self._get_required_tags_for_legal_type(session, legal_type)
@@ -595,7 +604,14 @@ class TagService:
             session.add(profile)
 
         allowed_keys = {
-            'about_company', 'values', 'contact_phone', 'contact_messengers', 'photos'
+            'about_company',
+            'values',
+            'contact_phone',
+            'contact_messengers',
+            'photos',
+            'theme',
+            'language',
+            'industry',
         }
         for key in allowed_keys:
             if key in fields:

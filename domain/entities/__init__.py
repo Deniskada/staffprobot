@@ -61,6 +61,7 @@ from .profile import Profile
 from .messenger_account import MessengerAccount
 from .profile_verification import ProfileVerification
 from .notification_target import NotificationTarget
+from .industry_term import IndustryTerm
 
 __all__ = [
     "Base",
@@ -132,4 +133,5 @@ __all__ = [
     "MessengerAccount",
     "ProfileVerification",
     "NotificationTarget",
+    "IndustryTerm",
 ]

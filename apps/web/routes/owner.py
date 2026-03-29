@@ -5801,6 +5801,19 @@ async def owner_profile(
                     {"value": "individual", "label": "Физическое лицо (ИП)"},
                     {"value": "legal", "label": "Юридическое лицо (ООО)"},
                 ],
+                "theme_options": [
+                    {"value": "light", "label": "Светлая"},
+                    {"value": "dark", "label": "Темная"},
+                    {"value": "system", "label": "Как в системе"},
+                ],
+                "language_options": [
+                    {"value": "ru", "label": "Русский"},
+                ],
+                "industry_options": [
+                    {"value": "grocery", "label": "Продуктовый магазин"},
+                    {"value": "florist", "label": "Цветочный салон"},
+                    {"value": "pickup_point", "label": "Пункт выдачи заказов (ПВЗ)"},
+                ],
             },
         )
         
@@ -5883,6 +5896,9 @@ async def owner_profile_save(
         about_company = form_data.get("about_company", "")
         values = form_data.get("values", "")
         contact_phone = form_data.get("contact_phone", "")
+        theme = form_data.get("theme", "light")
+        language = form_data.get("language", "ru")
+        industry = form_data.get("industry", "grocery")
         
         # Парсим JSON поля
         import json
@@ -5904,7 +5920,10 @@ async def owner_profile_save(
                 "values": values,
                 "photos": photos,
                 "contact_phone": contact_phone,
-                "contact_messengers": contact_messengers
+                "contact_messengers": contact_messengers,
+                "theme": theme,
+                "language": language,
+                "industry": industry,
             },
             legal_type
         )

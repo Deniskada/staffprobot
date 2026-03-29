@@ -7,6 +7,10 @@ from core.auth.user_manager import user_manager
 from apps.web.services.auth_service import AuthService
 from domain.entities.user import UserRole
 from core.logging.logger import logger
+from core.database.session import get_async_session
+from sqlalchemy import select
+from domain.entities.owner_profile import OwnerProfile
+from shared.services.industry_terms_service import IndustryTermsService
 
 
 class AuthMiddleware:
@@ -43,6 +47,24 @@ class AuthMiddleware:
             if not user:
                 logger.warning(f"User not found for user_id={user_id} telegram_id={telegram_id}")
                 return None
+
+            # UI-предпочтения владельца: тема/язык/отрасль + словарь терминов
+            try:
+                async with get_async_session() as session:
+                    prof = (
+                        await session.execute(
+                            select(OwnerProfile).where(OwnerProfile.user_id == user["id"])
+                        )
+                    ).scalar_one_or_none()
+                    if prof:
+                        user["theme"] = prof.theme or "light"
+                        user["language"] = prof.language or "ru"
+                        user["industry"] = prof.industry or "grocery"
+                        user["ui_terms"] = await IndustryTermsService.get_terms(
+                            session, user["industry"], user["language"]
+                        )
+            except Exception as prefs_err:
+                logger.warning(f"Failed to load ui prefs for user {user.get('id')}: {prefs_err}")
             
             logger.debug(f"User found: {user}")
             return user

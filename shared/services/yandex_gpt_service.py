@@ -111,3 +111,46 @@ async def generate_holiday_greeting(holiday_name: str) -> Optional[str]:
         logger.error(f"Yandex GPT holiday error: {e}")
 
     return None
+
+
+async def generate_industry_term_variants(
+    industry: str, base_terms: list[str], language: str = "ru"
+) -> Optional[str]:
+    """Сгенерировать варианты терминов для отрасли.
+
+    Возвращает markdown/plain текст с вариантами; парсинг в таблицу выполняется админом вручную.
+    """
+    folder_id = settings.yandex_gpt_folder_id
+    api_key = settings.yandex_gpt_api_key
+    if not folder_id or not api_key:
+        return None
+
+    system_prompt = (
+        "Ты UX-редактор интерфейсов кадровой системы. "
+        "Предложи короткие, понятные названия сущностей для отрасли. "
+        "Формат: term_key: term_value, по одной строке."
+    )
+    user_prompt = (
+        f"Отрасль: {industry}. Язык: {language}. "
+        f"Ключи: {', '.join(base_terms)}. "
+        "Сделай по 1 варианту на ключ."
+    )
+
+    payload = {
+        "modelUri": f"gpt://{folder_id}/yandexgpt/latest",
+        "completionOptions": {"stream": False, "temperature": 0.4, "maxTokens": "600"},
+        "messages": [
+            {"role": "system", "text": system_prompt},
+            {"role": "user", "text": user_prompt},
+        ],
+    }
+    headers = {"Authorization": f"Api-Key {api_key}", "Content-Type": "application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(YANDEX_GPT_URL, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            return data["result"]["alternatives"][0]["message"]["text"].strip()
+    except Exception as e:
+        logger.error(f"Yandex GPT industry terms error: {e}")
+        return None

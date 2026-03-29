@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ (current_user.language if current_user and current_user.language else 'ru') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,7 +25,7 @@
     
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body data-theme="{{ (current_user.theme if current_user and current_user.theme else 'light') }}">
     <!-- Топбар -->
     <header class="topbar">
         <button class="topbar-toggle" aria-label="Toggle sidebar">
@@ -149,19 +149,21 @@
                 <li class="sidebar-item">
                     <a href="/owner" class="sidebar-link">
                         <i class="bi bi-house-door"></i>
-                        <span class="sidebar-text">Главная</span>
+                        <span class="sidebar-text">{{ t('menu.home', current_user.language if current_user else 'ru', 'Главная') }}</span>
                     </a>
-                    <div class="sidebar-tooltip">Главная</div>
+                    <div class="sidebar-tooltip">{{ t('menu.home', current_user.language if current_user else 'ru', 'Главная') }}</div>
                 </li>
                 
+                {% set ui_terms = current_user.get('ui_terms', {}) if current_user else {} %}
+                {% set object_label = ui_terms.get('object_plural', 'Объекты') %}
                 <!-- Объекты (всегда видны) -->
                 {% if enabled_features | is_menu_visible('objects') %}
                 <li class="sidebar-item">
                     <a href="/owner/objects?view_mode=list" class="sidebar-link">
                         <i class="bi bi-building"></i>
-                        <span class="sidebar-text">Объекты</span>
+                        <span class="sidebar-text">{{ object_label }}</span>
                     </a>
-                    <div class="sidebar-tooltip">Объекты</div>
+                    <div class="sidebar-tooltip">{{ object_label }}</div>
                 </li>
                 {% endif %}
                 
@@ -170,9 +172,9 @@
                 <li class="sidebar-item">
                     <a href="/owner/employees" class="sidebar-link">
                         <i class="bi bi-people"></i>
-                        <span class="sidebar-text">Сотрудники</span>
+                        <span class="sidebar-text">{{ t('menu.employees', current_user.language if current_user else 'ru', 'Сотрудники') }}</span>
                     </a>
-                    <div class="sidebar-tooltip">Сотрудники</div>
+                    <div class="sidebar-tooltip">{{ t('menu.employees', current_user.language if current_user else 'ru', 'Сотрудники') }}</div>
                 </li>
                 {% endif %}
                 
@@ -480,6 +482,17 @@
     </div>
 
     <!-- Bootstrap 5 JS -->
+    <script>
+        (function() {
+            const body = document.body;
+            if (!body) return;
+            const mode = body.getAttribute('data-theme') || 'light';
+            if (mode === 'system') {
+                const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                body.setAttribute('data-theme', dark ? 'dark' : 'light');
+            }
+        })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- Notifications Badge & Dropdown -->

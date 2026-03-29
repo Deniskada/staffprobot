@@ -16,7 +16,7 @@ from typing import Optional
 
 from core.config.settings import settings
 from core.auth.user_manager import UserManager
-from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, constructor_api, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, shared_cancellations, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll, manager_payroll_adjustments, owner_payroll_adjustments, cancellations, admin_notifications, organization_profiles, owner_features, owner_media_storage, owner_cancellation_reasons, owner_rules, owner_tasks, owner_incidents, owner_products, manager_tasks, employee_tasks, employee_incidents, employee_offers, webhooks, owner_subscription, support, media_proxy, shared_profiles, address_book, manager_profiles, geocode_proxy
+from apps.web.routes import auth, dashboard, objects, timeslots, calendar, shifts, reports, contracts, users, employees, templates as templates_routes, contract_templates, constructor_api, profile, admin, owner, employee, manager, manager_timeslots, test_calendar, notifications, tariffs, user_subscriptions, billing, limits, admin_reports, shared_media, shared_ratings, shared_appeals, shared_reviews, shared_cancellations, review_reports, moderator, moderator_web, owner_reviews, employee_reviews, manager_reviews, user_appeals, simple_test, manager_reviews_simple, test_dropdown, owner_shifts, owner_timeslots, payroll, payment_schedule, org_structure, manager_payroll, manager_payroll_adjustments, owner_payroll_adjustments, cancellations, admin_notifications, organization_profiles, owner_features, owner_media_storage, owner_cancellation_reasons, owner_rules, owner_tasks, owner_incidents, owner_products, manager_tasks, employee_tasks, employee_incidents, employee_offers, webhooks, owner_subscription, support, media_proxy, shared_profiles, address_book, manager_profiles, geocode_proxy, admin_industry_terms
 from routes.shared.calendar_api import router as calendar_api_router
 from apps.web.routes.system_settings_api import router as system_settings_router
 from core.database.session import get_db_session
@@ -261,6 +261,7 @@ app.include_router(contract_templates.router, prefix="/owner/contract-templates"
 app.include_router(constructor_api.router, tags=["Конструктор шаблонов"])
 # app.include_router(profile.router, tags=["Профиль владельца"])  # Перенесено в owner.py
 app.include_router(admin.router, prefix="/admin", tags=["Администрирование"])
+app.include_router(admin_industry_terms.router, tags=["Администрирование - Термины"])
 app.include_router(admin_notifications.router, prefix="/admin/notifications", tags=["Управление уведомлениями"])
 app.include_router(system_settings_router, tags=["Системные настройки"])
 app.include_router(tariffs.router, prefix="/admin/tariffs", tags=["Тарифные планы"])

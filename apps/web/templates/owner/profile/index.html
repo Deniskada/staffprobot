@@ -211,7 +211,41 @@
                     </div>
                 </div>
 
-                <!-- Блок "Основные настройки" удален - логика перенесена в профили организаций -->
+                <!-- Визуальные и отраслевые настройки -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-palette me-2"></i>
+                            Интерфейс и отрасль
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <label for="theme" class="form-label">Тема оформления</label>
+                            <select class="form-select" id="theme" name="theme">
+                                {% for opt in theme_options %}
+                                <option value="{{ opt.value }}" {% if profile and profile.theme == opt.value %}selected{% elif not profile and opt.value == 'light' %}selected{% endif %}>{{ opt.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label for="language" class="form-label">Язык интерфейса</label>
+                            <select class="form-select" id="language" name="language">
+                                {% for opt in language_options %}
+                                <option value="{{ opt.value }}" {% if profile and profile.language == opt.value %}selected{% elif not profile and opt.value == 'ru' %}selected{% endif %}>{{ opt.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="industry" class="form-label">Отрасль</label>
+                            <select class="form-select" id="industry" name="industry">
+                                {% for opt in industry_options %}
+                                <option value="{{ opt.value }}" {% if profile and profile.industry == opt.value %}selected{% elif not profile and opt.value == 'grocery' %}selected{% endif %}>{{ opt.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Мои профили -->
                 <div class="card mb-3">
@@ -877,6 +911,18 @@ function initAutosaveBindings() {
             scheduleAutosave({ contact_messengers: arr });
         });
     });
+    const themeSelect = document.getElementById('theme');
+    if (themeSelect) {
+        themeSelect.addEventListener('change', () => scheduleAutosave({ theme: themeSelect.value }));
+    }
+    const languageSelect = document.getElementById('language');
+    if (languageSelect) {
+        languageSelect.addEventListener('change', () => scheduleAutosave({ language: languageSelect.value }));
+    }
+    const industrySelect = document.getElementById('industry');
+    if (industrySelect) {
+        industrySelect.addEventListener('change', () => scheduleAutosave({ industry: industrySelect.value }));
+    }
 }
 
 // Встраиваем существующие инициализации
